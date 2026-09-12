@@ -23,7 +23,7 @@ function downloadWasm(urls, destPaths) {
             res.on('end', () => {
               const buffer = Buffer.concat(chunks);
               // Verify wasm magic bytes \0asm (0x00, 0x61, 0x73, 0x6d)
-              if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x61 && buffer[2] === 0x73 && buffer[3] === 0x6d) {
+              if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x61 && buffer[2] === 0x73 && buffer[3] === 0x3d) {
                 for (const dest of destPaths) {
                   try {
                     mkdirSync(dirname(dest), { recursive: true });
@@ -56,6 +56,12 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    fs: {
+      allow: [
+        // 允许访问项目根目录及上层目录（包括上层的 public 资源目录）
+        resolve(__dirname, '..')
+      ]
+    },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'
