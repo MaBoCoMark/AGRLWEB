@@ -1,4 +1,4 @@
- public % find . -type f                                                   
+ public % find . -type f
 
 ./favicon.ico
 ./images/favicon-16x16.png
@@ -97,6 +97,7 @@
 ./assets/audio/engine/coast-07.wav
 ./assets/audio/engine/coast-13.wav
 ./assets/audio/engine/coast-12.wav
+./assets/audio/engine/coast-06.wav
 ./assets/audio/engine/coast-10.wav
 ./assets/audio/engine/coast-04.wav
 ./assets/audio/engine/coast-05.wav
@@ -136,6 +137,7 @@
 ./assets/arena/collision/mesh_14.cmf
 ./assets/arena/collision/mesh_9.cmf
 ./assets/arena/collision/mesh_8.cmf
+./assets/arena/collision/mesh_15.cmf
 ./assets/arena/collision/mesh_11.cmf
 ./assets/arena/collision/mesh_10.cmf
 ./assets/arena/collision/mesh_12.cmf

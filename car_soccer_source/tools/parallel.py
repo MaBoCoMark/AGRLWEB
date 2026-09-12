@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Car Soccer Asset Downloader (Parallel Version)
-==============================================
+Car Soccer Asset Downloader (Parallel + Skip Existing Version)
+============================================================
 This script automatically downloads all required 3D models, textures,
 audio files, and bot policy files from the live car-soccer.com server
-in parallel using multi-threading.
+in parallel using multi-threading, skipping files that already exist.
 
 Usage:
   python3 tools/download_assets.py
@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 BASE_URL = "https://car-soccer.com"
 TARGET_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
 MAX_WORKERS = 16  # 并行下载线程数
+OVERWRITE = False # 设置为 True 则强制重新下载所有文件
 
 ASSETS = [
     # Shell & Icons
@@ -135,6 +136,15 @@ def download_file(rel_path):
     local_path = os.path.join(TARGET_DIR, rel_path.lstrip("/"))
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     
+    # 检查文件是否已存在且非空
+    if not OVERWRITE and os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+        print(f"[SKIP] {rel_path}")
+        try:
+            with open(local_path, "rb") as f:
+                return rel_path, f.read()
+        except Exception:
+            return rel_path, b""
+
     try:
         req = urllib.request.Request(
             url,
@@ -195,12 +205,10 @@ def main():
     future_to_asset = {}
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        # 提交初始资产任务
         for asset in ASSETS:
             future = executor.submit(download_file, asset)
             future_to_asset[future] = asset
 
-        # 动态接收完成的任务并追加 Manifest 中的关联资产
         while future_to_asset:
             done, _ = wait(future_to_asset.keys(), return_when=FIRST_COMPLETED)
             
@@ -209,7 +217,6 @@ def main():
                 rel_path, data = future.result()
 
                 if data:
-                    # 解析清单文件中是否有额外需要下载的文件
                     extra_assets = extract_manifest_assets(rel_path, data)
                     for extra in extra_assets:
                         if extra not in downloaded_or_queued:
@@ -217,8 +224,7 @@ def main():
                             new_future = executor.submit(download_file, extra)
                             future_to_asset[new_future] = extra
 
-    print("\n=== Download Complete! ===")
-    print("All assets have been placed in public/assets/. The game is ready to run!")
+    print("\n=== Sync Complete! ===")
 
 
 if __name__ == "__main__":
