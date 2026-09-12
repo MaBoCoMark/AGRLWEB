@@ -118,16 +118,16 @@ public % find . -type f
 ./assets/audio/engine/coast-05.wav
 ./assets/audio/engine/coast-11.wav
 ./assets/flat-car/model.glb
-./assets/game-car/model.gltf
 ./assets/game-car/geometry.bin
+./assets/game-car/model.gltf
 ./assets/realistic-car/details.glb
 ./assets/golden-boost/sparks.png
 ./assets/golden-boost/plume.png
 ./assets/golden-boost/turbulence.png
 ./assets/ball/albedo.png
+./assets/ball/ball.bin
 ./assets/ball/material-mask.png
 ./assets/ball/ball.gltf
-./assets/ball/ball.bin
 ./assets/ball/normal.png
 ./assets/bot/necto/NOTICE.txt
 ./assets/bot/necto/policy.onnx
@@ -136,7 +136,6 @@ public % find . -type f
 ./assets/bot/seer/policy.onnx
 ./assets/bot/policy.onnx
 ./assets/worker-iFqqV1m9.js
-./assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm
 ./assets/arena/stadium/bank-hex-albedo.png
 ./assets/arena/stadium/continuous-boundary.json
 ./assets/arena/stadium/bank-hex-normal.png
@@ -163,3 +162,4 @@ public % find . -type f
 ./assets/arena/collision/mesh_10.cmf
 ./assets/arena/collision/mesh_12.cmf
 ./assets/arena/collision/mesh_13.cmf
+(.venv) seqma@Duck-Duck-Pro-32G public % 
