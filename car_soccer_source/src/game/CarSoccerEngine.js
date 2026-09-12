@@ -28850,7 +28850,7 @@ async function dB(){
     ...Kd
   }
   ,J = new Set;
-  let ne = !1,le = !1,je = !1,de,pe,Se = null,gt;
+  let ne = !1,le = !1,je = !1,de,pe,Se = null,gt,We = null,te = null,$e = null,I = null;
   const ct = document.createElement("button");
   ct.type = "button",ct.className = "cursor-hint";
   const oe = ()=>{
@@ -28884,10 +28884,12 @@ async function dB(){
 ,W=>{
   x.capturing = W,R.capturing = W
 }
-),We = Xe.attachGraphics(W=>{
-  N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null),typeof qeRenderViewport == "function" && qeRenderViewport()
+);
+We = Xe.attachGraphics(W=>{
+  N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null),typeof qeRenderViewport == "function" && qeRenderViewport(W)
 }
-),ft = ()=>{
+);
+const ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
     Se.hideDetails();
     return
@@ -28967,7 +28969,7 @@ const He = new iB,At = ()=>{
 }
 ;
 R.onBallCamToggle = At,x.onBallCamToggle = At,D.onBallCamToggle = At;
-const te = new l0({
+te = new l0({
   antialias:!0
 }
 );
@@ -28982,9 +28984,10 @@ N.scene.environment = G.fromScene(new c0,.04).texture,N.scene.environmentIntensi
 );
 const Ge = Xe.attachStatus(W=>Se == null?void 0:Se.apply(W),()=>Se == null?void 0:Se.showDetails());
 Se = new aB(an,He,te,Ge,W=>qe("status",W));
-function qeRenderViewport() {
-  if (typeof te === "undefined" || !te || typeof $e === "undefined" || !$e || typeof I === "undefined" || !I) return;
-  const scale = ((We == null ? void 0 : We.renderScale) ?? 100) / 100;
+function qeRenderViewport(graphics) {
+  if (!te || !$e || !I) return;
+  const currentGraphics = graphics ?? We ?? (typeof Xe !== "undefined" && Xe ? Xe.graphics : null);
+  const scale = ((currentGraphics == null ? void 0 : currentGraphics.renderScale) ?? 100) / 100;
   const basePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const effectivePixelRatio = basePixelRatio * scale;
   H.camera.aspect = window.innerWidth / window.innerHeight;
@@ -28998,7 +29001,7 @@ function qeRenderViewport() {
   const renderHeight = Math.round(window.innerHeight * effectivePixelRatio);
   console.log(`[Render Viewport] ${renderWidth} x ${renderHeight} (window: ${window.innerWidth} x ${window.innerHeight}, scale: ${(scale * 100).toFixed(1)}%, pixelRatio: ${effectivePixelRatio.toFixed(3)})`);
 }
-const $e = new fw(te,window.innerWidth,window.innerHeight,te.getPixelRatio()),I = new uC(te);
+$e = new fw(te,window.innerWidth,window.innerHeight,te.getPixelRatio()),I = new uC(te);
 qeRenderViewport();
 I.addPass(new pC(N.scene,H.camera)),I.addPass(new h0(new Lt({
   uniforms:{
