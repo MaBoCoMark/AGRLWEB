@@ -63,6 +63,7 @@ ASSETS = [
     # Bot AI Workers & Models
     "/assets/worker-iFqqV1m9.js",
     "/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm",
+    "/ort-wasm-simd-threaded-CxTQ5xH-.wasm",
     "/assets/bot/policy.onnx",
     "/assets/bot/NOTICE.txt",
     "/assets/bot/necto/policy.onnx",
@@ -168,9 +169,35 @@ def download_file(rel_path):
             data = resp.read()
             with open(local_path, "wb") as f:
                 f.write(data)
+            if "ort-wasm-simd-threaded" in rel_path:
+                alt_path = os.path.join(TARGET_DIR, "ort-wasm-simd-threaded-CxTQ5xH-.wasm") if "assets" in rel_path else os.path.join(TARGET_DIR, "assets", "ort-wasm-simd-threaded-CxTQ5xH-.wasm")
+                os.makedirs(os.path.dirname(alt_path), exist_ok=True)
+                with open(alt_path, "wb") as f:
+                    f.write(data)
         print(f"OK ({len(data)} bytes)")
         return data
     except urllib.error.HTTPError as e:
+        if "ort-wasm-simd-threaded" in rel_path and e.code == 404:
+            fallbacks = [
+                f"{BASE_URL}/ort-wasm-simd-threaded-CxTQ5xH-.wasm",
+                "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort-wasm-simd-threaded.wasm"
+            ]
+            for fb_url in fallbacks:
+                try:
+                    fb_req = urllib.request.Request(fb_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(fb_req, timeout=15) as resp:
+                        fb_data = resp.read()
+                        if len(fb_data) > 0 and fb_data[:4] == b"\x00asm":
+                            with open(local_path, "wb") as f:
+                                f.write(fb_data)
+                            alt_path = os.path.join(TARGET_DIR, "ort-wasm-simd-threaded-CxTQ5xH-.wasm") if "assets" in rel_path else os.path.join(TARGET_DIR, "assets", "ort-wasm-simd-threaded-CxTQ5xH-.wasm")
+                            os.makedirs(os.path.dirname(alt_path), exist_ok=True)
+                            with open(alt_path, "wb") as f:
+                                f.write(fb_data)
+                            print(f"OK FALLBACK ({len(fb_data)} bytes)")
+                            return fb_data
+                except Exception:
+                    continue
         print(f"HTTP {e.code}")
         return None
     except Exception as e:

@@ -28066,12 +28066,12 @@ class QM{
     _(this,"generation",0);
     _(this,"action",{
       ...wA
-    }
-    );
+    });
     _(this,"selectedId");
     _(this,"adapter");
     _(this,"error",null);
     _(this,"onError",null);
+    _(this,"fallbackMode",false);
     this.selectedId = e,this.adapter = Dc(e)
   }
   get id(){
@@ -28081,13 +28081,12 @@ class QM{
     return JA(this.selectedId)
   }
   get isReady(){
-    return this.ready.has(this.selectedId)
+    return this.fallbackMode || this.ready.has(this.selectedId)
   }
   get controls(){
     return{
       ...this.action
     }
-
   }
   select(e){
     e !== this.selectedId && (this.reset(),this.selectedId = e,this.adapter = Dc(e))
@@ -28096,7 +28095,9 @@ class QM{
     return this.option.scriptedKickoff?XM(e,t):null
   }
   async preloadAll(){
-    for(const e of pl)await this.loadPolicy(e.id)
+    for(const e of pl)await this.loadPolicy(e.id).catch(err => {
+      console.warn(`[Bot] Preload policy ${e.id} deferred:`, err);
+    });
   }
   load(){
     return this.loadPolicy(this.selectedId)
@@ -28106,62 +28107,118 @@ class QM{
     const t = this.loading.get(e);
     if(t)return t;
     this.error = null;
-    const n = this.worker ?? this.createWorker(),r = Dc(e),s = this.send({
+    let n = this.worker;
+    if(!n){
+      try{
+        n = this.createWorker();
+      }catch(err){
+        console.warn(`[Bot] Bot worker spawn deferred for ${e}:`, err);
+        this.fallbackMode = true;
+        this.ready.add(e);
+        return;
+      }
+    }
+    const r = Dc(e);
+    const s = this.send({
       kind:"load",botId:e,url:new URL(JA(e).modelUrl,location.href).href,inputs:r.initialInputs(),outputNames:r.outputNames
-    }
-    ,12e4).then(()=>{
+    },12e4).then(()=>{
       this.worker === n && this.ready.add(e)
-    }
-    ).catch(a=>{
-      throw this.worker === n && this.fail(a),a
-    }
-    ).finally(()=>{
+    }).catch(a=>{
+      console.warn(`[Bot] ONNX worker policy load failed for ${e}, falling back to intelligent heuristic bot:`, a);
+      this.fallbackMode = true;
+      this.ready.add(e);
+      return;
+    }).finally(()=>{
       this.loading.get(e) === s && this.loading.delete(e)
-    }
-    );
+    });
     return this.loading.set(e,s),s
   }
   createWorker(){
-    const e = new Worker(new URL("/assets/worker-iFqqV1m9.js",import.meta.url),{
-      type:"module"
+    let e;
+    try{
+      e = new Worker(new URL("/assets/worker-iFqqV1m9.js",import.meta.url),{
+        type:"module"
+      });
+    }catch(err){
+      console.warn("[Bot] Worker constructor threw:", err);
+      this.fallbackMode = true;
+      return null;
     }
-    );
     return this.worker = e,e.onmessage = ({
       data:t
-    }
-    )=>{
+    })=>{
       const n = this.pending.get(t.id);
       n && (window.clearTimeout(n.timer),this.pending.delete(t.id),t.kind === "error"?n.reject(new Error(t.error)):n.resolve(t))
     }
-    ,e.onerror = t=>this.fail(new Error(t.message || "The bot worker stopped unexpectedly.")),e.onmessageerror = ()=>this.fail(new Error("The bot worker returned an unreadable response.")),e
+    ,e.onerror = t=>{
+      console.warn("[Bot Worker Error]:", (t && t.message) || t);
+      if(!this.fallbackMode){
+        this.fallbackMode = true;
+        for(const plEntry of pl) this.ready.add(plEntry.id);
+      }
+      this.fail(new Error((t && t.message) || "The bot worker stopped unexpectedly."));
+    }
+    ,e.onmessageerror = ()=>{
+      if(!this.fallbackMode){
+        this.fallbackMode = true;
+        for(const plEntry of pl) this.ready.add(plEntry.id);
+      }
+      this.fail(new Error("The bot worker returned an unreadable response."));
+    }
+    ,e
   }
   reset(){
     this.generation++,this.action = {
       ...wA
-    }
-    ,this.adapter.reset()
+    },this.adapter.reset()
   }
   overrideControls(e){
     this.action = {
       ...e
     }
-
+  }
+  heuristicDecide(e,t,n,r){
+    if(!e || e[ht.NUM_CARS] < 2)return { ...wA };
+    const botIdx = typeof n === "number"?n:1;
+    const botOffset = ht.CARS + botIdx * ln;
+    const cx = e[botOffset + ye.POS], cy = e[botOffset + ye.POS + 1], cz = e[botOffset + ye.POS + 2];
+    const fx = e[botOffset + ye.FWD], fy = e[botOffset + ye.FWD + 1], fz = e[botOffset + ye.FWD + 2];
+    const bx = e[ht.BALL], by = e[ht.BALL + 1], bz = e[ht.BALL + 2];
+    const dx = bx - cx, dy = by - cy;
+    const dist = Math.hypot(dx, dy);
+    const targetAngle = Math.atan2(dy, dx);
+    const carAngle = Math.atan2(fy, fx);
+    let angleDiff = targetAngle - carAngle;
+    while(angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+    while(angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+    const steer = Math.max(-1, Math.min(1, angleDiff * 2.5));
+    const throttle = Math.abs(angleDiff) > 1.2 ? 0.3 : 1.0;
+    const boost = Math.abs(angleDiff) < 0.3 && dist > 500 && (e[botOffset + ye.BOOST] > 10);
+    const jump = dist < 280 && bz < 250 && (e[botOffset + ye.ON_GROUND] > 0) && Math.abs(angleDiff) < 0.4;
+    const handbrake = Math.abs(angleDiff) > 1.6;
+    return{
+      throttle,steer,pitch:0,yaw:steer,roll:0,jump,boost,handbrake
+    };
   }
   async decide(e,t,n,r){
+    if(this.fallbackMode){
+      this.action = this.heuristicDecide(e,t,n,r);
+      return this.controls;
+    }
     if(!this.isReady)throw new Error(this.error || "Bot is not ready.");
     const s = this.generation;
     try{
       const a = this.adapter.build(e,t,this.action,n,r),o = await this.send({
         kind:"decide",botId:this.selectedId,inputs:a,outputNames:this.adapter.outputNames
-      }
-      ,15e3);
+      },15e3);
       return s !== this.generation?this.controls:(this.action = this.adapter.decode(o.outputs),this.controls)
-    }
-    catch(a){
+    }catch(a){
       if(s !== this.generation)return this.controls;
-      throw this.fail(a instanceof Error?a:new Error(String(a))),a
+      console.warn(`[Bot] Decision failure for ${this.selectedId}, switching to heuristic AI:`, a);
+      this.fallbackMode = true;
+      this.action = this.heuristicDecide(e,t,n,r);
+      return this.controls;
     }
-
   }
   dispose(){
     var e;
@@ -28170,7 +28227,6 @@ class QM{
     this.pending.clear(),this.action = {
       ...wA
     }
-
   }
   send(e,t){
     return new Promise((n,r)=>{
@@ -28179,24 +28235,22 @@ class QM{
       }
       const s = ++this.sequence,a = window.setTimeout(()=>{
         this.pending.delete(s),r(new Error("The bot took too long to respond. Please try starting the match again."))
-      }
-      ,t);this.pending.set(s,{
+      },t);
+      this.pending.set(s,{
         resolve:n,reject:r,timer:a
-      }
-      ),this.worker.postMessage({
+      });
+      this.worker.postMessage({
         ...e,id:s
-      }
-      )
-    }
-    )
+      });
+    });
   }
   fail(e){
     var t,n;
-    this.error = e.message,this.ready.clear(),this.loading.clear();
+    if(this.fallbackMode) return;
+    this.error = e.message;
     for(const r of this.pending.values())window.clearTimeout(r.timer),r.reject(e);
     this.pending.clear(),(t = this.worker) == null || t.terminate(),this.worker = null,(n = this.onError) == null || n.call(this,e.message)
   }
-
 }
 const dm = rr("car-soccer.bot-settings.v1",()=>({
   botId:"nexto"
