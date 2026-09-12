@@ -119,6 +119,7 @@ public % find . -type f
 ./assets/audio/engine/coast-11.wav
 ./assets/flat-car/model.glb
 ./assets/game-car/model.gltf
+./assets/game-car/geometry.bin
 ./assets/realistic-car/details.glb
 ./assets/golden-boost/sparks.png
 ./assets/golden-boost/plume.png
@@ -126,6 +127,7 @@ public % find . -type f
 ./assets/ball/albedo.png
 ./assets/ball/material-mask.png
 ./assets/ball/ball.gltf
+./assets/ball/ball.bin
 ./assets/ball/normal.png
 ./assets/bot/necto/NOTICE.txt
 ./assets/bot/necto/policy.onnx

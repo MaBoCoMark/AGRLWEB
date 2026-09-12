@@ -47,12 +47,14 @@ ASSETS = [
     
     # Ball
     "/assets/ball/ball.gltf",
+    "/assets/ball/ball.bin",
     "/assets/ball/albedo.png",
     "/assets/ball/normal.png",
     "/assets/ball/material-mask.png",
     
     # Cars
     "/assets/game-car/model.gltf",
+    "/assets/game-car/geometry.bin",
     "/assets/flat-car/model.glb",
     "/assets/realistic-car/details.glb",
     
@@ -187,7 +189,7 @@ def download_file(rel_path):
 
 
 def extract_manifest_assets(rel_path, data):
-    """解析 Manifest 文件中包含的关联资源文件路径"""
+    """解析 Manifest 与 glTF 文件中包含的关联资源文件路径"""
     extra_assets = []
     if rel_path == "/assets/arena/collision/manifest.json" and data:
         try:
@@ -217,6 +219,23 @@ def extract_manifest_assets(rel_path, data):
                 extra_assets.append(f"/assets/audio/engine/{f}")
         except Exception as e:
             print(f"[ERROR] Failed to parse engine manifest: {e}")
+
+    elif rel_path.endswith(".gltf") and data:
+        try:
+            gltf_data = json.loads(data.decode("utf-8"))
+            base_dir = os.path.dirname(rel_path)
+            for buf in gltf_data.get("buffers", []):
+                uri = buf.get("uri")
+                if uri and not uri.startswith("data:"):
+                    buf_path = os.path.normpath(os.path.join(base_dir, uri)).replace("\\", "/")
+                    extra_assets.append(buf_path)
+            for img in gltf_data.get("images", []):
+                uri = img.get("uri")
+                if uri and not uri.startswith("data:"):
+                    img_path = os.path.normpath(os.path.join(base_dir, uri)).replace("\\", "/")
+                    extra_assets.append(img_path)
+        except Exception as e:
+            print(f"[ERROR] Failed to parse glTF references in {rel_path}: {e}")
 
     return extra_assets
 

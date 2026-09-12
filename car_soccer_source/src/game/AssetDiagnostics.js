@@ -15,8 +15,10 @@ export const ASSET_INVENTORY = [
   
   // 2. 3D Models & Geometry
   { path: "/assets/arena/stadium/stadium.glb", desc: "Stadium 3D architecture model", category: "3D Models", critical: true },
-  { path: "/assets/ball/ball.gltf", desc: "Ball 3D model & materials", category: "3D Models", critical: true },
-  { path: "/assets/game-car/model.gltf", desc: "Octane car 3D model", category: "3D Models", critical: true },
+  { path: "/assets/ball/ball.gltf", desc: "Ball 3D model descriptor", category: "3D Models", critical: true },
+  { path: "/assets/ball/ball.bin", desc: "Ball 3D geometry buffer", category: "3D Models", critical: true },
+  { path: "/assets/game-car/model.gltf", desc: "Octane car 3D model descriptor", category: "3D Models", critical: true },
+  { path: "/assets/game-car/geometry.bin", desc: "Octane car 3D geometry buffer", category: "3D Models", critical: true },
   { path: "/assets/flat-car/model.glb", desc: "Dominus/Flat car 3D model", category: "3D Models", critical: false },
   { path: "/assets/realistic-car/details.glb", desc: "Realistic car body details", category: "3D Models", critical: false },
 

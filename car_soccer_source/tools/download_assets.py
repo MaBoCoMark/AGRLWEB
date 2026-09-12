@@ -44,12 +44,14 @@ ASSETS = [
     
     # Ball
     "/assets/ball/ball.gltf",
+    "/assets/ball/ball.bin",
     "/assets/ball/albedo.png",
     "/assets/ball/normal.png",
     "/assets/ball/material-mask.png",
     
     # Cars
     "/assets/game-car/model.gltf",
+    "/assets/game-car/geometry.bin",
     "/assets/flat-car/model.glb",
     "/assets/realistic-car/details.glb",
     
@@ -217,6 +219,24 @@ def main():
                 print()
             except Exception as e:
                 print(f"Failed to parse engine manifest: {e}")
+
+        # If glTF model was downloaded, parse and download referenced binary buffers and images!
+        if asset.endswith(".gltf") and data:
+            try:
+                gltf_data = json.loads(data.decode("utf-8"))
+                base_dir = os.path.dirname(asset)
+                for buf in gltf_data.get("buffers", []):
+                    uri = buf.get("uri")
+                    if uri and not uri.startswith("data:"):
+                        buf_path = os.path.normpath(os.path.join(base_dir, uri)).replace("\\", "/")
+                        download_file(buf_path)
+                for img in gltf_data.get("images", []):
+                    uri = img.get("uri")
+                    if uri and not uri.startswith("data:"):
+                        img_path = os.path.normpath(os.path.join(base_dir, uri)).replace("\\", "/")
+                        download_file(img_path)
+            except Exception as e:
+                print(f"Failed to parse glTF references in {asset}: {e}")
 
     print("\n=== Download Complete! ===")
     print("All assets have been placed in public/assets/. The game is ready to run with full 3D models and audio!")
