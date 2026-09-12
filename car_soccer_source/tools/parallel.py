@@ -65,6 +65,7 @@ ASSETS = [
     
     # Bot AI Workers & Models
     "/assets/worker-iFqqV1m9.js",
+    "/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm",
     "/assets/bot/policy.onnx",
     "/assets/bot/NOTICE.txt",
     "/assets/bot/necto/policy.onnx",

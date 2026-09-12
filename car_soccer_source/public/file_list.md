@@ -136,6 +136,7 @@ public % find . -type f
 ./assets/bot/seer/policy.onnx
 ./assets/bot/policy.onnx
 ./assets/worker-iFqqV1m9.js
+./assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm
 ./assets/arena/stadium/bank-hex-albedo.png
 ./assets/arena/stadium/continuous-boundary.json
 ./assets/arena/stadium/bank-hex-normal.png

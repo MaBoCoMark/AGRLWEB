@@ -37,6 +37,7 @@ export const ASSET_INVENTORY = [
 
   // 5. Bot AI System
   { path: "/assets/worker-iFqqV1m9.js", desc: "Bot ONNX WebWorker script", category: "Bot AI", critical: false },
+  { path: "/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm", desc: "ONNX Runtime WebAssembly binary", category: "Bot AI", critical: false },
   { path: "/assets/bot/policy.onnx", desc: "Default bot ONNX neural network policy", category: "Bot AI", critical: false }
 ];
 

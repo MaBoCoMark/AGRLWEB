@@ -46,12 +46,22 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
           const pathname = (req.url || '').split('?')[0].split('#')[0];
-          // Guard any /assets/ or /images/ static file request
-          if (pathname.startsWith('/assets/') || pathname.startsWith('/images/')) {
+
+          // Route root-level ort-wasm request to assets folder if present
+          if (pathname === '/ort-wasm-simd-threaded-CxTQ5xH-.wasm') {
+            const inAssets = resolve(__dirname, 'public/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
+            if (existsSync(inAssets)) {
+              req.url = '/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm';
+              return next();
+            }
+          }
+
+          // Guard any /assets/, /images/, or .wasm static file requests
+          if (pathname.startsWith('/assets/') || pathname.startsWith('/images/') || pathname.endsWith('.wasm')) {
             const diskPath = resolve(__dirname, 'public', pathname.replace(/^\//, ''));
             if (!existsSync(diskPath)) {
               res.statusCode = 404;
-              res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+              res.setHeader('Content-Type', pathname.endsWith('.wasm') ? 'text/plain; charset=utf-8' : 'text/plain; charset=utf-8');
               res.setHeader('X-Asset-Missing', 'true');
               res.end(`[Asset Missing 404] The requested asset "${pathname}" was not found on disk at: ${diskPath}.\nPlease verify that all assets listed in file_list.md are present or run tools/parallel.py.`);
               return;

@@ -2409,7 +2409,7 @@ class Ne{
   getStyle(e = Ht){
     bt.workingToColorSpace(dn.copy(this),e);
     const t = dn.r,n = dn.g,r = dn.b;
-    return e !== Ht?`color(${e}${t.toFixed(3)}${n.toFixed(3)}${r.toFixed(3)})`:`rgb(${Math.round(t * 255)},${Math.round(n * 255)},${Math.round(r * 255)})`
+    return e !== Ht?`color(${e} ${t.toFixed(3)} ${n.toFixed(3)} ${r.toFixed(3)})`:`rgb(${Math.round(t * 255)},${Math.round(n * 255)},${Math.round(r * 255)})`
 }
 offsetHSL(e,t,n){
   return this.getHSL(Vr),this.setHSL(Vr.h + e,Vr.s + t,Vr.l + n)
@@ -8004,7 +8004,7 @@ function sf(i,e,t,n){
     case yh:case xh:return Math.ceil(i / 4) * Math.ceil(e / 4) * 8;
     case TA:case Ch:return Math.ceil(i / 4) * Math.ceil(e / 4) * 16
   }
-  throw new Error(`Unable to determine texture byte length for ${t}format.`)
+  throw new Error(`Unable to determine texture byte length for ${t} format.`)
 }
 function f6(i){
   switch(i){
@@ -13072,7 +13072,7 @@ class NA{
     const c = 3,h = this._lodMeshes[r];
     h.material = l;
     const d = l.uniforms,u = this._sizeLods[n] - 1,p = isFinite(s)?Math.PI / (2 * u):2 * Math.PI / (2 * ki - 1),v = s / p,g = isFinite(s)?1 + Math.floor(c * v):ki;
-    g > ki && it(`sigmaRadians, ${s}, is too large and will clip, as it requested ${g}samples when the maximum is set to ${ki}`);
+    g > ki && it(`sigmaRadians, ${s}, is too large and will clip, as it requested ${g} samples when the maximum is set to ${ki}`);
 const m = [];
 let y = 0;
 for(let k = 0;k < ki;++k){
@@ -14347,7 +14347,7 @@ return n.join(`
 const vf = new jt;
 function lx(i){
   bt._getMatrix(vf,bt.workingColorSpace,i);
-  const e =`mat3( ${vf.elements.map(t=>t.toFixed(4))})`;
+  const e =`mat3( ${vf.elements.map(t=>t.toFixed(4))} )`;
 switch(bt.getTransfer(i)){
   case RA:return[e,"LinearTransferOETF"];
   case kt:return[e,"sRGBTransferOETF"];
@@ -14385,7 +14385,7 @@ const Jo = new F;
 function ux(){
   bt.getLuminanceCoefficients(Jo);
   const i = Jo.x.toFixed(4),e = Jo.y.toFixed(4),t = Jo.z.toFixed(4);
-  return["float luminance( const in vec3 rgb ) {",`	const vec3 weights = vec3( ${i}, ${e}, ${t});`,"	return dot( weights, rgb );","}"].join(`
+  return["float luminance( const in vec3 rgb ) {",`	const vec3 weights = vec3( ${i}, ${e}, ${t} );`,"	return dot( weights, rgb );","}"].join(`
 `)
 }
 function fx(i){
@@ -14450,23 +14450,23 @@ function Ex(i,e,t,n){
   return r
 }
 function xf(i){
-  let e =`precision ${i.precision}float;
-	precision ${i.precision}int;
-	precision ${i.precision}sampler2D;
-	precision ${i.precision}samplerCube;
-	precision ${i.precision}sampler3D;
-	precision ${i.precision}sampler2DArray;
-	precision ${i.precision}sampler2DShadow;
-	precision ${i.precision}samplerCubeShadow;
-	precision ${i.precision}sampler2DArrayShadow;
-	precision ${i.precision}isampler2D;
-	precision ${i.precision}isampler3D;
-	precision ${i.precision}isamplerCube;
-	precision ${i.precision}isampler2DArray;
-	precision ${i.precision}usampler2D;
-	precision ${i.precision}usampler3D;
-	precision ${i.precision}usamplerCube;
-	precision ${i.precision}usampler2DArray;
+  let e =`precision ${i.precision} float;
+	precision ${i.precision} int;
+	precision ${i.precision} sampler2D;
+	precision ${i.precision} samplerCube;
+	precision ${i.precision} sampler3D;
+	precision ${i.precision} sampler2DArray;
+	precision ${i.precision} sampler2DShadow;
+	precision ${i.precision} samplerCubeShadow;
+	precision ${i.precision} sampler2DArrayShadow;
+	precision ${i.precision} isampler2D;
+	precision ${i.precision} isampler3D;
+	precision ${i.precision} isamplerCube;
+	precision ${i.precision} isampler2DArray;
+	precision ${i.precision} usampler2D;
+	precision ${i.precision} usampler3D;
+	precision ${i.precision} usamplerCube;
+	precision ${i.precision} usampler2DArray;
 	`;
 return i.precision === "highp"?e+=`
 #define HIGH_PRECISION`:i.precision === "mediump"?e+=`
@@ -18513,7 +18513,7 @@ function Yo(i){
 }
 function OC(i,e){
   const t = i < 2?"L Stick":"R Stick";
-  return i % 2 === 0?`${t}${e > 0?"Right":"Left"}`:`${t}${e > 0?"Down":"Up"}`
+  return i % 2 === 0?`${t} ${e > 0?"Right":"Left"}`:`${t} ${e > 0?"Down":"Up"}`
 }
 function Hi(i,e = "xbox"){
   switch(i.kind){
@@ -19101,19 +19101,19 @@ const b0 = class S0 extends co{
       this.trigger(`pressure ${e.uid}:pressure`,t.data)
   }
   ),e.on("attached detached",t=>{
-    const n =`${t.type}${t.data.joystick.uid}:${t.type}`;this.trigger(n,t.data)
+    const n =`${t.type} ${t.data.joystick.uid}:${t.type}`;this.trigger(n,t.data)
 }
 ),e.on("added start shown hidden rested removed end joystickCreated joystickDestroyed",t=>{
-  const n =`${t.type}${t.data.uid}:${t.type}`;this.trigger(n,t.data)
+  const n =`${t.type} ${t.data.uid}:${t.type}`;this.trigger(n,t.data)
 }
 ),e.on("move",t=>{
   this.trigger(`move ${t.data.instance.uid}:move`,t.data)
 }
 ),e.on("dir dir:up dir:right dir:down dir:left",t=>{
-  const n =`${t.type}${t.data.instance.uid}:${t.type}`;this.trigger(n,t.data)
+  const n =`${t.type} ${t.data.instance.uid}:${t.type}`;this.trigger(n,t.data)
 }
 ),e.on("plain plain:up plain:right plain:down plain:left",t=>{
-  const n =`${t.type}${t.data.instance.uid}:${t.type}`;this.trigger(n,t.data)
+  const n =`${t.type} ${t.data.instance.uid}:${t.type}`;this.trigger(n,t.data)
 }
 )
 }
@@ -19172,7 +19172,7 @@ createJoystick(e){
     ,shape:this.options.shape
   }
   );
-  return this.all.has(o.uid) && this.error(`Joystick with uid ${o.uid}already exists.`),this.options.dataOnly || (Gf(o.ui.el,s),Gf(o.ui.front,o.frontPosition)),this.all.set(o.uid,o),this.idles.add(o.uid),this.bindJoystick(o),o.init(),o
+  return this.all.has(o.uid) && this.error(`Joystick with uid ${o.uid} already exists.`),this.options.dataOnly || (Gf(o.ui.el,s),Gf(o.ui.front,o.frontPosition)),this.all.set(o.uid,o),this.idles.add(o.uid),this.bindJoystick(o),o.init(),o
 }
 processOnStart(e,t = 0){
   if(this.box = this.options.zone.getBoundingClientRect(),!this.actives.has(e.identifier) && this.actives.size >= this.options.maxNumberOfJoysticks)return void this.warn("No more joysticks allowed.");
@@ -19330,22 +19330,22 @@ const w0 = new class extends co{
       this.trigger(`pressure ${e.target.uid}:pressure`,e.data)
   }
   ),i.on("collectionCreated collectionDestroyed",e=>{
-    const t =`${e.type}${e.data.uid}:${e.type}`;this.trigger(t,e.data)
+    const t =`${e.type} ${e.data.uid}:${e.type}`;this.trigger(t,e.data)
 }
 ),i.on("attached detached",e=>{
-  const t =`${e.type}${e.data.joystick.uid}:${e.type}`;this.trigger(t,e.data)
+  const t =`${e.type} ${e.data.joystick.uid}:${e.type}`;this.trigger(t,e.data)
 }
 ),i.on("added start shown hidden rested removed end joystickCreated joystickDestroyed",e=>{
-  const t =`${e.type}${e.data.uid}:${e.type}`;this.trigger(t,e.data)
+  const t =`${e.type} ${e.data.uid}:${e.type}`;this.trigger(t,e.data)
 }
 ),i.on("move",e=>{
   this.trigger(`move ${e.data.instance.uid}:move`,e.data)
 }
 ),i.on("dir dir:up dir:right dir:down dir:left",e=>{
-  const t =`${e.type}${e.data.instance.uid}:${e.type}`;this.trigger(t,e.data)
+  const t =`${e.type} ${e.data.instance.uid}:${e.type}`;this.trigger(t,e.data)
 }
 ),i.on("plain plain:up plain:right plain:down plain:left",e=>{
-  const t =`${e.type}${e.data.instance.uid}:${e.type}`;this.trigger(t,e.data)
+  const t =`${e.type} ${e.data.instance.uid}:${e.type}`;this.trigger(t,e.data)
 }
 )
 }
@@ -21854,7 +21854,7 @@ function Yb(i,e){
   }
   const m = n.clone();
   return m.setIndex(g),t.geometry = m,v.map((y,C)=>{
-    if(y.length === 0)throw new Error(`Game car wheel ${C}has no detachable hardware`);const E = new Float32Array(y.length * 3),w = new Float32Array(y.length * 3),S = u[C];for(let T = 0;T < y.length;T+=1){
+    if(y.length === 0)throw new Error(`Game car wheel ${C} has no detachable hardware`);const E = new Float32Array(y.length * 3),w = new Float32Array(y.length * 3),S = u[C];for(let T = 0;T < y.length;T+=1){
     const R = y[T];iA.fromBufferAttribute(r,R).applyMatrix4(h).sub(S).toArray(E,T * 3),s && Xb.fromBufferAttribute(s,R).applyNormalMatrix(d).normalize().toArray(w,T * 3)
   }
   const k = new Ct;k.setAttribute("position",new zt(E,3)),s?k.setAttribute("normal",new zt(w,3)):k.computeVertexNormals(),k.computeBoundingBox(),k.computeBoundingSphere();const x = new Ee(k,t.material);return x.name =`${U0[C]}-hardware`,x
@@ -22936,7 +22936,7 @@ class V1{
     const e = this.getContext(),t = [`${Ec}/start.wav`,`${Ec}/loop.wav`,`${Ec}/release.wav`];
 let n = bp.get(e);
 return n || (n = Promise.all(t.map(async r=>{
-  const s = await fetch(r);if(!s.ok)throw new Error(`${s.status}${s.statusText}: ${r}`);return e.decodeAudioData(await s.arrayBuffer())
+  const s = await fetch(r);if(!s.ok)throw new Error(`${s.status} ${s.statusText}: ${r}`);return e.decodeAudioData(await s.arrayBuffer())
 }
 )),bp.set(e,n)),this.loading = n.then(r=>(this.buffers = r,r)).catch(r=>(console.warn("Golden Boost audio could not be loaded",r),[])),this.loading
 }
@@ -24135,7 +24135,7 @@ function XS(i){
 }
 function Ip(i){
   const e = i.clone();
-  return e.name =`${i.name}/ field side`,e.userData.fieldSideOnly = !0,e.onBeforeCompile = t=>{
+  return e.name =`${i.name} / field side`,e.userData.fieldSideOnly = !0,e.onBeforeCompile = t=>{
   t.vertexShader = t.vertexShader.replace("#include <common>",`
       #include <common>
       varying vec2 vStadiumPoint;
@@ -24953,7 +24953,7 @@ class jw{
     if(this.loading)return this.loading;
     const e = this.getContext();
     return this.loading = fetch(zp).then(t=>{
-      if(!t.ok)throw new Error(`${t.status}${t.statusText}: ${zp}`);return t.arrayBuffer()
+      if(!t.ok)throw new Error(`${t.status} ${t.statusText}: ${zp}`);return t.arrayBuffer()
 }
 ).then(t=>e.decodeAudioData(t)).then(t=>(this.buffer = t,t)).catch(t=>(console.warn("Flip reset audio could not be loaded from the local asset directory",t),null)),this.loading
 }
@@ -25164,7 +25164,7 @@ class Sw{
   }
   async preload(){
     await Promise.all(Object.keys(kc).map(async e=>{
-      if((await this.load(e)).length !== kc[e].length)throw new Error(`Car ${e}audio is unavailable`)
+      if((await this.load(e)).length !== kc[e].length)throw new Error(`Car ${e} audio is unavailable`)
   }
   ))
 }
@@ -25192,10 +25192,10 @@ load(e){
   const n = this.loading.get(e);
   if(n)return n;
   const r = this.getContext(),s = Promise.all(kc[e].map(async a=>{
-    const o =`${Cw}/${a}.wav`,A = await fetch(o);if(!A.ok)throw new Error(`${A.status}${A.statusText}: ${o}`);return r.decodeAudioData(await A.arrayBuffer())
+    const o =`${Cw}/${a}.wav`,A = await fetch(o);if(!A.ok)throw new Error(`${A.status} ${A.statusText}: ${o}`);return r.decodeAudioData(await A.arrayBuffer())
 }
 )).then(a=>(this.buffers.set(e,a),a)).catch(a=>{
-  console.warn(`Car ${e}audio could not be loaded`,a);const o = [];return this.buffers.set(e,o),o
+  console.warn(`Car ${e} audio could not be loaded`,a);const o = [];return this.buffers.set(e,o),o
 }
 ).finally(()=>{
   this.loading.delete(e)
@@ -25509,7 +25509,7 @@ function Kw(i){
   let e = em.get(i);
   return e || (e = (async()=>{
     var l,c;const t = await fetch(`${Qp}/manifest.json`);if(!t.ok)throw new Error(`Engine manifest: ${t.status}`);const n = await t.json();if(!((l = n.loaded) != null && l.length) || !((c = n.coast) != null && c.length) || !n.sampleRate)throw new Error("Invalid engine bank");const r = async h=>{
-  const d = await fetch(`${Qp}/${h}`);if(!d.ok)throw new Error(`Engine audio: ${d.status}${h}`);const u = await i.decodeAudioData(await d.arrayBuffer());if(u.numberOfChannels !== 1)throw new Error(`Engine recording must be mono: ${h}`);return u.getChannelData(0).slice()
+  const d = await fetch(`${Qp}/${h}`);if(!d.ok)throw new Error(`Engine audio: ${d.status} ${h}`);const u = await i.decodeAudioData(await d.arrayBuffer());if(u.numberOfChannels !== 1)throw new Error(`Engine recording must be mono: ${h}`);return u.getChannelData(0).slice()
 }
 ,s = async h=>Promise.all(h.map(async d=>({
   ...d,samples:await r(d.file)
@@ -25865,7 +25865,7 @@ this.editButton.addEventListener("click",()=>this.startEditing()),e.querySelecto
   if(!this.draft)return;const s = Ss(window.innerWidth,window.innerHeight);this.draft.layouts[s] = {
 
   }
-  ,this.render(),this.tools.querySelector("[data-touch-layout-status]").textContent =`${s === "portrait"?"Portrait":"Landscape"}reset. Save to keep it.`
+  ,this.render(),this.tools.querySelector("[data-touch-layout-status]").textContent =`${s === "portrait"?"Portrait":"Landscape"} reset. Save to keep it.`
 }
 ),e.querySelector("[data-touch-collapse]").addEventListener("click",s=>{
   const a = s.currentTarget,o = e.querySelector("#touch-editor-adjustments");o.hidden = !o.hidden,a.setAttribute("aria-expanded",String(!o.hidden)),a.textContent = o.hidden?"Show tools":"Hide tools"
@@ -26099,18 +26099,19 @@ function im(i,e,t,n,r){
     <span class="chip-pair">
       <button class="chip" type="button"
               data-bind-device="${i}" data-bind-action="${e}" data-bind-slot="${t}"
-              aria-label="Change ${s}binding for ${Li(e)}, currently ${Na(Hi(n,r))}">
-        ${Na(Hi(n,r))}</button>
+              aria-label="Change ${s} binding for ${Li(e)}, currently ${Na(Hi(n,r))}">
+        ${Na(Hi(n,r))}
+      </button>
       <button class="chip__clear" type="button"
               data-clear-device="${i}" data-clear-action="${e}" data-clear-slot="${t}"
-              aria-label="Remove ${Na(Hi(n,r))}from ${Li(e)}">
+              aria-label="Remove ${Na(Hi(n,r))} from ${Li(e)}">
         <span aria-hidden="true">×</span>
       </button>
     </span>
   `:`
       <button class="chip chip--empty" type="button"
               data-bind-device="${i}" data-bind-action="${e}" data-bind-slot="${t}"
-              aria-label="Add ${s}binding for ${Li(e)}">
+              aria-label="Add ${s} binding for ${Li(e)}">
         <span aria-hidden="true">+</span>
       </button>
     `
@@ -26236,7 +26237,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
         </button>
         <button id="settings-button" class="hud-tool" type="button"
                 aria-label="Open settings" title="Settings">
-          ${Vt("gear")}</button>
+          ${Vt("gear")}
+        </button>
       </div>
 
       <div id="settings-overlay" class="sheet-overlay" hidden aria-hidden="true">
@@ -26252,7 +26254,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
             </div>
             <button class="sheet-head__close" type="button" data-settings-close
                     aria-label="Close settings">
-              ${Vt("x")}</button>
+              ${Vt("x")}
+            </button>
           </header>
 
           <nav class="sheet-tabs" aria-label="Settings categories" role="tablist">
@@ -26368,7 +26371,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                   <p class="zone__note">Choose how much rendering power to use.</p>
                 </header>
                 <div class="zone__rows">
-                  ${Pr("limitFps","Limit FPS","Reduce GPU usage by capping the frame rate.","graphics")}<div class="dim" data-dim-row="maxFps">
+                  ${Pr("limitFps","Limit FPS","Reduce GPU usage by capping the frame rate.","graphics")}
+                  <div class="dim" data-dim-row="maxFps">
                     <label class="dim__label" for="graphics-maxFps">Maximum FPS</label>
                     <span class="dim__leader" aria-hidden="true"></span>
                     <span class="dim__control">
@@ -26386,7 +26390,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                   <p class="zone__note">The surroundings outside the playable arena.</p>
                 </header>
                 <div class="zone__rows">
-                  ${Pr("showStadium","Show Stadium","Draws the stands, roof, lights, signage, and sky.","graphics")}</div>
+                  ${Pr("showStadium","Show Stadium","Draws the stands, roof, lights, signage, and sky.","graphics")}
+                </div>
               </section>
             </section>
 
@@ -26432,10 +26437,12 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                   <p class="zone__note">What the corner readout carries.</p>
                 </header>
                 <div class="status-master">
-                  ${Pr("enabled","Show Status Overlay","Draws the readout over the game.","status")}<button class="act status-open-details" type="button" data-status-details disabled>View status details</button>
+                  ${Pr("enabled","Show Status Overlay","Draws the readout over the game.","status")}
+                  <button class="act status-open-details" type="button" data-status-details disabled>View status details</button>
                 </div>
                 <div class="zone__rows">
-                  ${_g.map(c=>Pr(c.key,c.label,c.note,"status")).join("")}</div>
+                  ${_g.map(c=>Pr(c.key,c.label,c.note,"status")).join("")}
+                </div>
               </section>
             </section>
 
@@ -26448,7 +26455,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                   <p class="zone__note">Session rules for practice.</p>
                 </header>
                 <div class="zone__rows">
-                  ${Pr("disableGoalReset","Disable Restart on Goal","Play on after the ball goes in.","training")}<div class="dim">
+                  ${Pr("disableGoalReset","Disable Restart on Goal","Play on after the ball goes in.","training")}
+                  <div class="dim">
                     <label class="dim__label" for="training-boost-option">Boost</label>
                     <span class="dim__leader" aria-hidden="true"></span>
                     <span class="dim__control">
@@ -26458,7 +26466,8 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                       </select>
                     </span>
                   </div>
-                  ${Pr("showCarHitbox","Show Car Hitbox","Draws the collision box around the car.","training")}</div>
+                  ${Pr("showCarHitbox","Show Car Hitbox","Draws the collision box around the car.","training")}
+                </div>
               </section>
             </section>
           </div>
@@ -26527,7 +26536,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
 }
 ),this.overlay.querySelector('[data-el="handle"]').addEventListener("click",()=>this.setAside(!this.asideMode,!0)),this.overlay.querySelectorAll("[data-theme-option]").forEach(c=>{
   c.addEventListener("click",()=>{
-    const h = c.dataset.themeOption;qs(h),this.setStatus(`${h === "arcade"?"Arcade":"Realistic"}theme selected.`)
+    const h = c.dataset.themeOption;qs(h),this.setStatus(`${h === "arcade"?"Arcade":"Realistic"} theme selected.`)
 }
 )
 }
@@ -26636,7 +26645,7 @@ syncAudioControls(){
 }
 updateAudioRangePresentation(e){
   const t = Math.round(Number(e.value));
-  e.style.setProperty("--dim-progress",`${t}%`),e.setAttribute("aria-valuetext",`${t}percent`);
+  e.style.setProperty("--dim-progress",`${t}%`),e.setAttribute("aria-valuetext",`${t} percent`);
 const n = this.overlay.querySelector('[data-audio-value-for="masterVolume"]');
 n && (n.value =`${t}%`)
 }
@@ -26663,12 +26672,12 @@ refreshPadStatus(){
   const t = Hd(),n = this.overlay.querySelector("#controller-input"),r = [new Option("Automatic (prefer game controller)","auto")];
   for(const o of OA())o != null && o.connected && r.push(new Option(`${o.id || "Controller"}· ${o.index + 1}`,String(o.index)));
 if(t.id !== null && !e){
-  const o = new Option(`${t.id}(disconnected)`,"disconnected");
+  const o = new Option(`${t.id} (disconnected)`,"disconnected");
 o.disabled = !0,r.push(o)
 }
 n.replaceChildren(...r),n.value = t.id === null?"auto":e?String(e.index):"disconnected",this.padLayout = Rh(e == null?void 0:e.id);
 const s = this.overlay.querySelector('[data-el="padStatus"]');
-s && (s.textContent = e?`${e.id.replace(/\s*\(.*\)\s*/g,"").trim() || "Controller"}· ${this.padLayout === "playstation"?"PlayStation":"Xbox"}layout`:t.id !== null?"Selected controller disconnected":"No controller detected",s.classList.toggle("is-live",!!e)),this.capture || this.renderParts(),this.updatePadHints()
+s && (s.textContent = e?`${e.id.replace(/\s*\(.*\)\s*/g,"").trim() || "Controller"}· ${this.padLayout === "playstation"?"PlayStation":"Xbox"} layout`:t.id !== null?"Selected controller disconnected":"No controller detected",s.classList.toggle("is-live",!!e)),this.capture || this.renderParts(),this.updatePadHints()
 }
 renderParts(){
   const e = this.overlay.querySelector('[data-el="partsBody"]');
@@ -26696,9 +26705,12 @@ renderParts(){
               <span class="parts__note">${a.note}</span>
             </th>
             <td class="parts__binds parts__binds--keyboard">
-              ${this.slotMarkup("keyboard",a.id,o)}</td>
+              ${this.slotMarkup("keyboard",a.id,o)}
+            </td>
             <td class="parts__binds parts__binds--controller">
-              ${this.slotMarkup("pad",a.id,A)}${this.axisHintFor(a.id)}</td>
+              ${this.slotMarkup("pad",a.id,A)}
+              ${this.axisHintFor(a.id)}
+            </td>
           </tr>
         `)
 }
@@ -26715,7 +26727,7 @@ axisHintFor(e){
     steer:t,pitch:n
   }
    = this.bindings.axes,r = a=>`<span class="axis-hint">${a}</span>`,s =`${Yo(t.axis)}${t.invert?" (inv)":""}`;
-return e === "steerLeft" || e === "steerRight"?r(s):e === "throttleForward" || e === "throttleReverse"?r(`pitch: ${Yo(n.axis)}${n.invert?" (inv)":""}`):e === "airRoll"?r(`held: ${s}rolls`):""
+return e === "steerLeft" || e === "steerRight"?r(s):e === "throttleForward" || e === "throttleReverse"?r(`pitch: ${Yo(n.axis)}${n.invert?" (inv)":""}`):e === "airRoll"?r(`held: ${s} rolls`):""
 }
 renderAxisRows(){
   const e = this.overlay.querySelector('[data-el="axisRows"]');
@@ -26729,14 +26741,16 @@ e.innerHTML =`
           <select id="axis-steer" class="pick" data-axis-role="steer">${t(this.bindings.axes.steer.axis)}</select>
         </span>
       </div>
-      ${Pr("steerInvert","Invert Steer","Flips the steering axis.","axisflag")}<div class="dim">
+      ${Pr("steerInvert","Invert Steer","Flips the steering axis.","axisflag")}
+      <div class="dim">
         <label class="dim__label" for="axis-pitch">Pitch Axis</label>
         <span class="dim__leader" aria-hidden="true"></span>
         <span class="dim__control">
           <select id="axis-pitch" class="pick" data-axis-role="pitch">${t(this.bindings.axes.pitch.axis)}</select>
         </span>
       </div>
-      ${Pr("pitchInvert","Invert Pitch","Stick up noses down when off.","axisflag")}<div class="dim">
+      ${Pr("pitchInvert","Invert Pitch","Stick up noses down when off.","axisflag")}
+      <div class="dim">
         <label class="dim__label" for="axis-deadzone">Stick Deadzone</label>
         <span class="dim__leader" aria-hidden="true"></span>
         <span class="dim__control">
@@ -26756,7 +26770,7 @@ e.innerHTML =`
       </div>
     `,e.querySelectorAll("[data-axis-role]").forEach(n=>{
   n.addEventListener("change",()=>{
-    const r = n.dataset.axisRole;this.bindings.axes[r].axis = Number(n.value),this.commitBindings(`${r === "steer"?"Steer":"Pitch"}axis set to ${Yo(Number(n.value))}.`),this.renderParts()
+    const r = n.dataset.axisRole;this.bindings.axes[r].axis = Number(n.value),this.commitBindings(`${r === "steer"?"Steer":"Pitch"} axis set to ${Yo(Number(n.value))}.`),this.renderParts()
 }
 )
 }
@@ -26813,7 +26827,7 @@ applyCapture(e){
     return
   }
   const r = Hi(e,this.padLayout);
-  this.commitBindings(`${r}bound to ${Li(t.action)}.`),this.renderParts();
+  this.commitBindings(`${r} bound to ${Li(t.action)}.`),this.renderParts();
 const s = this.overlay.querySelector(`[data-action-row="${t.action}"]`);
 s == null || s.classList.add("is-changed"),window.setTimeout(()=>s == null?void 0:s.classList.remove("is-changed"),900)
 }
@@ -26830,7 +26844,7 @@ r == null || r.classList.remove("is-capturing"),this.renderParts()
 }
 clearBindingAt(e,t,n){
   const s = this.bindings[e][t][n];
-  s && (RC(this.bindings,e,t,n),this.commitBindings(`${Hi(s,this.padLayout)}removed from ${Li(t)}.`),this.renderParts())
+  s && (RC(this.bindings,e,t,n),this.commitBindings(`${Hi(s,this.padLayout)} removed from ${Li(t)}.`),this.renderParts())
 }
 commitBindings(e){
   qC(this.bindings),this.onBindingsChange(this.bindings),e && this.setStatus(e)
@@ -26852,7 +26866,7 @@ updateGraphicsSetting(e){
 }
 syncGraphicsControls(){
   this.overlay.querySelectorAll("[data-graphics-setting]").forEach(e=>{
-    var n;const t = e.dataset.graphicsSetting;t === "showStadium" || t === "limitFps"?e.checked = this.graphics[t]:t === "maxFps" && (e.value = String(this.graphics.maxFps),e.disabled = !this.graphics.limitFps,e.setAttribute("aria-valuetext",`${this.graphics.maxFps}frames per second`),e.style.setProperty("--dim-progress",`${(this.graphics.maxFps - Ma) / (SA - Ma) * 100}%`),(n = e.closest(".dim")) == null || n.classList.toggle("is-disabled",!this.graphics.limitFps))
+    var n;const t = e.dataset.graphicsSetting;t === "showStadium" || t === "limitFps"?e.checked = this.graphics[t]:t === "maxFps" && (e.value = String(this.graphics.maxFps),e.disabled = !this.graphics.limitFps,e.setAttribute("aria-valuetext",`${this.graphics.maxFps} frames per second`),e.style.setProperty("--dim-progress",`${(this.graphics.maxFps - Ma) / (SA - Ma) * 100}%`),(n = e.closest(".dim")) == null || n.classList.toggle("is-disabled",!this.graphics.limitFps))
 }
 ),this.overlay.querySelector('[data-graphics-value-for="maxFps"]').value = String(this.graphics.maxFps)
 }
@@ -27286,7 +27300,8 @@ class UM{
               <p class="car-dialog__subtitle">Choose your ride.</p>
             </div>
             <button class="sheet-head__close" type="button" data-car-close aria-label="Close">
-              ${Vt("x",24)}</button>
+              ${Vt("x",24)}
+            </button>
           </header>
 
           <div class="car-grid" role="radiogroup" aria-label="Car body">
@@ -27310,7 +27325,7 @@ class UM{
 
           </div>
           <footer class="car-dialog__foot">
-            <span>${Vt("arrows-clockwise",16)}Switching cars restarts the arena.</span>
+            <span>${Vt("arrows-clockwise",16)} Switching cars restarts the arena.</span>
             <span class="car-dialog__keys"><kbd>←</kbd><kbd>→</kbd> Choose <kbd>Enter</kbd> Select</span>
           </footer>
         </section>
@@ -27528,7 +27543,8 @@ class $M{
               <p>One arena. One challenger.</p>
             </div>
             <button class="match-panel__close" type="button" data-match="close" aria-label="Close play menu">
-              ${Vt("x",24)}</button>
+              ${Vt("x",24)}
+            </button>
           </header>
 
           <div class="match-panel__body">
@@ -27684,14 +27700,14 @@ render(){
   const o = this.element("credit");
   o.href = t.noticeUrl,o.textContent = t.credit,this.overlay.querySelector(".match-opponent").dataset.playerTeam = n === 0?"blue":"orange";
   const A = e.overtime?`+${sm(e.overtimeSeconds,!1)}`:sm(e.remainingSeconds,!0),l = n === 0?"You":t.name,c = n === 1?"You":t.name;
-this.hud.hidden = !s,this.setText(this.hud,"blue-name",l),this.setText(this.hud,"orange-name",c),this.setText(this.hud,"blue-score",String(e.blueScore)),this.setText(this.hud,"orange-score",String(e.orangeScore)),this.setText(this.hud,"clock",A),this.setText(this.hud,"period",a?"Final":e.paused || this.openState?"Paused":e.overtime?"Overtime":"1v1"),this.hud.classList.toggle("is-overtime",e.overtime),this.hud.setAttribute("aria-label",`${l}${e.blueScore}, ${c}${e.orangeScore}. ${e.overtime?"Overtime ":""}${A}`),this.element("current").hidden = !s,this.setText(this.overlay,"blue-name",l),this.setText(this.overlay,"orange-name",c),this.setText(this.overlay,"current-clock",A),this.setText(this.overlay,"current-score",`${e.blueScore}— ${e.orangeScore}`),this.setText(this.overlay,"current-label",a?"Final score":"Match paused"),this.resumeButton.hidden = !s || a,this.resumeButton.disabled = this.starting,this.leaveButton.hidden = !s,this.leaveButton.disabled = this.starting,this.startButton.disabled = this.starting,this.startButton.classList.toggle("match-action--primary",!s || a),this.startButton.classList.toggle("match-action--secondary",s && !a);
+this.hud.hidden = !s,this.setText(this.hud,"blue-name",l),this.setText(this.hud,"orange-name",c),this.setText(this.hud,"blue-score",String(e.blueScore)),this.setText(this.hud,"orange-score",String(e.orangeScore)),this.setText(this.hud,"clock",A),this.setText(this.hud,"period",a?"Final":e.paused || this.openState?"Paused":e.overtime?"Overtime":"1v1"),this.hud.classList.toggle("is-overtime",e.overtime),this.hud.setAttribute("aria-label",`${l} ${e.blueScore}, ${c} ${e.orangeScore}. ${e.overtime?"Overtime ":""}${A}`),this.element("current").hidden = !s,this.setText(this.overlay,"blue-name",l),this.setText(this.overlay,"orange-name",c),this.setText(this.overlay,"current-clock",A),this.setText(this.overlay,"current-score",`${e.blueScore} — ${e.orangeScore}`),this.setText(this.overlay,"current-label",a?"Final score":"Match paused"),this.resumeButton.hidden = !s || a,this.resumeButton.disabled = this.starting,this.leaveButton.hidden = !s,this.leaveButton.disabled = this.starting,this.startButton.disabled = this.starting,this.startButton.classList.toggle("match-action--primary",!s || a),this.startButton.classList.toggle("match-action--secondary",s && !a);
 const h = this.starting?"Preparing opponent…":this.errorMessage?"Try again":a?"Play again":s?"Restart match":"Start match";
-((d = this.startButton.firstChild) == null?void 0:d.textContent) !==`${h}`&& (this.startButton.firstChild.textContent =`${h}`),this.loading.hidden = !this.starting,this.error.hidden = !this.errorMessage,this.error.textContent !== this.errorMessage && (this.error.textContent = this.errorMessage),this.dialog.setAttribute("aria-busy",String(this.starting)),this.renderMessage()
+((d = this.startButton.firstChild) == null?void 0:d.textContent) !==`${h} `&& (this.startButton.firstChild.textContent =`${h} `),this.loading.hidden = !this.starting,this.error.hidden = !this.errorMessage,this.error.textContent !== this.errorMessage && (this.error.textContent = this.errorMessage),this.dialog.setAttribute("aria-busy",String(this.starting)),this.renderMessage()
 }
 renderMessage(){
   const e = this.view,t = JA(this.selectedBotId).name,n = this.options.playerTeam,r = n === 0?1:0;
   let s = "",a = "",o = "",A = "";
-  e.mode === "match" && (e.phase === "ended"?(s = "Full time",a = e.winner === n?"You win":e.winner === r?`${t}wins`:"Match complete",o = "Open Play for a rematch",A = e.winner === 0?"blue":e.winner === 1?"orange":""):e.paused?(a = "Paused",o = "Ready when you are"):e.phase === "kickoff"?(s = e.overtime?"Overtime · Next goal wins":"Get ready",a = e.countdown > 0?String(Math.ceil(e.countdown)):"Go!"):e.phase === "goal"?(s = "Goal",a = e.scorer === n?"You scored":e.scorer === r?`${t}scored`:"Goal scored",A = e.scorer === 0?"blue":e.scorer === 1?"orange":""):!e.overtime && e.remainingSeconds <= 0 && (a = "Keep it up",o = "The clock is at zero. The ball is still live.")),this.message.hidden = !a || this.openState,this.message.dataset.team = A,this.message.classList.toggle("is-countdown",e.phase === "kickoff" && !e.paused),this.setText(this.message,"message-eyebrow",s),this.setText(this.message,"message-title",a),this.setText(this.message,"message-detail",o)
+  e.mode === "match" && (e.phase === "ended"?(s = "Full time",a = e.winner === n?"You win":e.winner === r?`${t} wins`:"Match complete",o = "Open Play for a rematch",A = e.winner === 0?"blue":e.winner === 1?"orange":""):e.paused?(a = "Paused",o = "Ready when you are"):e.phase === "kickoff"?(s = e.overtime?"Overtime · Next goal wins":"Get ready",a = e.countdown > 0?String(Math.ceil(e.countdown)):"Go!"):e.phase === "goal"?(s = "Goal",a = e.scorer === n?"You scored":e.scorer === r?`${t} scored`:"Goal scored",A = e.scorer === 0?"blue":e.scorer === 1?"orange":""):!e.overtime && e.remainingSeconds <= 0 && (a = "Keep it up",o = "The clock is at zero. The ball is still live.")),this.message.hidden = !a || this.openState,this.message.dataset.team = A,this.message.classList.toggle("is-countdown",e.phase === "kickoff" && !e.paused),this.setText(this.message,"message-eyebrow",s),this.setText(this.message,"message-title",a),this.setText(this.message,"message-detail",o)
 }
 focusables(){
   return Array.from(this.dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), a[href], [tabindex="0"]')).filter(e=>!e.hidden && e.offsetParent !== null)
@@ -27939,7 +27955,7 @@ class KM{
   }
   decode(e){
     const t = this.outputNames.map((A,l)=>{
-      const c = e[A];if(!c || c.length !== (l < 2?3:2) || !c.every(Number.isFinite))throw new Error(`Necto returned invalid ${A}logits.`);let h = 0;for(let d = 1;d < c.length;d++)c[d] > c[h] && (h = d);return h
+      const c = e[A];if(!c || c.length !== (l < 2?3:2) || !c.every(Number.isFinite))throw new Error(`Necto returned invalid ${A} logits.`);let h = 0;for(let d = 1;d < c.length;d++)c[d] > c[h] && (h = d);return h
   }
   ),[n,r,s,a,o] = t;
   return ed([n - 1,r - 1,n - 1,(r - 1) * (1 - o) || 0,(r - 1) * o || 0,s,a,o])
@@ -28469,7 +28485,7 @@ class aB{
         </div>
 
         <div class="status__section" data-section="chart" hidden>
-          <svg class="status__chart" viewBox="0 0 ${ya}${bi}" preserveAspectRatio="none" aria-hidden="true">
+          <svg class="status__chart" viewBox="0 0 ${ya} ${bi}" preserveAspectRatio="none" aria-hidden="true">
             <g class="status__grid" data-el="chartGrid"></g>
             <line class="status__budget" data-el="chartBudget" x1="0" y1="${bi / 2}" x2="${ya}" y2="${bi / 2}" />
             <path class="status__over" data-el="chartOver" d="" />
@@ -28565,12 +28581,12 @@ draw(){
   if(e.count === 0)return;
   const t = this.settings;
   if(t.frame && (this.set("summaryFps",e.frame.fps.toFixed(0)),this.set("summaryMs",e.frame.avgMs.toFixed(1))),!(this.compact.matches && !this.expanded)){
-    if(t.frame && (this.set("statFps",e.frame.fps.toFixed(0)),this.set("statFrame",e.frame.avgMs.toFixed(2)),this.set("statP50",e.frame.p50.toFixed(2)),this.set("statP95",e.frame.p95.toFixed(2)),this.set("statP99",e.frame.p99.toFixed(2)),this.set("statWorst",e.frame.worstMs.toFixed(1))),t.chart && this.drawChart(e),t.phases && !t.phasesCollapsed && this.rows("statPhases",[...e.phases.filter(r=>r.phase !== "other" || r.avgMs >= .02).map(r=>[r.phase,`${r.avgMs.toFixed(2)}ms`]),["cpu total",`${e.cpu.avgMs.toFixed(2)}ms`]]),t.sim){
+    if(t.frame && (this.set("statFps",e.frame.fps.toFixed(0)),this.set("statFrame",e.frame.avgMs.toFixed(2)),this.set("statP50",e.frame.p50.toFixed(2)),this.set("statP95",e.frame.p95.toFixed(2)),this.set("statP99",e.frame.p99.toFixed(2)),this.set("statWorst",e.frame.worstMs.toFixed(1))),t.chart && this.drawChart(e),t.phases && !t.phasesCollapsed && this.rows("statPhases",[...e.phases.filter(r=>r.phase !== "other" || r.avgMs >= .02).map(r=>[r.phase,`${r.avgMs.toFixed(2)} ms`]),["cpu total",`${e.cpu.avgMs.toFixed(2)} ms`]]),t.sim){
   const{
     ticksPerFrame:r,droppedTicks:s,clampedFrames:a,stalls:o
   }
    = e.sim;
-  this.rows("statSim",[["ticks / frame",r.toFixed(2)],["sim rate",`${Math.round(r * e.frame.fps)}/ 120 Hz`],["dropped",s === 0?"none":`${s}· ${a}f`,s > 0],["stalls",o === 0?"none":String(o),o > 0]])
+  this.rows("statSim",[["ticks / frame",r.toFixed(2)],["sim rate",`${Math.round(r * e.frame.fps)}/ 120 Hz`],["dropped",s === 0?"none":`${s} · ${a}f`,s > 0],["stalls",o === 0?"none":String(o),o > 0]])
 }
 if(t.renderer){
   const r = this.renderer.info;
@@ -28588,7 +28604,7 @@ drawChart(e){
   const A = p=>p / Math.max(1,a - 1) * ya,l = p=>bi - Math.min(1,p / o) * bi,c = [],h = [];
   for(let p = 0;p < a;p+=1){
     const v = A(p).toFixed(1),g = l(s[p]).toFixed(1);
-    c.push(`${v},${g}`),s[p] > e.budgetMs * 1.02 && h.push(`M ${v}${bi}L ${v}${g}`)
+    c.push(`${v},${g}`),s[p] > e.budgetMs * 1.02 && h.push(`M ${v} ${bi} L ${v} ${g}`)
 }
 t.setAttribute("points",c.join(" ")),r.setAttribute("d",h.join(" "));
 const d = l(e.budgetMs).toFixed(1);
@@ -28600,7 +28616,7 @@ u && u.childElementCount !== xa - 1 && (u.innerHTML = Array.from({
 ,(p,v)=>{
   const g = (v + 1) / xa * ya;return`<line x1="${g}" y1="0" x2="${g}" y2="${bi}" />`
 }
-).join("")),this.set("chartCaption",`${xa}s · ${e.budgetMs.toFixed(1)}ms at ~${e.refreshHz}Hz display · ${e.overBudgetPct.toFixed(0)}% over · peak ${o.toFixed(0)}ms`)
+).join("")),this.set("chartCaption",`${xa}s · ${e.budgetMs.toFixed(1)} ms at ~${e.refreshHz} Hz display · ${e.overBudgetPct.toFixed(0)}% over · peak ${o.toFixed(0)} ms`)
 }
 }
 // Analytics disabled in development
@@ -28996,7 +29012,7 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   return!0
 }
 ;
-Gc.textContent = "Preparing cars, sounds and opponents",await Promise.all([g.preload(),m.preload(),C.preload(),...E.map(W=>W.preload()),Y.preloadAudio(),o.preloadAll(),N.prepareAssets(),de.preload(),...["400 16px Archivo","500 16px Archivo","700 16px Archivo",'400 20px "Lilita One"'].map(W=>document.fonts.load(W))]),Gc.textContent = "Warming up visual effects",rd.textContent = "Almost ready to play.",N.update(s.prevState,s.currState,0,0,0,A,A,!1),H.update(N.cars[r],N.ball,0,be);
+Gc.textContent = "Preparing cars, sounds and opponents",await Promise.all([g.preload(),m.preload(),C.preload(),...E.map(W=>W.preload()),Y.preloadAudio(),o.preloadAll().catch(W=>console.warn("[Bot] Policy preload deferred or failed:",W)),N.prepareAssets(),de.preload(),...["400 16px Archivo","500 16px Archivo","700 16px Archivo",'400 20px "Lilita One"'].map(W=>document.fonts.load(W))]),Gc.textContent = "Warming up visual effects",rd.textContent = "Almost ready to play.",N.update(s.prevState,s.currState,0,0,0,A,A,!1),H.update(N.cars[r],N.ball,0,be);
 const Ye = tr();
 try{
   for(const W of dl)qs(W,{
