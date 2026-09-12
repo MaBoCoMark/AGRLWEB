@@ -4,8 +4,10 @@ node_modules/
 
 # Production / Build outputs
 dist/
-dist_game/
 build/
+
+# Big Assets
+car_soccer_source/public/assets
 
 # Logs
 npm-debug.log*
