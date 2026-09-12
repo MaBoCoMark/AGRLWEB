@@ -24571,7 +24571,7 @@ class ow{
 
   }
   async ensureOpponent(){
-    this.cars.length > 1 || (this.gameCarAsset ?? (this.gameCarAsset = await Uh()),!(this.cars.length > 1) && (this.opponentSun = this.makeSubjectSun(this.opponentSunTarget,cA),this.opponentSun.visible = !1,this.scene.add(this.opponentSun,this.opponentSunTarget),this.addCar(Gd(this.carVisual === "flat-car").botTeam,"game-car")))
+    this.cars.length > 1 || (this.gameCarAsset ?? (this.gameCarAsset = await Uh()),!(this.cars.length > 1) && (this.opponentSun = this.makeSubjectSun(this.opponentSunTarget,cA),this.opponentSun.visible = !1,this.scene.add(this.opponentSun,this.opponentSunTarget),this.addCar(1,"game-car")))
   }
   async prepareAssets(){
     await this.ensureOpponent(),this.cars[no].visible = !1,await Promise.all(this.carBoosts.flatMap(e=>e.map(t=>t.preload())))
@@ -27181,7 +27181,20 @@ function createWhiteboxCarModel(presetId, teamColor = 0x0088ff) {
     roughness: 0.35,
     metalness: 0.2
   });
-  const bodyMesh = new Ee(bodyGeom, bodyMat);
+  const rearMat = new lt({
+    color: 0xffffff,
+    roughness: 0.35,
+    metalness: 0.2
+  });
+  const materials = [
+    bodyMat, // Face 0: +X (Front - team color)
+    rearMat, // Face 1: -X (Rear / 车屁股 - White)
+    bodyMat, // Face 2: +Y (Top - team color)
+    bodyMat, // Face 3: -Y (Bottom - team color)
+    bodyMat, // Face 4: +Z (Side - team color)
+    bodyMat  // Face 5: -Z (Side - team color)
+  ];
+  const bodyMesh = new Ee(bodyGeom, materials);
   bodyMesh.position.set(cfg.forward, cfg.up, 0);
   bodyMesh.castShadow = true;
   bodyMesh.receiveShadow = true;
@@ -29065,10 +29078,30 @@ const multiplayerManager = new MultiplayerManager({
   arena: N,
   cameraRig: H,
   ballRadius: n.ballRadius,
+  createIndicatorRings: (ballRadius) => {
+    const r = ballRadius * 1.15;
+    const s = new Ya(r * 0.92, r, 48);
+    const a = new cn({
+      color: 16777215,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false
+    });
+    const ring = new Ee(s, a);
+    const heightRing = new Ee(s, a);
+    ring.rotation.x = -Math.PI / 2;
+    ring.renderOrder = 2;
+    heightRing.rotation.x = -Math.PI / 2;
+    heightRing.renderOrder = 2;
+    return { ring, heightRing };
+  },
   onEnterMultiplayer: () => {
     n.configureMultiplayer(i === "flat-car" ? "flat" : "default");
     N.ensureOpponent();
-    if (N.cars && N.cars[1]) N.cars[1].visible = true;
+    if (N.cars && N.cars[1]) {
+      N.cars[1].visible = true;
+      fl(N.cars[1], ul(xn[1]));
+    }
     if (N.opponentSun) N.opponentSun.visible = true;
     s.sync();
   },
