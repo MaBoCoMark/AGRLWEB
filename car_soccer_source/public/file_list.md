@@ -1,4 +1,4 @@
- public % find . -type f
+public % find . -type f
 
 ./favicon.ico
 ./images/favicon-16x16.png
@@ -14,9 +14,12 @@
 ./assets/audio/vehicle/jump-03.wav
 ./assets/audio/vehicle/jump-01.wav
 ./assets/audio/vehicle/wheel-impact-02.wav
+./assets/audio/vehicle/supersonic-enter-c.wav
+./assets/audio/vehicle/supersonic-enter-b.wav
 ./assets/audio/vehicle/wheel-impact-03.wav
 ./assets/audio/vehicle/wheel-impact-01.wav
 ./assets/audio/vehicle/dodge-04.wav
+./assets/audio/vehicle/supersonic-enter-a.wav
 ./assets/audio/vehicle/wheel-impact-04.wav
 ./assets/audio/vehicle/dodge-01.wav
 ./assets/audio/vehicle/dodge-02.wav
@@ -30,23 +33,34 @@
 ./assets/audio/boost/release.wav
 ./assets/audio/boost/start.wav
 ./assets/audio/impacts/surface-body-06.wav
+./assets/audio/impacts/arena-02.wav
+./assets/audio/impacts/arena-03.wav
 ./assets/audio/impacts/surface-body-05.wav
+./assets/audio/impacts/arena-01.wav
 ./assets/audio/impacts/surface-body-04.wav
+./assets/audio/impacts/arena-04.wav
+./assets/audio/impacts/arena-05.wav
 ./assets/audio/impacts/surface-body-01.wav
 ./assets/audio/impacts/surface-body-03.wav
+./assets/audio/impacts/arena-06.wav
 ./assets/audio/impacts/surface-body-02.wav
 ./assets/audio/impacts/vehicle-hard-03.wav
 ./assets/audio/impacts/vehicle-body-01.wav
 ./assets/audio/impacts/vehicle-hard-02.wav
+./assets/audio/impacts/grass-05.wav
 ./assets/audio/impacts/vehicle-body-03.wav
 ./assets/audio/impacts/vehicle-body-02.wav
 ./assets/audio/impacts/vehicle-hard-01.wav
+./assets/audio/impacts/grass-04.wav
 ./assets/audio/impacts/vehicle-hard-05.wav
 ./assets/audio/impacts/vehicle-body-06.wav
 ./assets/audio/impacts/vehicle-hard-04.wav
+./assets/audio/impacts/grass-01.wav
+./assets/audio/impacts/grass-03.wav
 ./assets/audio/impacts/vehicle-hard-06.wav
 ./assets/audio/impacts/vehicle-body-05.wav
 ./assets/audio/impacts/vehicle-body-04.wav
+./assets/audio/impacts/grass-02.wav
 ./assets/audio/impacts/vehicle-detail-01.wav
 ./assets/audio/impacts/vehicle-detail-03.wav
 ./assets/audio/impacts/vehicle-detail-02.wav
@@ -64,6 +78,7 @@
 ./assets/audio/engine/coast-20.wav
 ./assets/audio/engine/coast-08.wav
 ./assets/audio/engine/coast-09.wav
+./assets/audio/engine/idle.wav
 ./assets/audio/engine/coast-19.wav
 ./assets/audio/engine/coast-18.wav
 ./assets/audio/engine/loaded-08.wav
@@ -105,6 +120,9 @@
 ./assets/flat-car/model.glb
 ./assets/game-car/model.gltf
 ./assets/realistic-car/details.glb
+./assets/golden-boost/sparks.png
+./assets/golden-boost/plume.png
+./assets/golden-boost/turbulence.png
 ./assets/ball/albedo.png
 ./assets/ball/material-mask.png
 ./assets/ball/ball.gltf
