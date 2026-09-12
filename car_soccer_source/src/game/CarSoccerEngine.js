@@ -21691,7 +21691,7 @@ function ep(i,e,t){
 }
 )
 }
-const dl = ["realistic","arcade"],Gh = "realistic",I0 = rr("car-soccer.theme.v1",()=>({
+const dl = ["realistic","arcade"],Gh = "arcade",I0 = rr("car-soccer.theme.v1",()=>({
   theme:Gh
 }
 ),(i,e)=>{
@@ -24717,7 +24717,7 @@ class ow{
 
 }
 const Ps = {
-  cameraShake:!1,fov:110,distance:270,height:100,angleDeg: - 3,stiffness:.35,swivelSpeed:4,transitionSpeed:1,invertSwivel:!0
+  cameraShake:!1,fov:110,distance:270,height:90,angleDeg: - 4,stiffness:1,swivelSpeed:10,transitionSpeed:1.9,invertSwivel:!0
 }
 ,Aw = 32,Sc = 32,wc = 35,Mc = 38,lw = 41;
 class cw{
@@ -25981,11 +25981,14 @@ const _g = [{
   i.enabled = jr(e.enabled,i.enabled),i.phasesCollapsed = jr(e.phasesCollapsed,i.phasesCollapsed);for(const t of _g)i[t.key] = jr(e[t.key],i[t.key])
 }
 ),Ma = 60,SA = 240,uA = rr("car-soccer.graphics-settings.v1",()=>({
-  showStadium:!0,limitFps:!1,maxFps:120
+  showStadium:!0,limitFps:!0,maxFps:120,renderScale:100
 }
 ),(i,e)=>{
   i.showStadium = jr(e.showStadium,i.showStadium),i.limitFps = jr(e.limitFps,i.limitFps),i.maxFps = _r(e.maxFps,i.maxFps,{
     min:Ma,max:SA,integer:!0
+  }
+  ),i.renderScale = _r(e.renderScale,i.renderScale ?? 100,{
+    min:25,max:100
   }
   )
 }
@@ -26380,6 +26383,23 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                              min="${Ma}" max="${SA}" step="1" data-graphics-setting="maxFps" />
                     </span>
                     <output class="figure" data-graphics-value-for="maxFps" for="graphics-maxFps"></output>
+                  </div>
+                </div>
+              </section>
+              <section class="zone">
+                <header class="zone__head">
+                  <h2 class="zone__label">Resolution</h2>
+                  <p class="zone__note">Adjust internal rendering scale to balance sharpness and GPU performance.</p>
+                </header>
+                <div class="zone__rows">
+                  <div class="dim" data-dim-row="renderScale">
+                    <label class="dim__label" for="graphics-renderScale">Render Scale</label>
+                    <span class="dim__leader" aria-hidden="true"></span>
+                    <span class="dim__control">
+                      <input id="graphics-renderScale" class="dim__line" type="range"
+                             min="25" max="100" step="0.1" data-graphics-setting="renderScale" />
+                    </span>
+                    <output class="figure" data-graphics-value-for="renderScale" for="graphics-renderScale">100.0%</output>
                   </div>
                 </div>
               </section>
@@ -26861,14 +26881,25 @@ updateGraphicsSetting(e){
   const t = e.dataset.graphicsSetting;
   if(t === "showStadium" || t === "limitFps")this.graphics[t] = e.checked;
   else if(t === "maxFps")this.graphics.maxFps = Math.round(Math.max(Ma,Math.min(SA,e.valueAsNumber)));
+  else if(t === "renderScale")this.graphics.renderScale = Math.round(Math.max(25,Math.min(100,e.valueAsNumber))*10)/10;
   else return;
   uA.save(this.graphics),(n = this.onGraphicsChange) == null || n.call(this,this.graphics),this.syncGraphicsControls()
 }
 syncGraphicsControls(){
   this.overlay.querySelectorAll("[data-graphics-setting]").forEach(e=>{
-    var n;const t = e.dataset.graphicsSetting;t === "showStadium" || t === "limitFps"?e.checked = this.graphics[t]:t === "maxFps" && (e.value = String(this.graphics.maxFps),e.disabled = !this.graphics.limitFps,e.setAttribute("aria-valuetext",`${this.graphics.maxFps} frames per second`),e.style.setProperty("--dim-progress",`${(this.graphics.maxFps - Ma) / (SA - Ma) * 100}%`),(n = e.closest(".dim")) == null || n.classList.toggle("is-disabled",!this.graphics.limitFps))
+    var n;const t = e.dataset.graphicsSetting;
+    if(t === "showStadium" || t === "limitFps")e.checked = this.graphics[t];
+    else if(t === "maxFps")(e.value = String(this.graphics.maxFps),e.disabled = !this.graphics.limitFps,e.setAttribute("aria-valuetext",`${this.graphics.maxFps} frames per second`),e.style.setProperty("--dim-progress",`${(this.graphics.maxFps - Ma) / (SA - Ma) * 100}%`),(n = e.closest(".dim")) == null || n.classList.toggle("is-disabled",!this.graphics.limitFps));
+    else if(t === "renderScale"){
+      const rVal = Number(this.graphics.renderScale ?? 100);
+      e.value = rVal.toFixed(1),e.setAttribute("aria-valuetext",`${rVal.toFixed(1)}%`),e.style.setProperty("--dim-progress",`${(rVal - 25) / (100 - 25) * 100}%`)
+    }
 }
-),this.overlay.querySelector('[data-graphics-value-for="maxFps"]').value = String(this.graphics.maxFps)
+);
+  const maxFpsEl = this.overlay.querySelector('[data-graphics-value-for="maxFps"]');
+  if(maxFpsEl) maxFpsEl.value = String(this.graphics.maxFps);
+  const scaleEl = this.overlay.querySelector('[data-graphics-value-for="renderScale"]');
+  if(scaleEl) scaleEl.value = `${Number(this.graphics.renderScale ?? 100).toFixed(1)}%`
 }
 attachStatus(e,t){
   return this.onStatusChange = e,this.onStatusDetails = t ?? null,this.syncStatusControls(),this.status
@@ -28854,7 +28885,7 @@ async function dB(){
   x.capturing = W,R.capturing = W
 }
 ),We = Xe.attachGraphics(W=>{
-  N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null)
+  N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null),typeof qeRenderViewport == "function" && qeRenderViewport()
 }
 ),ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
@@ -28951,7 +28982,24 @@ N.scene.environment = G.fromScene(new c0,.04).texture,N.scene.environmentIntensi
 );
 const Ge = Xe.attachStatus(W=>Se == null?void 0:Se.apply(W),()=>Se == null?void 0:Se.showDetails());
 Se = new aB(an,He,te,Ge,W=>qe("status",W));
+function qeRenderViewport() {
+  if (typeof te === "undefined" || !te || typeof $e === "undefined" || !$e || typeof I === "undefined" || !I) return;
+  const scale = ((We == null ? void 0 : We.renderScale) ?? 100) / 100;
+  const basePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const effectivePixelRatio = basePixelRatio * scale;
+  H.camera.aspect = window.innerWidth / window.innerHeight;
+  H.camera.updateProjectionMatrix();
+  te.setPixelRatio(effectivePixelRatio);
+  te.setSize(window.innerWidth, window.innerHeight);
+  $e.setSize(window.innerWidth, window.innerHeight, te.getPixelRatio());
+  I.setPixelRatio(te.getPixelRatio());
+  I.setSize(window.innerWidth, window.innerHeight);
+  const renderWidth = Math.round(window.innerWidth * effectivePixelRatio);
+  const renderHeight = Math.round(window.innerHeight * effectivePixelRatio);
+  console.log(`[Render Viewport] ${renderWidth} x ${renderHeight} (window: ${window.innerWidth} x ${window.innerHeight}, scale: ${(scale * 100).toFixed(1)}%, pixelRatio: ${effectivePixelRatio.toFixed(3)})`);
+}
 const $e = new fw(te,window.innerWidth,window.innerHeight,te.getPixelRatio()),I = new uC(te);
+qeRenderViewport();
 I.addPass(new pC(N.scene,H.camera)),I.addPass(new h0(new Lt({
   uniforms:{
     baseTexture:{
@@ -29016,7 +29064,7 @@ const ae = ()=>{
 }
 ;
 window.addEventListener("resize",()=>{
-  H.camera.aspect = window.innerWidth / window.innerHeight,H.camera.updateProjectionMatrix(),te.setSize(window.innerWidth,window.innerHeight),$e.setSize(window.innerWidth,window.innerHeight,te.getPixelRatio()),I.setSize(window.innerWidth,window.innerHeight)
+  qeRenderViewport();
 }
 );
 let ze = performance.now(),Fe = 0,ke = x.read();

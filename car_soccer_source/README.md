@@ -15,7 +15,7 @@
 - **二进制编译部分**：
   游戏物理核心由 `RocketSim`（C++ Rocket League 物理仿真库）通过 Emscripten 编译为 WebAssembly 内嵌在 JS 中，提供 120Hz 确定性车辆悬挂、轮胎摩擦、空中翻滚与碰撞解算。
 - **外部非代码资源（媒体与模型文件）**：
-  仅包括 3D 模型（`.glb`/`.gltf`）、音频（`.wav`）、强化学习机器人权重（`.onnx`）与球场碰撞体分块（`.cmf`）。这些资产由 `tools/download_assets.py` 自动化从官网拉取，且已被 `.gitignore` 排除。
+  仅包括 3D 模型（`.glb`/`.gltf`）、音频（`.wav`）、强化学习机器人权重（`.onnx`）与球场碰撞体分块（`.cmf`）。这些资产由 `public/download_assets.py` 自动化从官网拉取，且已被 `.gitignore` 排除。
 
 ### 2. 为何此前车和球会初始化在球场正中心 `(0, 0, 0)`？
 - 之前的重构代码在 `GameEngine.js` 中虽然初始化了 RocketSim 物理核心，但**漏掉了调用 `physics.addCar(...)`**，导致 RocketSim 内部车辆数量为 0。
@@ -26,7 +26,7 @@
 - 根据用户明确要求：“*如果没有检测到必要的资源文件的话，你可以显示一个提示，比如说少什么东西，而不是说我们有一个 fallback 的一个模拟选项*”。
 - 我们**彻底移除了伪物理回退模块 (`ProceduralPhysicsFallback.js`)**。
 - 引入了**开机启动资产预检机制 (`checkRequiredAssets`)**：
-  若在本地启动时缺少碰撞体分块或模型文件，游戏不会启动劣质模拟器，而是在加载屏幕上以友好的高对比度界面清晰列出缺失的具体文件路径，并提示执行 `python3 tools/download_assets.py` 进行一键下载。
+  若在本地启动时缺少碰撞体分块或模型文件，游戏不会启动劣质模拟器，而是在加载屏幕上以友好的高对比度界面清晰列出缺失的具体文件路径，并提示执行 `python3 public/download_assets.py` 进行一键下载。
 
 ---
 
@@ -49,7 +49,7 @@
 ### 1. 检查并下载外部资产 (若未下载)
 由于 `public/assets` 包含约 40+ 个 3D 高模、音效与碰撞体分块，且已被 `.gitignore` 排除。若您本地尚未下载，只需执行：
 ```bash
-python3 tools/download_assets.py
+python3 public/download_assets.py
 ```
 *注：该脚本将全自动从官网下载球场模型、足球贴图、车辆模型、RocketSim 16 个碰撞体分块与引擎音效。*
 
@@ -82,6 +82,6 @@ car_soccer_source/
 │   └── styles/
 │       ├── game.css             # 游戏样式主入口
 │       └── original_fonts.css   # 官方完整 253KB 像素级 UI 样式表 (包含所有菜单、弹窗、表盘样式)
-└── tools/
+└── ../public/ (decoupled assets └── tools/ download tools)
     └── download_assets.py       # 官方资产自动化下载工具
 ```

@@ -7,8 +7,10 @@ dist/
 build/
 
 # Big Assets
-car_soccer_source/public/assets
-car_soccer_source/public/*.wasm
+/public/*.wasm
+/public/assets
+/public/images
+/myaudio
 
 # Logs
 npm-debug.log*

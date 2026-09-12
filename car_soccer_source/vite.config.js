@@ -52,7 +52,7 @@ function downloadWasm(urls, destPaths) {
 
 export default defineConfig({
   root: '.',
-  publicDir: 'public',
+  publicDir: resolve(__dirname, '../public'),
   server: {
     port: 3000,
     open: true,
@@ -97,9 +97,9 @@ export default defineConfig({
 
           // 1. Handle ort-wasm requests (simd-threaded) specifically
           if (pathname.includes('ort-wasm-simd-threaded') || pathname.endsWith('.wasm')) {
-            const inRoot = resolve(__dirname, 'public/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
-            const inAssets = resolve(__dirname, 'public/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
-            const genericDiskPath = resolve(__dirname, 'public', pathname.replace(/^\//, ''));
+            const inRoot = resolve(__dirname, '../public/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
+            const inAssets = resolve(__dirname, '../public/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
+            const genericDiskPath = resolve(__dirname, '../public', pathname.replace(/^\//, ''));
 
             const foundPath = existsSync(inRoot)
               ? inRoot
@@ -140,12 +140,12 @@ export default defineConfig({
 
           // 2. Guard any /assets/ or /images/ static file requests
           if (pathname.startsWith('/assets/') || pathname.startsWith('/images/')) {
-            const diskPath = resolve(__dirname, 'public', pathname.replace(/^\//, ''));
+            const diskPath = resolve(__dirname, '../public', pathname.replace(/^\//, ''));
             if (!existsSync(diskPath)) {
               res.statusCode = 404;
               res.setHeader('Content-Type', 'text/plain; charset=utf-8');
               res.setHeader('X-Asset-Missing', 'true');
-              res.end(`[Asset Missing 404] The requested asset "${pathname}" was not found on disk at: ${diskPath}.\nPlease verify that all assets listed in file_list.md are present or run tools/parallel.py.`);
+              res.end(`[Asset Missing 404] The requested asset "${pathname}" was not found on disk at: ${diskPath}.\nPlease verify that all assets listed in public/file_list.md are present or run public/parallel.py.`);
               return;
             }
           }

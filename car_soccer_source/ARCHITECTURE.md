@@ -115,4 +115,4 @@ const ye = {
    - 球场模型：`/assets/arena/stadium/stadium.glb`
    - 足球模型：`/assets/ball/ball.gltf`
    - 车辆模型：`/assets/game-car/model.gltf`
-   若检测到 404 或未加载，直接在 `<div id="loading" data-state="error">` 呈现格式化错误指示，指引开发者运行 `python3 tools/download_assets.py`。
+   若检测到 404 或未加载，直接在 `<div id="loading" data-state="error">` 呈现格式化错误指示，指引开发者运行 `python3 public/download_assets.py`。

@@ -9,16 +9,17 @@ export class CameraController {
   constructor(aspect = window.innerWidth / window.innerHeight) {
     this.fov = 110;
     this.distance = 270;
-    this.height = 100;
+    this.height = 90;
     this.pitchDeg = -4;
-    this.stiffness = 0.45;
-    this.swivelSpeed = 2.5;
+    this.stiffness = 1.0;
+    this.swivelSpeed = 10;
+    this.transitionSpeed = 1.9;
 
     this.ballCam = true; // Ball Cam enabled by default
     this.camera = new THREE.PerspectiveCamera(this.fov, aspect, 1, 60000);
 
     // Coordinate positions
-    this.currentPosition = new THREE.Vector3(0, 100, -300);
+    this.currentPosition = new THREE.Vector3(0, 90, -270);
     this.targetPosition = new THREE.Vector3();
     this.lookAtTarget = new THREE.Vector3();
     this.currentLookAt = new THREE.Vector3();
@@ -71,14 +72,14 @@ export class CameraController {
 
     // Swivel / manual look offset
     if (lookOffset.x !== 0 || lookOffset.y !== 0) {
-      this.targetPosition.x += lookOffset.x * 120;
-      this.targetPosition.y += lookOffset.y * 60;
+      this.targetPosition.x += lookOffset.x * 12 * this.swivelSpeed;
+      this.targetPosition.y += lookOffset.y * 6 * this.swivelSpeed;
     }
 
     // Smooth camera motion
-    const lerpFactor = 1 - Math.exp(-15 * dt * this.stiffness);
-    this.currentPosition.lerp(this.targetPosition, Math.min(lerpFactor, 0.9));
-    this.currentLookAt.lerp(this.lookAtTarget, Math.min(lerpFactor, 0.9));
+    const lerpFactor = 1 - Math.exp(-15 * dt * this.stiffness * (this.transitionSpeed / 1.5));
+    this.currentPosition.lerp(this.targetPosition, Math.min(lerpFactor, 0.99));
+    this.currentLookAt.lerp(this.lookAtTarget, Math.min(lerpFactor, 0.99));
 
     this.camera.position.copy(this.currentPosition);
     this.camera.lookAt(this.currentLookAt);
