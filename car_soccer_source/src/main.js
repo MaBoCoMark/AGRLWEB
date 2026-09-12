@@ -1,30 +1,10 @@
 /**
  * main.js
  * Application bootstrap entry point.
+ * Imports complete Car Soccer Game Engine & original styling.
  */
 
-import { GameEngine } from './game/GameEngine.js';
 import './styles/game.css';
+import './game/CarSoccerEngine.js';
 
-window.addEventListener('DOMContentLoaded', async () => {
-  const container = document.getElementById('app');
-  if (!container) {
-    console.error('Root element #app not found in document.');
-    return;
-  }
-
-  // Register PWA Service Worker if supported
-  if ('serviceWorker' in navigator && window.isSecureContext) {
-    try {
-      await navigator.serviceWorker.register('/game-sw.js');
-      console.log('[App] Service Worker registered.');
-    } catch (e) {
-      console.warn('[App] Service Worker registration skipped:', e.message);
-    }
-  }
-
-  console.log('[App] Starting Car Soccer Engine...');
-  const game = new GameEngine(container);
-  await game.start();
-  console.log('[App] Car Soccer running smoothly.');
-});
+console.log('[CarSoccer] Official Car Soccer Engine online — Free Play ready.');
