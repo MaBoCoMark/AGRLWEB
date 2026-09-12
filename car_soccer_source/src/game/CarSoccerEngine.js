@@ -1,3 +1,4 @@
+import { auditRequiredAssets, formatMissingAssetsHtml, validateAssetResponse } from './AssetDiagnostics.js';
 import jC from '../physics/RocketSimWasm.js';
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
@@ -7137,6 +7138,10 @@ class Pd extends Xi{
   }
   ),o = this.mimeType,A = this.responseType;
   fetch(a).then(l=>{
+    const check = validateAssetResponse(l, e, A);
+    if (!check.ok && A !== "document" && !e.endsWith(".html")) {
+      throw check.error;
+    }
     if(l.status === 200 || l.status === 0){
       if(l.status === 0 && it("FileLoader: HTTP Status 0 received."),typeof ReadableStream > "u" || l.body === void 0 || l.body.getReader === void 0)return l;const c = Rr[e],h = l.body.getReader(),d = l.headers.get("X-File-Size") || l.headers.get("Content-Length"),u = d?parseInt(d):0,p = u !== 0;let v = 0;const g = new ReadableStream({
         start(m){
@@ -17852,7 +17857,17 @@ class yC{
   }
   async init(){
     this.module = await jC();
-    const e = await(await fetch("/assets/arena/collision/manifest.json")).json(),t = await Promise.all(e.map(async A=>new Uint8Array(await(await fetch(`/assets/arena/collision/${A}`)).arrayBuffer()))),n = t.reduce((A,l)=>A + l.length,0),r = this.module._malloc(n),s = this.module._malloc(t.length * 4);
+    const mRes = await fetch("/assets/arena/collision/manifest.json");
+    const mCheck = validateAssetResponse(mRes, "/assets/arena/collision/manifest.json", "json");
+    if (!mCheck.ok) throw mCheck.error;
+    const e = await mRes.json();
+    const t = await Promise.all(e.map(async A => {
+      const cPath = `/assets/arena/collision/${A}`;
+      const cRes = await fetch(cPath);
+      const cCheck = validateAssetResponse(cRes, cPath, "cmf");
+      if (!cCheck.ok) throw cCheck.error;
+      return new Uint8Array(await cRes.arrayBuffer());
+    })), n = t.reduce((A, l) => A + l.length, 0), r = this.module._malloc(n), s = this.module._malloc(t.length * 4);
   let a = 0;
   t.forEach((A,l)=>{
     this.module.HEAPU8.set(A,r + a),this.module.HEAP32[s / 4 + l] = A.length,a+=A.length
@@ -21231,7 +21246,20 @@ class $b{
       const o = a[0],A = hc[r.type],l = Ts[r.componentType],c = l.BYTES_PER_ELEMENT,h = c * A,d = r.byteOffset || 0,u = r.bufferView !== void 0?n.bufferViews[r.bufferView].byteStride:void 0,p = r.normalized === !0;let v,g;if(u && u !== h){
         const m = Math.floor(d / u),y = "InterleavedBuffer:" + r.bufferView + ":" + r.componentType + ":" + m + ":" + r.count;let C = t.cache.get(y);C || (v = new l(o,m * u,r.count * u / c),C = new Tm(v,u / c),t.cache.add(y,C)),g = new Va(C,A,d % u / c,p)
       }
-      else o === null?v = new l(r.count * A):v = new l(o,d,r.count * A),g = new zt(v,A,p);if(r.sparse !== void 0){
+      else {
+        try {
+          o === null ? v = new l(r.count * A) : v = new l(o, d, r.count * A);
+        } catch (bufErr) {
+          const reqBytes = r.count * A * c;
+          const actualBytes = o ? o.byteLength : 0;
+          const errMsg = `[GLTFLoader] Buffer length out of range in accessor ${e}: requested ${reqBytes} bytes at offset ${d}, but buffer only has ${actualBytes} bytes (${l.name}). File may be truncated or corrupted.`;
+          console.error(errMsg);
+          const err = new Error(errMsg);
+          err.isAssetError = true;
+          throw err;
+        }
+        g = new zt(v, A, p);
+      }if(r.sparse !== void 0){
         const m = hc.SCALAR,y = Ts[r.sparse.indices.componentType],C = r.sparse.indices.byteOffset || 0,E = r.sparse.values.byteOffset || 0,w = new y(a[1],C,r.sparse.count * m),S = new l(a[2],E,r.sparse.count * A);o !== null && (g = new zt(g.array.slice(),g.itemSize,g.normalized)),g.normalized = !1;for(let k = 0,x = w.length;k < x;k++){
           const T = w[k];if(g.setX(T,S[k * A]),A >= 2 && g.setY(T,S[k * A + 1]),A >= 3 && g.setZ(T,S[k * A + 2]),A >= 4 && g.setW(T,S[k * A + 3]),A >= 5)throw new Error("THREE.GLTFLoader: Unsupported itemSize in sparse BufferAttribute.")
         }
@@ -25213,11 +25241,13 @@ class kw{
     _(this,"previousWorldSerial",null)
   }
   async preload(){
-    await Promise.all(Object.keys(Rc).map(async e=>{
-      if((await this.load(e)).length !== Rc[e].length)throw new Error(`Ball-hit ${e}audio is unavailable`)
+    await Promise.all(Object.keys(Rc).map(async e => {
+      const b = await this.load(e);
+      if (b.length !== Rc[e].length) {
+        console.warn(`[Impact Audio Warning] Ball-hit "${e}" audio loaded ${b.length}/${Rc[e].length} tracks.`);
+      }
+    }));
   }
-  ))
-}
 update(e){
   if(this.previousCarSerial === null || this.previousWorldSerial === null){
     this.previousCarSerial = e.carSerial,this.previousWorldSerial = e.worldSerial;
@@ -25233,13 +25263,21 @@ load(e){
   if(t)return Promise.resolve(t);
   const n = this.loading.get(e);
   if(n)return n;
-  const r = this.getContext(),s = Promise.all(Rc[e].map(async a=>{
-    const o =`${ww}/${a}.wav`,A = await fetch(o);if(!A.ok)throw new Error(`${A.status}${A.statusText}: ${o}`);return r.decodeAudioData(await A.arrayBuffer())
-}
-)).then(a=>(this.buffers.set(e,a),a)).catch(a=>{
-  console.warn(`Ball-hit ${e}audio could not be loaded`,a);const o = [];return this.buffers.set(e,o),o
-}
-).finally(()=>{
+  const r = this.getContext(), s = Promise.all(Rc[e].map(async a => {
+    const o = `${ww}/${a}.wav`;
+    const A = await fetch(o);
+    const check = validateAssetResponse(A, o, "audio");
+    if (!check.ok) throw check.error;
+    try {
+      return await r.decodeAudioData(await A.arrayBuffer());
+    } catch (err) {
+      throw new Error(`[Impact Audio Error] Failed to decode "${o}": ${err.message}`);
+    }
+  })).then(a => (this.buffers.set(e, a), a)).catch(a => {
+    console.warn(`[Impact Audio Warning] Ball-hit "${e}" audio could not be loaded:`, a.message || a);
+    const o = [];
+    return this.buffers.set(e, o), o;
+  }).finally(()=>{
   this.loading.delete(e)
 }
 );
@@ -25315,22 +25353,27 @@ class Lw{
     if(this.unavailable)return Promise.reject(this.loadError);
     if(this.buffer)return Promise.resolve();
     if(this.loading)return this.loading;
-    const e = this.context ?? (this.context = qr()),t = async n=>{
-      const r = await fetch(`/assets/audio/vehicle/${n}.wav`);
-    if(!r.ok)throw new Error(`Audio request failed: ${r.status}${n}`);
-return e.decodeAudioData(await r.arrayBuffer())
-}
-;
-return this.loading = Promise.all(["supersonic-loop",...Iw].map(t)).then(([n,...r])=>{
-  this.buffer = n,this.entries = r
-}
-).catch(n=>{
-  throw this.unavailable = !0,this.loadError = n,console.warn("Supersonic audio could not be loaded",n),n
-}
-).finally(()=>{
-  this.loading = null
-}
-),this.loading
+    const e = this.context ?? (this.context = qr()), t = async n => {
+      const u = `/assets/audio/vehicle/${n}.wav`;
+      const r = await fetch(u);
+      const check = validateAssetResponse(r, u, "audio");
+      if (!check.ok) throw check.error;
+      try {
+        return await e.decodeAudioData(await r.arrayBuffer());
+      } catch (decErr) {
+        throw new Error(`[Supersonic Audio Error] Failed to decode "${u}": ${decErr.message}`);
+      }
+    };
+    return this.loading = Promise.all(["supersonic-loop", ...Iw].map(t)).then(([n, ...r]) => {
+      this.buffer = n, this.entries = r;
+    }).catch(n => {
+      this.unavailable = !0;
+      this.loadError = n;
+      console.warn(`[CarSoccerEngine Audio Warning] Supersonic sound unavailable: ${n.message || n}`);
+      return null;
+    }).finally(() => {
+      this.loading = null;
+    }), this.loading
 }
 update(e,t,n = !0){
   t && (this.unlocked = !0);
@@ -28653,45 +28696,15 @@ const nd = document.querySelector("#loading"),
       rd = document.querySelector("#loading .load__note"),
       Gc = document.querySelector("#loading .load__label");
 
-async function checkRequiredAssets() {
-  const criticalAssets = [
-    { path: "/assets/arena/collision/manifest.json", desc: "RocketSim arena collision meshes" },
-    { path: "/assets/arena/stadium/stadium.glb", desc: "Stadium 3D architecture model" },
-    { path: "/assets/ball/ball.gltf", desc: "Ball 3D model & textures" },
-    { path: "/assets/game-car/model.gltf", desc: "Octane car 3D model" }
-  ];
-
-  const missing = [];
-  await Promise.all(criticalAssets.map(async (item) => {
-    try {
-      const res = await fetch(item.path, { method: "HEAD" });
-      if (!res.ok && res.status !== 405) {
-        missing.push(`${item.desc} (<code>${item.path}</code>)`);
-      }
-    } catch (e) {
-      missing.push(`${item.desc} (<code>${item.path}</code>)`);
-    }
-  }));
-  return missing;
-}
-
 async function dB(){
-  const missingAssets = await checkRequiredAssets();
-  if (missingAssets.length > 0) {
-    const err = new Error(
-      `<div style="text-align:left;line-height:1.6;font-size:13px;max-width:580px;background:rgba(10,20,36,0.9);padding:16px;border-radius:8px;border:1px solid #2a4365;">` +
-      `<p style="color:#ff6b6b;font-weight:bold;margin:0 0 8px 0;font-size:15px;">⚠️ 缺少运行必需的外部资产文件 (Missing Required Assets):</p>` +
-      `<p style="margin:0 0 8px 0;color:#e2e8f0;">系统检测到 <code>public/assets/</code> 目录缺少以下高品质模型与物理网格：</p>` +
-      `<ul style="margin:0 0 12px 20px;padding:0;color:#cbd5e1;">` +
-      missingAssets.map(m => `<li style="margin-bottom:4px;">${m}</li>`).join("") +
-      `</ul>` +
-      `<p style="margin:0 0 6px 0;color:#e2e8f0;">请在能够访问互联网的环境中运行自带的下载脚本一键获取全部官方素材：</p>` +
-      `<pre style="background:rgba(0,0,0,0.5);border:1px solid #4a5568;padding:8px 12px;border-radius:6px;color:#38bdf8;font-family:monospace;font-size:12px;margin:8px 0;user-select:all;">python3 tools/download_assets.py</pre>` +
-      `<p style="margin:8px 0 0 0;color:#94a3b8;font-size:12px;">下载完成后刷新本页面即可启动。本项目已彻底弃用低质简陋的街机模拟伪回退 (Procedural fallback disabled)，保证 100% 官方 RocketSim 真实物理与画面！</p>` +
-      `</div>`
-    );
+  const { missingCritical, missingNonCritical } = await auditRequiredAssets();
+  if (missingCritical.length > 0) {
+    const err = new Error(formatMissingAssetsHtml(missingCritical));
     err.isAssetError = true;
     throw err;
+  }
+  if (missingNonCritical.length > 0) {
+    console.warn(`[CarSoccerEngine Asset Notice] Some non-critical assets (audio/textures/models) are missing:`, missingNonCritical.map(m => m.path));
   }
 
   await cB(),Gc.textContent = "Preparing the arena",rd.textContent = "Getting every car, sound and game mode ready.";

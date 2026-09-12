@@ -7,7 +7,7 @@ audio files, and bot policy files from the live car-soccer.com server
 in parallel using multi-threading, skipping files that already exist.
 
 Usage:
-  python3 tools/download_assets.py
+  python3 tools/parallel.py
 """
 
 import os
@@ -56,6 +56,11 @@ ASSETS = [
     "/assets/flat-car/model.glb",
     "/assets/realistic-car/details.glb",
     
+    # Visual Effects / Boost Particle Textures
+    "/assets/golden-boost/plume.png",
+    "/assets/golden-boost/turbulence.png",
+    "/assets/golden-boost/sparks.png",
+    
     # Bot AI Workers & Models
     "/assets/worker-iFqqV1m9.js",
     "/assets/bot/policy.onnx",
@@ -73,6 +78,9 @@ ASSETS = [
     
     # Audio - Vehicle
     "/assets/audio/vehicle/supersonic-loop.wav",
+    "/assets/audio/vehicle/supersonic-enter-a.wav",
+    "/assets/audio/vehicle/supersonic-enter-b.wav",
+    "/assets/audio/vehicle/supersonic-enter-c.wav",
     "/assets/audio/vehicle/jump-01.wav",
     "/assets/audio/vehicle/jump-02.wav",
     "/assets/audio/vehicle/jump-03.wav",
@@ -122,6 +130,17 @@ ASSETS = [
     "/assets/audio/impacts/surface-body-04.wav",
     "/assets/audio/impacts/surface-body-05.wav",
     "/assets/audio/impacts/surface-body-06.wav",
+    "/assets/audio/impacts/grass-01.wav",
+    "/assets/audio/impacts/grass-02.wav",
+    "/assets/audio/impacts/grass-03.wav",
+    "/assets/audio/impacts/grass-04.wav",
+    "/assets/audio/impacts/grass-05.wav",
+    "/assets/audio/impacts/arena-01.wav",
+    "/assets/audio/impacts/arena-02.wav",
+    "/assets/audio/impacts/arena-03.wav",
+    "/assets/audio/impacts/arena-04.wav",
+    "/assets/audio/impacts/arena-05.wav",
+    "/assets/audio/impacts/arena-06.wav",
     
     # Engine Audio
     "/assets/audio/engine/manifest.json",
@@ -188,6 +207,12 @@ def extract_manifest_assets(rel_path, data):
                         files_set.add(item["file"])
                     elif isinstance(item, str):
                         files_set.add(item)
+            if "idle" in engine_data:
+                idle_item = engine_data["idle"]
+                if isinstance(idle_item, dict) and "file" in idle_item:
+                    files_set.add(idle_item["file"])
+                elif isinstance(idle_item, str):
+                    files_set.add(idle_item)
             for f in files_set:
                 extra_assets.append(f"/assets/audio/engine/{f}")
         except Exception as e:
