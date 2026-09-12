@@ -17972,37 +17972,12 @@ async function jC(i = {
 
 }
 ){
-  var vt,_t,rt;
-  var e = i,t = !!globalThis.window,n = !!globalThis.WorkerGlobalScope,r = ((_t = (vt = globalThis.process) == null?void 0:vt.versions) == null?void 0:_t.node) && ((rt = globalThis.process) == null?void 0:rt.type) != "renderer";
-  if(r){
-    const{
-      createRequire:f
-    }
-     = await d0(()=>import("./__vite-browser-external-BIHI7g3E.js"),[]);
-    var s = f(import.meta.url)
-  }
+  var e = i,t = !!globalThis.window,n = !!globalThis.WorkerGlobalScope;
   var a = "./this.program",o = (f,j)=>{
     throw j
   }
   ,A = import.meta.url,l = "",c,h;
-  if(r){
-    var d = s("node:fs");
-    A.startsWith("file:") && (l = s("node:path").dirname(s("node:url").fileURLToPath(A)) + "/"),h = f=>{
-      f = y(f)?new URL(f):f;
-      var j = d.readFileSync(f);
-      return j
-    }
-    ,c = async(f,j = !0)=>{
-      f = y(f)?new URL(f):f;
-      var M = d.readFileSync(f,j?void 0:"utf8");
-      return M
-    }
-    ,process.argv.length > 1 && (a = process.argv[1].replace(/\\/g,"/")),process.argv.slice(2),o = (f,j)=>{
-      throw process.exitCode = f,j
-    }
-
-  }
-  else if(t || n){
+  if(t || n){
     try{
       l = new URL(".",A).href
     }
@@ -34283,29 +34258,8 @@ s · ${e.budgetMs.toFixed(1)
  ms`)
 }
 }
-const oB = "phc_rwFXBqE8hWPtW4YS84PSHCxxXAFZfJUC2rpREZfRt9sg",AB = ["car-soccer.com","www.car-soccer.com"].includes(location.hostname) && navigator.doNotTrack !== "1";
-AB && d0(async()=>{
-  const{
-    default:i
-  }
-   = await import("./module.no-external-lXQM_FQ3.js");return{
-    default:i
-  }
-
-}
-,[]).then(({
-  default:i
-}
-)=>{
-  i.init(oB,{
-    api_host:"https://us.i.posthog.com",ui_host:"https://us.posthog.com",defaults:"2026-05-30",capture_pageview:!0,capture_pageleave:!0,before_send:e=>(e == null?void 0:e.event) === "$pageview" || (e == null?void 0:e.event) === "$pageleave"?e:null,persistence:"localStorage",person_profiles:"never",respect_dnt:!0,autocapture:!1,rageclick:!1,capture_dead_clicks:!1,capture_heatmaps:!1,capture_performance:!1,capture_exceptions:!1,disable_session_recording:!0,disable_surveys:!0,advanced_disable_flags:!0
-  }
-  )
-}
-).catch(()=>{
-
-}
-);
+// Analytics disabled in development
+const oB = "phc_rwFXBqE8hWPtW4YS84PSHCxxXAFZfJUC2rpREZfRt9sg",AB = false;
 const td = "/",pm =`${td
 }
 game-sw.js`;
@@ -34350,6 +34304,54 @@ async function cB(i){
   }
 }
 
+
+
+async function hB(i,e,t,n){
+  const r=new Set;
+  e.traverseVisible(h=>{h instanceof ai&&r.add(h)});
+  const s=[],a=new Map,o=(n.passes??[]).map(h=>({pass:h,enabled:h.enabled})),A=(n.disappearingLightRoots??[]).map(h=>{const d=[];return h.traverse(u=>{u instanceof ai&&d.push(u)}),d}).filter(h=>h.length>0),l=i.getRenderTarget(),c=i.shadowMap.needsUpdate;
+  e.traverse(h=>{var d,u;if(s.push({object:h,visible:h.visible,frustumCulled:h.frustumCulled}),h.visible=!0,h.frustumCulled=!1,h instanceof Ee||h instanceof Ai||h instanceof rl){const p=h.geometry;p.drawRange.count===0&&!a.has(p)&&(a.set(p,{...p.drawRange}),p.setDrawRange(0,((d=p.index)==null?void 0:d.count)??((u=p.attributes.position)==null?void 0:u.count)??0))}});
+  for(const{pass:h}of o)h.enabled=!0;
+  try{
+    const h=new Set;
+    for(const d of[!1,!0])for(let u=0;u<2**A.length;u++){
+      for(const{object:v}of s)v instanceof ai&&(v.visible=d||r.has(v));
+      for(let v=0;v<A.length;v++)if(u&1<<v)for(const g of A[v])g.visible=!1;
+      const p=s.filter(({object:v})=>v instanceof ai&&v.visible).map(({object:v})=>v.id).join(",");
+      h.has(p)||(h.add(p),await i.compileAsync(e,t),await n.renderBloom(),i.shadowMap.needsUpdate=!0,n.renderFinal())
+    }
+  }finally{
+    for(const{object:h,visible:d,frustumCulled:u}of s)h.visible=d,h.frustumCulled=u;
+    for(const[h,d]of a)h.setDrawRange(d.start,d.count);
+    for(const{pass:h,enabled:d}of o)h.enabled=d;
+    i.shadowMap.needsUpdate=c,i.setRenderTarget(l)
+  }
+}
+
+const an = document.querySelector("#app");
+const ml = i => {
+  an.dataset.inputMethod !== i && (an.dataset.inputMethod = i);
+};
+ml(navigator.maxTouchPoints > 0 || window.matchMedia("(any-pointer: coarse)").matches ? "touch" : "mouse");
+window.addEventListener("keydown", i => {
+  i.repeat || ml("keyboard");
+}, !0);
+window.addEventListener("pointerdown", i => {
+  ml(i.pointerType === "touch" || i.pointerType === "pen" ? "touch" : "mouse");
+}, { capture: !0, passive: !0 });
+
+an.innerHTML = `
+  <div id="loading" data-state="loading">
+    <div class="load__emblem"><img src="${mC}" width="512" height="512" alt="Orange car chasing a soccer ball" fetchpriority="high" /></div>
+    <h1 class="load__title">CAR <span>SOCCER</span></h1>
+    <p class="load__label" role="status">Loading game</p>
+    <div class="load__rule"></div>
+    <p class="load__note"></p>
+  </div>
+`;
+const nd = document.querySelector("#loading"),
+      rd = document.querySelector("#loading .load__note"),
+      Gc = document.querySelector("#loading .load__label");
 
 async function checkRequiredAssets() {
   const criticalAssets = [

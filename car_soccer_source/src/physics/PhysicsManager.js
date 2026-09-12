@@ -1,17 +1,15 @@
 /**
  * PhysicsManager.js
- * Unified physics orchestrator.
- * Dynamically boots RocketSim WebAssembly when collision manifests are available,
- * or effortlessly falls back to the pure JavaScript ProceduralPhysicsFallback engine.
+ * Unified physics orchestrator for RocketSim WebAssembly.
+ * Loads 16 collision mesh chunks and communicates with RocketSim C++ core.
  */
 
 import jC from './RocketSimWasm.js';
-import { ProceduralPhysicsFallback } from './ProceduralPhysicsFallback.js';
 import { BALL, CONTROLS_STRIDE } from '../constants/GameConstants.js';
 
 export class PhysicsManager {
   constructor() {
-    this.mode = 'fallback'; // 'rocketsim' or 'fallback'
+    this.mode = 'rocketsim';
     this.sim = null;
     this.module = null;
     
@@ -27,9 +25,8 @@ export class PhysicsManager {
   }
 
   async init() {
-    console.log('[PhysicsManager] Initializing physics subsystem...');
+    console.log('[PhysicsManager] Initializing RocketSim physics subsystem...');
 
-    // Attempt to initialize RocketSim WASM + collision meshes
     try {
       const manifestResp = await fetch('/assets/arena/collision/manifest.json');
       if (!manifestResp.ok) {
@@ -77,37 +74,34 @@ export class PhysicsManager {
       this.stateLen = this.module._physics_getStateSize();
       this.controlsPtr = this.module._physics_getControlsPtr();
 
-      this.mode = 'rocketsim';
       console.log('[PhysicsManager] RocketSim WebAssembly physics engine successfully online!');
       return;
     } catch (err) {
-      console.warn('[PhysicsManager] Could not start RocketSim WASM engine:', err.message);
-      console.log('[PhysicsManager] Engaging high-performance ProceduralPhysicsFallback engine.');
-      this.mode = 'fallback';
-      this.sim = new ProceduralPhysicsFallback();
+      console.error('[PhysicsManager] Could not start RocketSim WASM engine:', err.message);
+      throw err;
     }
   }
 
   get state() {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       const buffer = this.module.HEAPF32.buffer;
       if (!this.stateView || this.stateView.buffer !== buffer) {
         this.stateView = new Float32Array(buffer, this.statePtr, this.stateLen);
       }
       return this.stateView;
     }
-    return this.sim.state;
+    return new Float32Array(100);
   }
 
   addCar(team, config = 'default') {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       return this.module._physics_addCar(team, config === 'flat' ? 1 : 0);
     }
-    return team === 0 ? 0 : 1;
+    return 0;
   }
 
   setControls(carIndex, controls) {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       const buffer = this.module.HEAPF32.buffer;
       if (!this.controlsView || this.controlsView.buffer !== buffer) {
         this.controlsView = new Float32Array(buffer, this.controlsPtr, 8 * CONTROLS_STRIDE);
@@ -121,42 +115,33 @@ export class PhysicsManager {
       this.controlsView[offset + 5] = controls.jump ? 1 : 0;
       this.controlsView[offset + 6] = controls.boost ? 1 : 0;
       this.controlsView[offset + 7] = controls.handbrake ? 1 : 0;
-    } else {
-      this.sim.setControls(carIndex, controls);
     }
   }
 
   step(ticks = 1) {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       this.module._physics_step(ticks);
-    } else {
-      this.sim.step(ticks);
     }
   }
 
   resetKickoff(type = 0) {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       this.module._physics_resetKickoff(type);
-    } else {
-      this.sim.resetKickoff(type);
     }
   }
 
   pollGoal() {
-    if (this.mode === 'rocketsim') {
+    if (this.module) {
       const g = this.state[1];
       if (g !== 0) {
         this.module._physics_clearGoalFlag();
       }
       return g;
     }
-    return this.sim.pollGoal();
+    return 0;
   }
 
   getPads() {
-    if (this.mode === 'fallback') {
-      return this.sim.getPads();
-    }
     return [];
   }
 }
