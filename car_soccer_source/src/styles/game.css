@@ -1,0 +1,306 @@
+/*
+ * game.css
+ * Sleek, arcade-styled user interface for Car Soccer.
+ */
+
+@import './original_fonts.css';
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #0b111e;
+  font-family: 'Lilita One', 'Archivo', system-ui, -apple-system, sans-serif;
+  color: #ffffff;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* HUD Overlay */
+.hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 24px;
+}
+
+/* Top Bar / Scoreboard */
+.hud-top-bar {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  margin: 0 auto;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.hud-team {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 24px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.hud-team.blue {
+  background: linear-gradient(90deg, rgba(0, 102, 255, 0.4), rgba(0, 102, 255, 0.15));
+  border-right: 2px solid #0066ff;
+}
+
+.hud-team.orange {
+  background: linear-gradient(270deg, rgba(255, 102, 0, 0.4), rgba(255, 102, 0, 0.15));
+  border-left: 2px solid #ff6600;
+}
+
+.hud-score {
+  font-size: 32px;
+  min-width: 24px;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.hud-timer-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 20px;
+  min-width: 90px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.hud-timer {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.hud-timer.critical {
+  color: #ff3b30;
+  animation: pulse-red 1s infinite;
+}
+
+.hud-timer.overtime {
+  color: #ffcc00;
+}
+
+.hud-timer-sub {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Center Countdown Banner */
+.hud-center-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hud-center-banner h1 {
+  font-size: 96px;
+  font-weight: 900;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 40px rgba(255, 255, 255, 0.4);
+  animation: scale-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Goal Banner */
+.hud-goal-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 60px;
+  border-radius: 20px;
+  backdrop-filter: blur(16px);
+  animation: goal-bounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.hud-goal-banner.blue-theme {
+  background: radial-gradient(circle, rgba(0, 119, 255, 0.85) 0%, rgba(0, 51, 153, 0.9) 100%);
+  border: 3px solid #66b2ff;
+}
+
+.hud-goal-banner.orange-theme {
+  background: radial-gradient(circle, rgba(255, 102, 0, 0.85) 0%, rgba(180, 50, 0, 0.9) 100%);
+  border: 3px solid #ffaa66;
+}
+
+.hud-goal-banner h1 {
+  font-size: 72px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  text-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+.hud-goal-banner p {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  opacity: 0.9;
+}
+
+/* Bottom Left: Ball Cam Badge */
+.hud-bottom-left {
+  align-self: flex-start;
+}
+
+.hud-cam-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s ease;
+}
+
+.hud-cam-badge.active {
+  background: rgba(0, 119, 255, 0.35);
+  border-color: #0077ff;
+  color: #ffffff;
+}
+
+/* Bottom Right: Circular Boost Meter */
+.hud-bottom-right {
+  align-self: flex-end;
+}
+
+.boost-meter-container {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.boost-ring {
+  position: absolute;
+  transform: rotate(-90deg);
+}
+
+.boost-bg {
+  fill: rgba(15, 23, 42, 0.75);
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 10;
+}
+
+.boost-bar {
+  fill: transparent;
+  stroke: #ffaa00;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.05s linear, stroke 0.2s ease;
+}
+
+.boost-value {
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.boost-label {
+  position: absolute;
+  bottom: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Controls Hint at bottom center */
+.hud-controls-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+  padding: 8px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: opacity 1s ease;
+}
+
+.hud-controls-hint span {
+  color: #ffaa00;
+  font-weight: 700;
+}
+
+.hud-controls-hint.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes scale-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes goal-bounce {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  70% { transform: translate(-50%, -50%) scale(0.96); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
