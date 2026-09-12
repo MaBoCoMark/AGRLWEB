@@ -8,6 +8,7 @@ build/
 
 # Big Assets
 car_soccer_source/public/assets
+car_soccer_source/public/*.wasm
 
 # Logs
 npm-debug.log*
