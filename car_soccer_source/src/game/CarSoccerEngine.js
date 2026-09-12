@@ -1,5 +1,8 @@
 import { auditRequiredAssets, formatMissingAssetsHtml, validateAssetResponse } from './AssetDiagnostics.js';
 import jC from '../physics/RocketSimWasm.js';
+import { EMotorSynth } from '../audio/EMotorSynth.js';
+import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
+import { MultiplayerManager } from './MultiplayerManager.js';
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
   enumerable:!0,configurable:!0,writable:!0,value:t
@@ -22352,7 +22355,9 @@ class u1{
 
 }
 const f1 = "car-soccer.audio-settings.v1",lg = {
-  masterVolume:.6
+  masterVolume:.6,
+  engineVolume:.8,
+  boostVolume:.8
 }
 ,bA = rr(f1,()=>({
   ...lg
@@ -22361,7 +22366,15 @@ const f1 = "car-soccer.audio-settings.v1",lg = {
   i.masterVolume = _r(e.masterVolume,i.masterVolume,{
     min:0,max:1
   }
-  )
+  );
+  i.engineVolume = _r(e.engineVolume,i.engineVolume ?? .8,{
+    min:0,max:1
+  }
+  );
+  i.boostVolume = _r(e.boostVolume,i.boostVolume ?? .8,{
+    min:0,max:1
+  }
+  );
 }
 ),Xd = "car-soccer:audio-settings-changed",mc = globalThis,En = mc.__carSoccerAudio ?? (mc.__carSoccerAudio = p1());
 function p1(){
@@ -22394,6 +22407,56 @@ function up(i){
   var e;
   Number.isFinite(i) && (En.settings.masterVolume = Math.min(1,Math.max(0,i)),(e = En.mixer) == null || e.setVolume(En.settings.masterVolume),bA.save(En.settings),window.dispatchEvent(new Event(Xd)))
 }
+function setEngineVolume(i){
+  Number.isFinite(i) && (En.settings.engineVolume = Math.min(1,Math.max(0,i)),bA.save(En.settings),window.dispatchEvent(new Event(Xd)))
+}
+function setBoostVolume(i){
+  Number.isFinite(i) && (En.settings.boostVolume = Math.min(1,Math.max(0,i)),bA.save(En.settings),window.dispatchEvent(new Event(Xd)))
+}
+class BoostCollectAudioPlayer {
+  constructor() {
+    this.buffer = null;
+    this.loaded = false;
+    this.warned = false;
+  }
+  async load() {
+    if (this.loaded || this.warned) return;
+    try {
+      const res = await fetch("/custom/assets/audio/boost_collect.ogg");
+      if (!res.ok) {
+        this.warned = true;
+        console.warn("[Boost Audio] Asset does not exist: /custom/assets/audio/boost_collect.ogg. Continuing without collect audio.");
+        return;
+      }
+      const ctx = qr();
+      const data = await res.arrayBuffer();
+      this.buffer = await ctx.decodeAudioData(data);
+      this.loaded = true;
+    } catch (e) {
+      this.warned = true;
+      console.warn("[Boost Audio] Asset does not exist: /custom/assets/audio/boost_collect.ogg. Continuing without collect audio.", (e && e.message) || e);
+    }
+  }
+  play() {
+    if (!this.loaded || !this.buffer) {
+      if (!this.warned) this.load();
+      return;
+    }
+    try {
+      const ctx = qr();
+      const src = ctx.createBufferSource();
+      src.buffer = this.buffer;
+      const gain = ctx.createGain();
+      const vol = (En.settings.boostVolume ?? 0.8) * (En.settings.masterVolume ?? 1.0);
+      gain.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), ctx.currentTime);
+      src.connect(gain);
+      gain.connect($r());
+      src.start();
+    } catch (e) {}
+  }
+}
+const boostCollectAudio = new BoostCollectAudioPlayer();
+boostCollectAudio.load();
 const fp = 250,g1 = 4500,v1 = .4;
 function j1(i){
   if(!Number.isFinite(i))return 0;
@@ -23498,7 +23561,7 @@ class nS{
 
 }
 const wp = 95;
-function rS(){
+function rS(patternColor = null){
   const i = new Td(1,0),e = i.getAttribute("position"),t = [],n = new Map,r = [];
   for(let m = 0;m < e.count;m+=3){
     const y = [];
@@ -23521,7 +23584,7 @@ function rS(){
     }
     )
   }
-  const A = [],l = [],c = [],h = [],d = new Ne(16052713),u = new Ne(1054498),p = new Ne(3423560),v = (m,y,C)=>{
+  const A = [],l = [],c = [],h = [],d = new Ne(16052713),u = patternColor != null ? new Ne(patternColor) : new Ne(1054498),p = new Ne(3423560),v = (m,y,C)=>{
     const E = A.length / 3;
     return A.push(m.x * y,m.y * y,m.z * y),l.push(m.x,m.y,m.z),c.push(C.r,C.g,C.b),E
   }
@@ -23549,8 +23612,8 @@ function rS(){
   }
   ,g
 }
-function iS(){
-  const i = new Ee(rS(),Nr({
+function iS(patternColor = null){
+  const i = new Ee(rS(patternColor),Nr({
     name:"Classic soccer ball / matte leather",vertexColors:!0
   }
   ));
@@ -24453,7 +24516,7 @@ class ow{
     this.ballLocatorArrow.update(this.cars[t],this.ball,e)
   }
   async loadCarAndPadAssets(){
-    [this.gameCarAsset,this.flatCarAsset,this.realisticCarAsset] = await Promise.all([Uh(),Y0(),og()]);
+    [this.gameCarAsset,this.flatCarAsset] = await Promise.all([Uh(),Y0()]);this.realisticCarAsset = null;
     const e = new cb,t = new Ao,n = async r=>{
       const s = await t.loadAsync(r);
       return s.colorSpace = Ht,s
@@ -24500,9 +24563,15 @@ class ow{
     await this.ensureOpponent(),this.cars[no].visible = !1,await Promise.all(this.carBoosts.flatMap(e=>e.map(t=>t.preload())))
   }
   addCar(e,t = this.carVisual){
-    const n = new dt,r = this.cars.length === no,s = t === "realistic",a = t === "flat-car";
+    const n = new dt,r = this.cars.length === no,s = t === "realistic",a = t === "flat-car",isHitbox = t.startsWith("hitbox-");
     let o = null,A;
-    if(s){
+    if(isHitbox){
+      const preset = HITBOX_PRESETS[t] || HITBOX_PRESETS["hitbox-octane"];
+      n.add(createWhiteboxCarModel(t, xn[e]));
+      const u = RS(preset);
+      u.visible = this.carHitboxesVisible,this.carHitboxes.push(u),this.carGimbals.push(null),n.add(u),A = Wb;
+    }
+    else if(s){
       const u = new dt;
       u.name = "realistic-car",o = sg(xn[e]),u.add(o.group);
       const p = rg();
@@ -24521,8 +24590,11 @@ class ow{
       const u = RS(a?Qb:void 0);
       u.visible = this.carHitboxesVisible,this.carHitboxes.push(u),this.carGimbals.push(null),n.add(u),A = a?t1:Wb
     }
-    const l = s?VA:a?X0:q0,c = [];
-    for(let u = 0;u < l.length;u+=1){
+    const l = isHitbox?[]:s?VA:a?X0:q0,c = [];
+    if(isHitbox){
+      for(let u = 0;u < 4;u++) c.push({ steer: new dt, spin: new dt });
+    }
+    else for(let u = 0;u < l.length;u+=1){
       const[p,v,g] = l[u],m = new dt;
       m.position.set(p,a?J0[u]:g - zA,v);
       const y = new dt;
@@ -25504,145 +25576,88 @@ class Xw{
   }
 
 }
-const Qp = "/assets/audio/engine",Jw = .16 * 10**(4 / 20),em = new WeakMap;
-function Kw(i){
-  let e = em.get(i);
-  return e || (e = (async()=>{
-    var l,c;const t = await fetch(`${Qp}/manifest.json`);if(!t.ok)throw new Error(`Engine manifest: ${t.status}`);const n = await t.json();if(!((l = n.loaded) != null && l.length) || !((c = n.coast) != null && c.length) || !n.sampleRate)throw new Error("Invalid engine bank");const r = async h=>{
-  const d = await fetch(`${Qp}/${h}`);if(!d.ok)throw new Error(`Engine audio: ${d.status} ${h}`);const u = await i.decodeAudioData(await d.arrayBuffer());if(u.numberOfChannels !== 1)throw new Error(`Engine recording must be mono: ${h}`);return u.getChannelData(0).slice()
-}
-,s = async h=>Promise.all(h.map(async d=>({
-  ...d,samples:await r(d.file)
-}
-))),[a,o,A] = await Promise.all([s(n.loaded),s(n.coast),r(n.idle.file),i.audioWorklet.addModule(Fw)]);return{
-  loaded:a,coast:o,idle:A,sampleRate:i.sampleRate
-}
-}
-)(),em.set(i,e),e)
-}
-class tm{
-  constructor(e = !1){
-    _(this,"drive",new Xw);
-    _(this,"spatial");
-    _(this,"context",null);
-    _(this,"node",null);
-    _(this,"output",null);
-    _(this,"filters",[]);
-    _(this,"spatialBus",null);
-    _(this,"loading",null);
-    _(this,"resumePending",!1);
-    _(this,"unlocked",!1);
-    _(this,"disposed",!1);
-    _(this,"unavailable",!1);
-    _(this,"loadError",null);
-    _(this,"wanted",!1);
-    _(this,"alive",!1);
-    _(this,"active",!1);
-    _(this,"sendAt",0);
-    _(this,"position",new F);
-    _(this,"state",{
-      rpm:0,load:0
-    }
-    );
-    _(this,"unlock",()=>{
-      this.disposed || (this.unlocked = !0,this.wanted && this.prepare())
-    }
-    );
-    _(this,"visibilityChanged",()=>{
-      document.hidden && this.silence()
-    }
-    );
-    _(this,"silence",()=>{
-      var t,n;const e = this.active;this.wanted = !1,this.active = !1,this.sendAt = 0,e && (this.output && this.context && (this.output.gain.cancelScheduledValues(this.context.currentTime),this.output.gain.setValueAtTime(0,this.context.currentTime),(t = this.node) == null || t.port.postMessage({
-        type:"state",rpm:this.state.rpm,load:this.state.load,enabled:!1
+class tm {
+  constructor(e = !1) {
+    _(this, "synth", null);
+    _(this, "spatial", e);
+    _(this, "position", new F);
+    _(this, "alive", !0);
+    _(this, "audible", !0);
+    _(this, "disposed", !1);
+    _(this, "unlocked", !1);
+    _(this, "spatialBus", null);
+    _(this, "unlock", () => {
+      this.disposed || (this.unlocked = !0, this.prepare());
+    });
+    this.spatial = e;
+    window.addEventListener("pointerdown", this.unlock, { passive: !0 });
+    window.addEventListener("keydown", this.unlock);
+  }
+  preload() {
+    if (this.disposed) return Promise.resolve();
+    try {
+      const ctx = qr();
+      if (!this.synth) {
+        if (this.spatial) {
+          this.spatialBus = new cg(ctx, $r());
+          this.spatialBus.setPosition(this.position);
+          this.synth = new EMotorSynth(ctx, this.spatialBus.input);
+        } else {
+          this.synth = new EMotorSynth(ctx, $r());
+        }
       }
-      )),(n = this.spatialBus) == null || n.setEnabled(!1))
-    }
-    );
-    this.spatial = e,window.addEventListener("pointerdown",this.unlock,{
-      passive:!0
-    }
-    ),window.addEventListener("keydown",this.unlock),window.addEventListener("blur",this.silence),window.addEventListener("pagehide",this.silence),document.addEventListener("visibilitychange",this.visibilityChanged)
+    } catch (err) {}
+    return Promise.resolve();
   }
-  preload(){
-    if(this.unavailable)return Promise.reject(this.loadError);
-    if(this.disposed || this.node)return Promise.resolve();
-    if(this.loading)return this.loading;
-    const e = this.context ?? (this.context = qr());
-    return this.loading = Kw(e).then(t=>{
-      var a;if(this.disposed)return;this.node = new AudioWorkletNode(e,"car-engine",{
-        numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[1]
+  update(e, t) {
+    if (this.disposed) return;
+    if (!this.synth) {
+      this.preload();
+    }
+    if (e.position) {
+      this.position.copy(e.position);
+      if (this.spatialBus) this.spatialBus.setPosition(this.position);
+    }
+    this.alive = e.alive !== !1;
+    this.audible = e.audible !== !1 && !document.hidden && document.hasFocus();
+    const vol = (En.settings.engineVolume ?? 0.8) * (En.settings.masterVolume ?? 1.0);
+    if (this.synth) {
+      this.synth.setVolume(vol);
+      this.synth.update({
+        forwardSpeed: e.forwardSpeed,
+        alive: this.alive,
+        audible: this.audible
+      });
+    }
+    if (this.spatialBus) {
+      this.spatialBus.setEnabled(this.alive && this.audible);
+    }
+  }
+  silence() {
+    this.synth?.silence();
+    if (this.spatialBus) this.spatialBus.setEnabled(!1);
+  }
+  reset() {
+    this.synth?.reset();
+    if (this.spatialBus) this.spatialBus.setEnabled(!1);
+  }
+  dispose() {
+    if (!this.disposed) {
+      this.disposed = !0;
+      window.removeEventListener("pointerdown", this.unlock);
+      window.removeEventListener("keydown", this.unlock);
+      this.synth?.dispose();
+      this.synth = null;
+      if (this.spatialBus) {
+        this.spatialBus.dispose();
+        this.spatialBus = null;
       }
-      ),this.node.port.postMessage({
-        type:"bank",...t
-      }
-      );const n = e.createBiquadFilter();n.type = "highpass",n.frequency.value = 150,n.Q.value = 1;const r = e.createBiquadFilter();r.type = "peaking",r.frequency.value = 250,r.Q.value = 1,r.gain.value = - 4;const s = e.createBiquadFilter();s.type = "highshelf",s.frequency.value = 5e3,s.gain.value = 2,this.filters = [n,r,s],this.output = e.createGain(),this.output.gain.value = 0,this.node.connect(n).connect(r).connect(s).connect(this.output),this.spatial && (this.spatialBus = new cg(e,$r()),this.spatialBus.setPosition(this.position),this.spatialBus.setEnabled(!1)),this.output.connect(((a = this.spatialBus) == null?void 0:a.input) ?? $r())
     }
-    ).catch(t=>{
-      throw this.unavailable = !0,this.loadError = t,console.warn("Engine audio could not be loaded",t),t
-    }
-    ).finally(()=>{
-      this.loading = null
-    }
-    ),this.loading
   }
-  update(e,t){
-    var n;
-    if(!this.disposed){
-      if(e.alive !== this.alive && (this.reset(),this.alive = e.alive),e.position && (this.position.copy(e.position),(n = this.spatialBus) == null || n.setPosition(this.position)),this.wanted = e.alive && e.audible && !document.hidden && document.hasFocus(),!this.wanted){
-        this.silence();
-        return
-      }
-      this.state = this.drive.update(e,t),e.controllerActive && (this.unlocked = !0),this.unlocked && this.prepare(),this.apply()
-    }
-
+  prepare() {
+    this.preload();
   }
-  reset(){
-    var e;
-    this.disposed || (this.drive.reset(),this.state = {
-      rpm:0,load:0
-    }
-    ,this.silence(),(e = this.node) == null || e.port.postMessage({
-      type:"reset"
-    }
-    ))
-  }
-  dispose(){
-    var e,t,n,r,s;
-    if(!this.disposed){
-      this.reset(),this.disposed = !0,window.removeEventListener("pointerdown",this.unlock),window.removeEventListener("keydown",this.unlock),window.removeEventListener("blur",this.silence),window.removeEventListener("pagehide",this.silence),document.removeEventListener("visibilitychange",this.visibilityChanged),(e = this.node) == null || e.port.postMessage({
-        type:"dispose"
-      }
-      ),(t = this.node) == null || t.disconnect(),(n = this.node) == null || n.port.close();
-      for(const a of this.filters)a.disconnect();
-      (r = this.output) == null || r.disconnect(),(s = this.spatialBus) == null || s.dispose()
-    }
-
-  }
-  prepare(){
-    if(this.unavailable || this.disposed)return;
-    const e = this.context ?? (this.context = qr());
-    e.state === "suspended" && !this.resumePending && (this.resumePending = !0,e.resume().catch(()=>{
-
-    }
-    ).finally(()=>{
-      this.resumePending = !1
-    }
-    )),!(this.node || this.loading) && this.preload().then(()=>this.apply()).catch(()=>{
-
-    }
-    )
-  }
-  apply(){
-    var t;
-    if(!this.node || !this.output || !this.context || !this.unlocked || !this.wanted || this.disposed || document.hidden || !document.hasFocus() || this.context.state !== "running")return;
-    const e = this.context.currentTime;
-    this.active || (this.active = !0,this.output.gain.cancelScheduledValues(e),this.output.gain.setValueAtTime(0,e),this.output.gain.linearRampToValueAtTime(Jw,e + .1),(t = this.spatialBus) == null || t.setEnabled(!0),this.sendAt = 0),e >= this.sendAt && (this.node.port.postMessage({
-      type:"state",rpm:this.state.rpm,load:this.state.load,enabled:!0
-    }
-    ),this.sendAt = e + 1 / 60)
-  }
-
+  apply() {}
 }
 class Yw extends Js{
   constructor(t){
@@ -26274,7 +26289,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
             </div>
             <div class="sheet-head__actions" style="display:flex;align-items:center;gap:16px;margin-left:auto;">
               <label class="stop-rendering-toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:var(--graphite-2);font-family:var(--sans);" title="Pause 3D scene rendering while Settings is open to save power. Uncheck to preview graphics/camera changes live.">
-                <input type="checkbox" id="settings-stop-rendering" class="tick" checked style="accent-color:var(--mark);width:18px;height:18px;cursor:pointer;" />
+                <input type="checkbox" id="settings-stop-rendering" checked style="appearance:checkbox;-webkit-appearance:checkbox;accent-color:var(--mark);width:18px;height:18px;cursor:pointer;opacity:1;position:static;" />
                 <span>Stop Rendering</span>
               </label>
               <button class="sheet-head__close" type="button" data-settings-close
@@ -26460,6 +26475,26 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                     </span>
                     <output class="figure" data-audio-value-for="masterVolume"
                             for="audio-master-volume"></output>
+                  </div>
+                  <div class="dim" data-dim-row="engineVolume">
+                    <label class="dim__label" for="audio-engine-volume">Engine Audio Sound</label>
+                    <span class="dim__leader" aria-hidden="true"></span>
+                    <span class="dim__control">
+                      <input id="audio-engine-volume" class="dim__line" type="range"
+                             min="0" max="100" step="1" data-audio-setting="engineVolume" />
+                    </span>
+                    <output class="figure" data-audio-value-for="engineVolume"
+                            for="audio-engine-volume"></output>
+                  </div>
+                  <div class="dim" data-dim-row="boostVolume">
+                    <label class="dim__label" for="audio-boost-volume">Boost Effect Audio Volume</label>
+                    <span class="dim__leader" aria-hidden="true"></span>
+                    <span class="dim__control">
+                      <input id="audio-boost-volume" class="dim__line" type="range"
+                             min="0" max="100" step="1" data-audio-setting="boostVolume" />
+                    </span>
+                    <output class="figure" data-audio-value-for="boostVolume"
+                            for="audio-boost-volume"></output>
                   </div>
                 </div>
               </section>
@@ -26678,22 +26713,30 @@ const a = this.overlay.querySelector(`[data-value-for="${t}"]`);
 a && (a.value =`${r.toFixed(n.decimals)}${n.suffix ?? ""}`)
 }
 updateAudioSetting(e){
-  if(e.dataset.audioSetting !== "masterVolume")return;
+  const k = e.dataset.audioSetting;
   const t = Number(e.value);
-  Number.isFinite(t) && (up(t / 100),this.updateAudioRangePresentation(e))
+  if(!Number.isFinite(t))return;
+  if(k === "masterVolume") up(t / 100);
+  else if(k === "engineVolume") setEngineVolume(t / 100);
+  else if(k === "boostVolume") setBoostVolume(t / 100);
+  this.updateAudioRangePresentation(e);
 }
 syncAudioControls(){
-  const e = Math.round(m1().masterVolume * 100);
+  const s = m1();
   this.overlay.querySelectorAll("[data-audio-setting]").forEach(t=>{
-    t.value = String(e),this.updateAudioRangePresentation(t)
-  }
-  )
+    const k = t.dataset.audioSetting;
+    const v = k === "engineVolume" ? (s.engineVolume ?? 0.8) : k === "boostVolume" ? (s.boostVolume ?? 0.8) : s.masterVolume;
+    t.value = String(Math.round(v * 100));
+    this.updateAudioRangePresentation(t);
+  });
 }
 updateAudioRangePresentation(e){
   const t = Math.round(Number(e.value));
-  e.style.setProperty("--dim-progress",`${t}%`),e.setAttribute("aria-valuetext",`${t} percent`);
-const n = this.overlay.querySelector('[data-audio-value-for="masterVolume"]');
-n && (n.value =`${t}%`)
+  e.style.setProperty("--dim-progress",`${t}%`);
+  e.setAttribute("aria-valuetext",`${t} percent`);
+  const k = e.dataset.audioSetting;
+  const n = this.overlay.querySelector(`[data-audio-value-for="${k}"]`);
+  if(n) n.value = `${t}%`;
 }
 updateTrainingSetting(e){
   const t = e.dataset.trainingSetting;
@@ -27083,14 +27126,87 @@ persistTraining(){
   rm.save(this.trainingTarget)
 }
 }
-const kM = ["realistic","game-car","flat-car"],Fc = [{
-  id:"realistic",label:"Realistic"
+const HITBOX_PRESETS = {
+  "hitbox-octane": { name: "Octane", length: 118.01, width: 84.20, height: 36.16, forward: 13.88, up: 20.75 },
+  "hitbox-dominus": { name: "Dominus", length: 127.93, width: 83.28, height: 31.30, forward: 9.0, up: 15.75 },
+  "hitbox-breakout": { name: "Breakout", length: 131.57, width: 80.52, height: 30.30, forward: 12.5, up: 18.65 },
+  "hitbox-hybrid": { name: "Hybrid", length: 127.02, width: 82.19, height: 34.16, forward: 13.88, up: 17.60 },
+  "hitbox-plank": { name: "Batmobile (Plank)", length: 128.82, width: 84.67, height: 29.40, forward: 9.0, up: 19.36 },
+  "hitbox-merc": { name: "Merc", length: 120.72, width: 76.80, height: 41.66, forward: 12.5, up: 12.50 }
+};
+
+function createWhiteboxCarModel(presetId, teamColor = 0x0088ff) {
+  const cfg = HITBOX_PRESETS[presetId] || HITBOX_PRESETS["hitbox-octane"];
+  const root = new dt();
+  root.name = `whitebox-${cfg.name}`;
+
+  const bodyGeom = new Tn(cfg.length, cfg.height, cfg.width);
+  const bodyMat = new lt({
+    color: teamColor,
+    roughness: 0.35,
+    metalness: 0.2
+  });
+  const bodyMesh = new Ee(bodyGeom, bodyMat);
+  bodyMesh.position.set(cfg.forward, cfg.up, 0);
+  bodyMesh.castShadow = true;
+  bodyMesh.receiveShadow = true;
+
+  const edgesGeom = new Nm(bodyGeom);
+  const wireMat = new Gi({ color: 16777215, transparent: true, opacity: 0.85 });
+  const wireMesh = new Wa(edgesGeom, wireMat);
+  bodyMesh.add(wireMesh);
+  root.add(bodyMesh);
+
+  const rWheel = 15;
+  const wWheel = 10;
+  const wheelGeom = new Xt(rWheel, rWheel, wWheel, 16);
+  wheelGeom.rotateX(Math.PI / 2);
+  const wheelMat = new lt({ color: 2171169, roughness: 0.9, metalness: 0.1 });
+
+  const xOff = cfg.length * 0.35;
+  const zOff = (cfg.width * 0.5) + (wWheel * 0.5);
+  const yOff = cfg.up - (cfg.height * 0.5) + (rWheel * 0.4);
+
+  const wheelPositions = [
+    [cfg.forward + xOff, yOff, zOff],
+    [cfg.forward + xOff, yOff, -zOff],
+    [cfg.forward - xOff, yOff, zOff],
+    [cfg.forward - xOff, yOff, -zOff]
+  ];
+
+  for (const pos of wheelPositions) {
+    const w = new Ee(wheelGeom, wheelMat);
+    w.position.set(pos[0], pos[1], pos[2]);
+    w.castShadow = true;
+    root.add(w);
+  }
+
+  return root;
+}
+
+const kM = ["hitbox-octane","hitbox-dominus","hitbox-breakout","hitbox-hybrid","hitbox-plank","hitbox-merc","game-car","flat-car"],Fc = [{
+  id:"hitbox-octane",label:"Octane (Whitebox)",isPreset:true
 }
 ,{
-  id:"game-car",label:"Default Car"
+  id:"hitbox-dominus",label:"Dominus (Whitebox)",isPreset:true
 }
 ,{
-  id:"flat-car",label:"Flat Car"
+  id:"hitbox-breakout",label:"Breakout (Whitebox)",isPreset:true
+}
+,{
+  id:"hitbox-hybrid",label:"Hybrid (Whitebox)",isPreset:true
+}
+,{
+  id:"hitbox-plank",label:"Batmobile/Plank (Whitebox)",isPreset:true
+}
+,{
+  id:"hitbox-merc",label:"Merc (Whitebox)",isPreset:true
+}
+,{
+  id:"game-car",label:"Default Car",isPreset:false
+}
+,{
+  id:"flat-car",label:"Flat Car",isPreset:false
 }
 ],Qh = rr("car-soccer.display-settings.v1",()=>({
   carVisual:"game-car"
@@ -27225,7 +27341,7 @@ class HM{
       const o = new dt,l = new xr().setFromObject(a).getCenter(new F);
       a.position.set(- l.x, - l.y + LM, - l.z),o.add(a),this.turntables.set(e,o)
     }
-    ,s = e === "realistic"?NM().then(r):e === "flat-car"?OM().then(r):GM().then(r);
+    ,s = e.startsWith("hitbox-")?Promise.resolve(createWhiteboxCarModel(e, xn[Ni])).then(r):e === "flat-car"?OM().then(r):GM().then(r);
     return{
       canvas:t,ready:s
     }
@@ -28931,6 +29047,27 @@ We = Xe.attachGraphics(W=>{
   N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null),typeof qeRenderViewport == "function" && qeRenderViewport(W)
 }
 );
+const speedometerHUD = new SpeedometerHUD(an);
+const multiplayerManager = new MultiplayerManager({
+  container: an,
+  physics: n,
+  arena: N,
+  cameraRig: H,
+  ballRadius: n.ballRadius,
+  createBall: (col, name) => {
+    const mesh = new Ee(rS(col),Nr({
+      name: name,
+      vertexColors: !0
+    }));
+    mesh.name = name;
+    mesh.castShadow = !0;
+    mesh.receiveShadow = !0;
+    const g = new dt;
+    g.name = name;
+    g.add(mesh);
+    return g;
+  }
+});
 const ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
     Se.hideDetails();
@@ -29128,7 +29265,19 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   }
   ),je && (Rn = A));
   const zn = D.read(),Sr = x.read(),Pn = R.active()?"gamepad":D.active()?"touch":"keyboard",on = Pn === "gamepad"?Rn:Pn === "touch"?zn:Sr,Mt = !document.hidden && document.hasFocus();
-  be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on,n.setControls(r,on)
+  be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on;
+  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+    const neutral = {throttle:0,steer:0,pitch:0,yaw:0,roll:0,jump:!1,boost:!1,handbrake:!1};
+    if(multiplayerManager.activeCarIndex === 0){
+      n.setControls(0, on);
+      n.setControls(1, neutral);
+    } else {
+      n.setControls(1, on);
+      n.setControls(0, neutral);
+    }
+  } else {
+    n.setControls(r, on);
+  }
 }
 ,Le = n.getPads(),Ie = ()=>{
   if(h)return;
@@ -29144,6 +29293,14 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
 }
 ,me = ()=>{
   if(a.state.paused || a.state.phase === "ended" || p)return!1;
+  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+    n.step(1),u++;
+    const fe = n.state;
+    a.tick({
+      goal:n.pollGoal(),ballOnGround:n.ballOnGround,kickoffTouched:Math.abs(fe[ht.BALL]) + Math.abs(fe[ht.BALL + 1]) > 1 || Math.hypot(fe[ht.BALL + 12],fe[ht.BALL + 13]) > 1
+    });
+    return !0;
+  }
   if(a.state.phase === "playing"){
     const W = o.getKickoffControls(n.state,u);
     if(W)l = W,o.overrideControls(W);
@@ -29214,7 +29371,18 @@ function wt(W){
   }
   ),y[0] = Rn,y[1] = zn,He.mark();
   const on = ht.CARS + r * ln,Mt = s.currState;
-  be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]),H.update(N.cars[r],N.ball,fe,be),He.mark(),N.updateBallLocatorArrow(H.ballCam,r),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
+  be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]);
+  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+    multiplayerManager.updatePhysics(fe, N.cars, N.ball.position);
+    const activeCarIdx = multiplayerManager.activeCarIndex;
+    const activeBall = activeCarIdx === 0 ? N.ball : (multiplayerManager.ball1Mesh || N.ball);
+    H.update(N.cars[activeCarIdx], activeBall, fe, be);
+    N.updateBallLocatorArrow(H.ballCam, activeCarIdx);
+  } else {
+    H.update(N.cars[r], N.ball, fe, be);
+    N.updateBallLocatorArrow(H.ballCam, r);
+  }
+  He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
   for(let bn = 0;bn < E.length;bn++){
     const B = ht.CARS + bn * ln,pi = bn === r?ke:l,In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
     E[bn].update({
@@ -29225,8 +29393,21 @@ function wt(W){
   N.prepareBallSpeedTrail(H.camera);
   const nn = ht.CARS + r * ln,ir = s.currState[nn + ye.SUPERSONIC] === 1 && s.currState[nn + ye.DEMOED] !== 1;
   Te.set(s.currState[nn + ye.VEL],s.currState[nn + ye.VEL + 2],s.currState[nn + ye.VEL + 1]),S.update(fe,ir && x.enabled && Ft,Te,H.camera),C.update(ir,R.active(),x.enabled && Ft);
-  const sr = ht.CARS + r * ln;
-  Be.update(s.currState[sr + ye.BOOST],s.currState[sr + ye.IS_BOOSTING] === 1,a.state.mode === "freeplay" && V.boostOption === "unlimited"),He.mark();
+  const activeControlledIdx = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
+  const activeCarPos = ht.CARS + activeControlledIdx * ln;
+  Te.set(s.currState[activeCarPos + ye.VEL],s.currState[activeCarPos + ye.VEL + 2],s.currState[activeCarPos + ye.VEL + 1]);
+  if (typeof speedometerHUD !== "undefined" && speedometerHUD) {
+    speedometerHUD.update(Te.length());
+  }
+  const curBoost = s.currState[activeCarPos + ye.BOOST];
+  if (typeof window.__lastBoostAmount === "undefined") window.__lastBoostAmount = curBoost;
+  if (curBoost > window.__lastBoostAmount + 1 && !(a.state.mode === "freeplay" && V.boostOption === "unlimited")) {
+    if (typeof boostCollectAudio !== "undefined" && boostCollectAudio) {
+      boostCollectAudio.play();
+    }
+  }
+  window.__lastBoostAmount = curBoost;
+  Be.update(curBoost,s.currState[activeCarPos + ye.IS_BOOSTING] === 1,a.state.mode === "freeplay" && V.boostOption === "unlimited"),He.mark();
   const fi = N.boostBloomActive || Y.bloomActive;
   if(fi){
     H.camera.layers.set(0),ce();

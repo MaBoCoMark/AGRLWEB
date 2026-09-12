@@ -144,7 +144,34 @@ export default defineConfig({
             } catch (err) {}
           }
 
-          // 2. Guard any /assets/ or /images/ static file requests
+          // 2. Handle /custom/ static file requests from repository root
+          if (pathname.startsWith('/custom/')) {
+            const customDiskPath = resolve(__dirname, "..", pathname.replace(/^\//, ""));
+            if (existsSync(customDiskPath)) {
+              res.statusCode = 200;
+              const ext = pathname.split(".").pop().toLowerCase();
+              const mimeMap = {
+                ogg: "audio/ogg",
+                wav: "audio/wav",
+                mp3: "audio/mpeg",
+                json: "application/json",
+                png: "image/png"
+              };
+              res.setHeader("Content-Type", mimeMap[ext] || "application/octet-stream");
+              res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+              res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+              createReadStream(customDiskPath).pipe(res);
+              return;
+            } else {
+              res.statusCode = 404;
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.setHeader("X-Asset-Missing", "true");
+              res.end(`[Custom Asset 404] The requested custom asset "${pathname}" was not found at: ${customDiskPath}.`);
+              return;
+            }
+          }
+
+          // 3. Guard any /assets/ or /images/ static file requests
           if (pathname.startsWith('/assets/') || pathname.startsWith('/images/')) {
             const diskPath = resolve(__dirname, '../public', pathname.replace(/^\//, ''));
             if (!existsSync(diskPath)) {

@@ -33,7 +33,6 @@ export const ASSET_INVENTORY = [
   { path: "/assets/audio/vehicle/supersonic-loop.wav", desc: "Supersonic loop audio", category: "Audio", critical: false },
   { path: "/assets/audio/vehicle/supersonic-enter-a.wav", desc: "Supersonic enter audio variant A", category: "Audio", critical: false },
   { path: "/assets/audio/events/reset.wav", desc: "Flip reset event sound", category: "Audio", critical: false },
-  { path: "/assets/audio/engine/manifest.json", desc: "Dynamic car engine audio bank manifest", category: "Audio", critical: false },
 
   // 5. Bot AI System
   { path: "/assets/worker-iFqqV1m9.js", desc: "Bot ONNX WebWorker script", category: "Bot AI", critical: false },
