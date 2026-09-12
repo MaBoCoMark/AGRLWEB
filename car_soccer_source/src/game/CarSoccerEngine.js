@@ -17884,6 +17884,12 @@ class yC{
 addCar(e,t = "default"){
   return this.module._physics_addCar(e,t === "flat"?1:0)
 }
+configureMultiplayer(e = "default"){
+  if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
+  if(this.addCar(0, e) !== _C)throw new Error("Car 0 creation failed");
+  if(this.addCar(1, "default") !== no)throw new Error("Car 1 creation failed");
+  this.resetKickoff(),this.resetView()
+}
 configureCars(e,t,n = 0){
   const{
     playerTeam:r,botTeam:s
@@ -21878,6 +21884,11 @@ const Zb = {
 }
 ,rp = new Map;
 function ul(i,e = Zb){
+  if(typeof i === "number" && (!e || e === Zb)){
+    e = { primary: i, realisticPrimary: i, pearl: i };
+  } else if(typeof i === "object" && i !== null && (!e || e === Zb)){
+    e = i;
+  }
   const t =`${e.primary}/${e.realisticPrimary ?? e.primary}/${e.pearl ?? e.primary}`,n = rp.get(t);
 if(n)return n;
 const r = new Ne(e.pearl ?? e.primary),s = new Cn({
@@ -22422,10 +22433,13 @@ class BoostCollectAudioPlayer {
   async load() {
     if (this.loaded || this.warned) return;
     try {
-      const res = await fetch("/custom/assets/audio/boost_collect.ogg");
+      let res = await fetch("/custom/assets/audio/boost_collect.wav");
+      if (!res.ok) {
+        res = await fetch("/custom/assets/audio/boost_collect.ogg");
+      }
       if (!res.ok) {
         this.warned = true;
-        console.warn("[Boost Audio] Asset does not exist: /custom/assets/audio/boost_collect.ogg. Continuing without collect audio.");
+        console.warn("[Boost Audio] Asset does not exist: boost_collect audio. Continuing without collect audio.");
         return;
       }
       const ctx = qr();
@@ -22434,7 +22448,7 @@ class BoostCollectAudioPlayer {
       this.loaded = true;
     } catch (e) {
       this.warned = true;
-      console.warn("[Boost Audio] Asset does not exist: /custom/assets/audio/boost_collect.ogg. Continuing without collect audio.", (e && e.message) || e);
+      console.warn("[Boost Audio] Asset decode failed: boost_collect audio. Continuing without collect audio.", (e && e.message) || e);
     }
   }
   play() {
@@ -24512,8 +24526,8 @@ class ow{
     const e = await aS();
     Dp(e,this.ballSun.shadow.camera),this.ball.add(e),this.markRenderTreeChanged()
   }
-  updateBallLocatorArrow(e,t = 0){
-    this.ballLocatorArrow.update(this.cars[t],this.ball,e)
+  updateBallLocatorArrow(e,t = 0,targetBall = this.ball){
+    this.ballLocatorArrow.update(this.cars[t],targetBall || this.ball,e)
   }
   async loadCarAndPadAssets(){
     [this.gameCarAsset,this.flatCarAsset] = await Promise.all([Uh(),Y0()]);this.realisticCarAsset = null;
@@ -24590,9 +24604,29 @@ class ow{
       const u = RS(a?Qb:void 0);
       u.visible = this.carHitboxesVisible,this.carHitboxes.push(u),this.carGimbals.push(null),n.add(u),A = a?t1:Wb
     }
-    const l = isHitbox?[]:s?VA:a?X0:q0,c = [];
+    let l;
     if(isHitbox){
-      for(let u = 0;u < 4;u++) c.push({ steer: new dt, spin: new dt });
+      const cfg = HITBOX_PRESETS[t] || HITBOX_PRESETS["hitbox-octane"];
+      const xF = cfg.forward + cfg.length * 0.35, xR = cfg.forward - cfg.length * 0.35, zS = (cfg.width * 0.5) + 5;
+      l = [[xF, zS, 12.5], [xF, -zS, 12.5], [xR, zS, 15], [xR, -zS, 15]];
+    } else {
+      l = s?VA:a?X0:q0;
+    }
+    const c = [];
+    if(isHitbox){
+      const wheelGeom = new Xt(13.5, 13.5, 9, 16);
+      wheelGeom.rotateX(Math.PI / 2);
+      const wheelMat = new lt({ color: 2171169, roughness: 0.9, metalness: 0.1 });
+      for(let u = 0;u < 4;u++){
+        const m = new dt;
+        const y = new dt;
+        const wm = new Ee(wheelGeom, wheelMat);
+        wm.castShadow = !0;
+        y.add(wm);
+        m.add(y);
+        n.add(m);
+        c.push({ steer: m, spin: y });
+      }
     }
     else for(let u = 0;u < l.length;u+=1){
       const[p,v,g] = l[u],m = new dt;
@@ -24709,6 +24743,7 @@ class ow{
       C && h1(this.cars[u].quaternion,t[p + ye.VEL],t[p + ye.VEL + 1],r,C);
       const E = t[p + ye.VEL] * t[p + ye.FWD] + t[p + ye.VEL + 1] * t[p + ye.FWD + 1] + t[p + ye.VEL + 2] * t[p + ye.FWD + 2],w = this.carWheels[u],S = this.carWheelSpecs[u],k = this.carSuspension[u],x = this.wheelSpin[u];
       for(let R = 0;R < 4;R++){
+        if(!S || !S[R] || !w || !w[R]) continue;
         const D = p + ye.WHEELS + R * EC,N = t[D],X = t[D + 1],Y = t[D + 2] === 1,[H,V,J] = S[R],le = (this.carVisuals[u] === "flat-car"?e1:YS) - N;
         w[R].steer.position.set(H,le,V),w[R].steer.rotation.y = - X;
         const je = k[R];
@@ -27157,30 +27192,6 @@ function createWhiteboxCarModel(presetId, teamColor = 0x0088ff) {
   bodyMesh.add(wireMesh);
   root.add(bodyMesh);
 
-  const rWheel = 15;
-  const wWheel = 10;
-  const wheelGeom = new Xt(rWheel, rWheel, wWheel, 16);
-  wheelGeom.rotateX(Math.PI / 2);
-  const wheelMat = new lt({ color: 2171169, roughness: 0.9, metalness: 0.1 });
-
-  const xOff = cfg.length * 0.35;
-  const zOff = (cfg.width * 0.5) + (wWheel * 0.5);
-  const yOff = cfg.up - (cfg.height * 0.5) + (rWheel * 0.4);
-
-  const wheelPositions = [
-    [cfg.forward + xOff, yOff, zOff],
-    [cfg.forward + xOff, yOff, -zOff],
-    [cfg.forward - xOff, yOff, zOff],
-    [cfg.forward - xOff, yOff, -zOff]
-  ];
-
-  for (const pos of wheelPositions) {
-    const w = new Ee(wheelGeom, wheelMat);
-    w.position.set(pos[0], pos[1], pos[2]);
-    w.castShadow = true;
-    root.add(w);
-  }
-
   return root;
 }
 
@@ -29054,6 +29065,17 @@ const multiplayerManager = new MultiplayerManager({
   arena: N,
   cameraRig: H,
   ballRadius: n.ballRadius,
+  onEnterMultiplayer: () => {
+    n.configureMultiplayer(i === "flat-car" ? "flat" : "default");
+    N.ensureOpponent();
+    if (N.cars && N.cars[1]) N.cars[1].visible = true;
+    if (N.opponentSun) N.opponentSun.visible = true;
+    s.sync();
+  },
+  onLeaveMultiplayer: () => {
+    n.configureCars(i === "flat-car" ? "flat" : "default", false, 0);
+    _e();
+  },
   createBall: (col, name) => {
     const mesh = new Ee(rS(col),Nr({
       name: name,
@@ -29370,17 +29392,18 @@ function wt(W){
     carSerial:Rn + zn,carSpeed:Sr,carPan:zn !== y[1]?Pn:0,worldSerial:s.currState[Nt + ye.BALL_WORLD_IMPACT_SERIAL],worldSpeed:s.currState[Nt + ye.BALL_WORLD_IMPACT_SPEED],worldSurface:s.currState[Nt + ye.BALL_WORLD_SURFACE] === 0?0:1,worldPan:Pn,audible:!0
   }
   ),y[0] = Rn,y[1] = zn,He.mark();
-  const on = ht.CARS + r * ln,Mt = s.currState;
+  const activeCar = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
+  const on = ht.CARS + activeCar * ln,Mt = s.currState;
   be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]);
   if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
     multiplayerManager.updatePhysics(fe, N.cars, N.ball.position);
     const activeCarIdx = multiplayerManager.activeCarIndex;
     const activeBall = activeCarIdx === 0 ? N.ball : (multiplayerManager.ball1Mesh || N.ball);
     H.update(N.cars[activeCarIdx], activeBall, fe, be);
-    N.updateBallLocatorArrow(H.ballCam, activeCarIdx);
+    N.updateBallLocatorArrow(H.ballCam, activeCarIdx, activeBall);
   } else {
     H.update(N.cars[r], N.ball, fe, be);
-    N.updateBallLocatorArrow(H.ballCam, r);
+    N.updateBallLocatorArrow(H.ballCam, r, N.ball);
   }
   He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
   for(let bn = 0;bn < E.length;bn++){

@@ -6,7 +6,7 @@
  * Features:
  * - Direct style updates (zero latency, no transitions)
  * - Light-grey vertical notch at 2200 uu/s (85% mark) for supersonic threshold reference
- * - Segment 1: 0 <= v <= 1410 -> p = (v / 1410) * 40%, solid #77ca7a
+ * - Segment 1: 0 <= v <= 1410 -> p = (v / 1410) * 40%, solid #d4af37 (yellow/gold low-speed zone)
  * - Segment 2: 1410 < v < 2200 -> p = 40 + ((v - 1410) / 790) * 45%, lerp #77ca7a to #59f168
  * - Segment 3: 2200 <= v <= 2300 -> p = 85 + ((v - 2200) / 100) * 15%, supersonic purple glow #a020f0
  */
@@ -74,7 +74,7 @@ export class SpeedometerHUD {
       top: 0;
       bottom: 0;
       width: 0%;
-      background: #77ca7a;
+      background: #d4af37;
       border-radius: 0px !important;
       transition: none !important;
       z-index: 2;
@@ -108,12 +108,12 @@ export class SpeedometerHUD {
     this.lastSpeed = v;
 
     let p = 0;
-    let color = '#77ca7a';
+    let color = '#d4af37';
     let isSupersonic = false;
 
     if (v <= 1410) {
       p = (v / 1410) * 40;
-      color = '#77ca7a';
+      color = '#d4af37';
     } else if (v < 2200) {
       const t = (v - 1410) / (2200 - 1410);
       p = 40 + t * 45;
