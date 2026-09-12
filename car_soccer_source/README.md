@@ -85,3 +85,10 @@ car_soccer_source/
 └── ../public/ (decoupled assets └── tools/ download tools)
     └── download_assets.py       # 官方资产自动化下载工具
 ```
+
+## 致谢与特别鸣谢 (Acknowledgments & Credits)
+
+在此特别感谢以下开发者及其开源贡献：
+
+1. **Thomas** ([@xthomasms](https://x.com/xthomasms)) - 原版 car-soccer.com 网页游戏的创作者。感谢其在 WebGL/Three.js 汽车足球物理、视觉渲染与操作手感上的出色设计与完整实现。
+2. **ZealanL** ([GitHub](https://github.com/zealanL)) - [RocketSim](https://github.com/zealanL/rocketsim) C++ 物理仿真库的作者。RocketSim 提供了高精度的 Rocket League 悬挂、轮胎摩擦、空中旋转与 120Hz 确定性碰撞仿真核心，是本项目物理表现的基石。

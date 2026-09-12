@@ -25959,7 +25959,24 @@ moveDrag(e){
   n.left = this.drag.left + e.clientX - this.drag.x,n.top = this.drag.top + e.clientY - this.drag.y,this.draft.layouts[Ss(t.width,t.height)][this.drag.id] = Hf(n,t,this.currentPlacement().size),this.render()
 }
 }
+function getDefaultRenderScale() {
+  if (typeof window !== "undefined") {
+    const sw = (window.screen && window.screen.width) || 0;
+    const sh = (window.screen && window.screen.height) || 0;
+    const iw = window.innerWidth || 0;
+    const ih = window.innerHeight || 0;
+    const w = Math.max(sw, iw);
+    const h = Math.max(sh, ih);
+    if (w > 2560 && h > 1600) {
+      return 50;
+    }
+  }
+  return 100;
+}
 const _g = [{
+  key:"fps",label:"FPS Counter",note:"Current frames per second and screen refresh rate."
+}
+,{
   key:"frame",label:"Frame Time",note:"Average with p50, p95, p99 and the worst frame."
 }
 ,{
@@ -25975,19 +25992,19 @@ const _g = [{
   key:"renderer",label:"Renderer",note:"Draw calls, triangles, and resident geometry and textures."
 }
 ],Yh = rr("car-soccer.status-settings.v1",()=>({
-  enabled:!1,frame:!0,chart:!0,phases:!0,sim:!0,renderer:!1,phasesCollapsed:!1
+  enabled:!0,fps:!0,frame:!1,chart:!1,phases:!1,sim:!1,renderer:!1,phasesCollapsed:!1
 }
 ),(i,e)=>{
   i.enabled = jr(e.enabled,i.enabled),i.phasesCollapsed = jr(e.phasesCollapsed,i.phasesCollapsed);for(const t of _g)i[t.key] = jr(e[t.key],i[t.key])
 }
 ),Ma = 60,SA = 240,uA = rr("car-soccer.graphics-settings.v1",()=>({
-  showStadium:!0,limitFps:!0,maxFps:120,renderScale:100
+  showStadium:!0,limitFps:!0,maxFps:120,renderScale:getDefaultRenderScale()
 }
 ),(i,e)=>{
   i.showStadium = jr(e.showStadium,i.showStadium),i.limitFps = jr(e.limitFps,i.limitFps),i.maxFps = _r(e.maxFps,i.maxFps,{
     min:Ma,max:SA,integer:!0
   }
-  ),i.renderScale = _r(e.renderScale,i.renderScale ?? 100,{
+  ),i.renderScale = _r(e.renderScale,i.renderScale ?? getDefaultRenderScale(),{
     min:25,max:100
   }
   )
@@ -26255,10 +26272,16 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
             <div class="sheet-head__ident">
               ${Vt("gear",32)}<h1 id="settings-title">Settings</h1>
             </div>
-            <button class="sheet-head__close" type="button" data-settings-close
-                    aria-label="Close settings">
-              ${Vt("x")}
-            </button>
+            <div class="sheet-head__actions" style="display:flex;align-items:center;gap:16px;margin-left:auto;">
+              <label class="stop-rendering-toggle" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:var(--graphite-2);font-family:var(--sans);" title="Pause 3D scene rendering while Settings is open to save power. Uncheck to preview graphics/camera changes live.">
+                <input type="checkbox" id="settings-stop-rendering" class="tick" checked style="accent-color:var(--mark);width:18px;height:18px;cursor:pointer;" />
+                <span>Stop Rendering</span>
+              </label>
+              <button class="sheet-head__close" type="button" data-settings-close
+                      aria-label="Close settings">
+                ${Vt("x")}
+              </button>
+            </div>
           </header>
 
           <nav class="sheet-tabs" aria-label="Settings categories" role="tablist">
@@ -26506,7 +26529,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
           </footer>
         </section>
       </div>
-    `),this.overlay = e.querySelector("#settings-overlay"),this.sheet = this.overlay.querySelector(".sheet"),this.touchPanel = new _M(this.overlay.querySelector("#touch-settings-panel"),c=>{
+    `),this.overlay = e.querySelector("#settings-overlay"),this.stopRendering = !0,(()=>{const sr=this.overlay.querySelector("#settings-stop-rendering");if(sr){sr.addEventListener("change",()=>{this.stopRendering=sr.checked;if(!this.stopRendering&&typeof te!=="undefined"&&te){te.shadowMap.needsUpdate=!0}})}})(),this.sheet = this.overlay.querySelector(".sheet"),this.touchPanel = new _M(this.overlay.querySelector("#touch-settings-panel"),c=>{
   this.setAside(!1,!1),this.overlay.classList.toggle("is-touch-editing",c)
 }
 ),this.sheet.addEventListener("keydown",c=>{
@@ -26614,6 +26637,9 @@ toggle(){
   this.openState?this.hide():this.show()
 }
 show(){
+  this.stopRendering = !0;
+  const srEl = this.overlay.querySelector("#settings-stop-rendering");
+  if (srEl) srEl.checked = !0;
   this.openState || (this.openState = !0,this.overlay.hidden = !1,this.overlay.setAttribute("aria-hidden","false"),document.body.classList.add("settings-open"),this.onOpenChange(!0),requestAnimationFrame(()=>this.overlay.classList.add("is-open")),this.focusPanelStart(),this.refreshPadStatus(),document.body.classList.toggle("pad-nav",this.inputSource === "pad"),this.updatePadHints(),this.startPadNav())
 }
 hide(){
@@ -28551,6 +28577,16 @@ class aB{
         </button>
         <div id="status-details" class="status__details">
         <p class="status__empty" data-el="statusEmpty" hidden>No readouts selected. Choose them in Settings.</p>
+        <div class="status__section" data-section="fps" hidden>
+          <div class="status__hero">
+            <span class="status__pair" title="Current frames per second and screen refresh rate.">
+              <span class="status__value" data-el="statFpsSimple">—</span>
+              <span class="status__sep" style="color:rgba(255,255,255,0.4);margin:0 4px;font-weight:300;">/</span>
+              <span class="status__hz" data-el="statHzSimple" style="color:rgba(255,255,255,0.45);font-weight:400;font-size:0.85em;">—</span>
+              <span class="status__unit" style="margin-left:6px;">fps</span>
+            </span>
+          </div>
+        </div>
         <div class="status__section" data-section="frame" hidden>
           <div class="status__hero">
             <span class="status__pair" title="Rendered frames per second. Screen presentation follows the display refresh rate.">
@@ -28621,8 +28657,12 @@ toggleDetails(){
 }
 applyDisclosure(){
   const e = this.compact.matches;
-  this.root.classList.toggle("is-compact",e),this.root.classList.toggle("is-details-open",e && this.expanded),this.summary.hidden = !e,this.summary.setAttribute("aria-expanded",String(this.expanded)),this.summary.setAttribute("aria-label",this.expanded?"Hide status details":"Show status details"),this.settings.frame?this.summary.setAttribute("aria-describedby","status-summary-metrics"):this.summary.removeAttribute("aria-describedby"),this.details.hidden = e && !this.expanded,this.root.querySelector('[data-el="summaryMetrics"]').hidden = !this.settings.frame,this.root.querySelector('[data-el="summaryLabel"]').hidden = this.settings.frame;
-  const t = this.settings.frame || this.settings.chart || this.settings.phases || this.settings.sim || this.settings.renderer;
+  this.root.classList.toggle("is-compact",e),this.root.classList.toggle("is-details-open",e && this.expanded),this.summary.hidden = !e,this.summary.setAttribute("aria-expanded",String(this.expanded)),this.summary.setAttribute("aria-label",this.expanded?"Hide status details":"Show status details");
+  const hasFpsOrFrame = this.settings.fps || this.settings.frame;
+hasFpsOrFrame?this.summary.setAttribute("aria-describedby","status-summary-metrics"):this.summary.removeAttribute("aria-describedby"),this.details.hidden = e && !this.expanded,this.root.querySelector('[data-el="summaryMetrics"]').hidden = !hasFpsOrFrame,this.root.querySelector('[data-el="summaryLabel"]').hidden = hasFpsOrFrame;
+  const msEl = this.root.querySelector('[data-el="summaryMs"]');
+  if (msEl && msEl.parentElement) msEl.parentElement.hidden = (this.settings.fps && !this.settings.frame);
+  const t = this.settings.fps || this.settings.frame || this.settings.chart || this.settings.phases || this.settings.sim || this.settings.renderer;
   this.root.querySelector('[data-el="statusEmpty"]').hidden = t || !e
 }
 togglePhases(){
@@ -28665,7 +28705,9 @@ draw(){
   const e = this.profiler.snapshot(ya / 2,xa);
   if(e.count === 0)return;
   const t = this.settings;
-  if(t.frame && (this.set("summaryFps",e.frame.fps.toFixed(0)),this.set("summaryMs",e.frame.avgMs.toFixed(1))),!(this.compact.matches && !this.expanded)){
+  if(t.fps){this.set("statFpsSimple",e.frame.fps.toFixed(0)),this.set("statHzSimple",String(Math.round(e.refreshHz || 60)));}
+  if(t.fps && !t.frame){this.set("summaryFps",`${e.frame.fps.toFixed(0)} <span style="color:rgba(255,255,255,0.45);font-weight:400;font-size:0.85em;">/ ${Math.round(e.refreshHz || 60)}</span>`);const msSpan=this.root.querySelector('[data-el="summaryMs"]');if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!0;}else if(t.frame){this.set("summaryFps",e.frame.fps.toFixed(0)),this.set("summaryMs",e.frame.avgMs.toFixed(1));const msSpan=this.root.querySelector('[data-el="summaryMs"]');if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!1;}
+  if(!(this.compact.matches && !this.expanded)){
     if(t.frame && (this.set("statFps",e.frame.fps.toFixed(0)),this.set("statFrame",e.frame.avgMs.toFixed(2)),this.set("statP50",e.frame.p50.toFixed(2)),this.set("statP95",e.frame.p95.toFixed(2)),this.set("statP99",e.frame.p99.toFixed(2)),this.set("statWorst",e.frame.worstMs.toFixed(1))),t.chart && this.drawChart(e),t.phases && !t.phasesCollapsed && this.rows("statPhases",[...e.phases.filter(r=>r.phase !== "other" || r.avgMs >= .02).map(r=>[r.phase,`${r.avgMs.toFixed(2)} ms`]),["cpu total",`${e.cpu.avgMs.toFixed(2)} ms`]]),t.sim){
   const{
     ticksPerFrame:r,droppedTicks:s,clampedFrames:a,stalls:o
@@ -29151,6 +29193,12 @@ let Je = !0;
 function wt(W){
   var ar;
   He.frameStart();
+  if (typeof Xe !== "undefined" && Xe && Xe.isOpen && Xe.stopRendering) {
+    ze = W;
+    s.sync(W);
+    He.frameEnd(0, 0, 0);
+    return;
+  }
   const fe = Math.min((W - ze) / 1e3,.1);
   ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0),a.state.mode === "freeplay" && n.pollGoal() !== 0 && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail()),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
