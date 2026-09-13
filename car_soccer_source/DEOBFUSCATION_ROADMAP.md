@@ -88,12 +88,13 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **07** | **全局 UI 矢量图标库**| `jM`, `Vt` | `src/ui/Icons.js` | ✅ **已完成** | 包含 20 个高精度 SVG 矢量图标库与格式化输出 |
 | **08** | **综合音效总线与空间音频**| `class Lw`, `Sw`, `kw`, `V1`, `jw`, `tm`, `u1`, `cg`, `GameAudioManager` | `src/audio/SpatialAudioSource.js`<br>`src/audio/GameAudioSubsystem.js` | ✅ **已完成** | Web Audio HRTF 空间化立体声、Smoothstep 距离衰减、多层撞球撞墙声、起跳翻滚与着陆悬挂声、超音速音爆与循环、黄金喷气火焰粒子声效、引擎音频桥接、比赛播报与设置持久化 |
 | **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M`, `BC`, `Rh`, `Yo` | `src/input/MultiPlatformInput.js` | ✅ **已完成** | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆、Bindings 存储与重映射 |
-| **10** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段五* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
-| **11** | **比赛与模式状态机** | `class VM`, `class $M` | `src/game/MatchController.js` | ⏳ *阶段五* | Kickoff 开球、321 倒计时、进球判定、加时赛判定 |
-| **12** | **RL Bot 强化学习代理**| `class QM` | `src/ai/RLBotAgent.js` | ⏳ *阶段六* | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer) |
-| **13** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
-| **14** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
-| **15** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
+| **10** | **比赛与模式状态机** | `class VM`, `class $M`, `qM`, `sm` | `src/game/MatchStateMachine.js`<br>`src/ui/MatchDialog.js` | ✅ **已完成** | Kickoff 开球、321 倒计时、进球判定、加时赛判定、实时记分牌与手柄导航 |
+| **11** | **RL Bot 强化学习代理**| `class QM`, `JM`, `KM`, `ZM`, `pl`, `JA`, `Am`, `XM`, `dm` | `src/ai/RLBotAgent.js` | ✅ **已完成** | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer)、Nexto 离散动作表与开球例程、智能启发式保底 AI |
+| **12** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段六* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
+| **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ⏳ *阶段六* | 键位映射、手柄配置、图像与音效配置弹窗 |
+| **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
+| **15** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
+| **16** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
 
@@ -156,17 +157,31 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 抽离触控安全区适配与自适应布局解算器（`getScreenSafeArea`, `computeTouchLayoutBounds`, `normalizeTouchLayoutRect`, `applyTouchLayoutToDom`）。
    - 抽离触控自定义布局编辑器 `TouchLayoutEditor`（原 `_M`）。
 7. 创建 `src/input/MultiPlatformInput.js`：
-   - 提供全平台统合外观门面与多设备动态切换调度器 `MultiPlatformInputCoordinator`。
-   - 保持 100% 向后兼容别名桥接（`SC`, `XC`, `ib`, `_M`, `io`, `BC`, `Rf`, `UC`, `qC`, `Li`, `Hi`, `TC`, `RC`, `Pf`, `PC`, `OA`, `Hd`, `$C`, `Ks` 等）。
+   - 提供全平台统合外观门面与多设备动态切换调度器 `MultiPlatformInputCoordinator`。\n   - 保持 100% 向后兼容别名桥接（`SC`, `XC`, `ib`, `_M`, `io`, `BC`, `Rf`, `UC`, `qC`, `Li`, `Hi`, `TC`, `RC`, `Pf`, `PC`, `OA`, `Hd`, `$C`, `Ks` 等）。
 8. 创建测试套件 `tests/input_subsystem.test.js`：涵盖配置存取、按键映射、设备识别、控制器读取及触控布局数学，全部 7 组测试用例 100% 通过。
 9. 重构 `src/game/CarSoccerEngine.js`：移除 2,178 行内联高混淆输入与布局编辑代码，替换为现代 ES Module 导入。
 10. **缺陷修复与别名补齐 (Bugfix)**：修复启动实例化设置面板 `SettingsSheet` (`BM`) 时因缺失 `detectControllerType` (`Rh`) 与 `formatAxisName` (`Yo`) 别名导致的 `ReferenceError: Can't find variable: Rh` 运行时白屏崩溃问题；并在 `tests/input_subsystem.test.js` 中扩充了手柄品牌识别与轴名格式化验证。
 
-### 阶段五：弹窗与比赛状态机模块化
-- 目标：抽取 `SettingsSheet` (`BM`)、`GarageDialog` (`UM`/`HM`)、`MatchDialog` (`$M`) 与 `MatchStateMachine` (`VM`)。
+### 阶段五：比赛状态机与 RLBot 强化学习智能体解耦（✅ 已落地）
+1. 创建 `src/game/MatchStateMachine.js`：
+   - 抽离高精度 120Hz 比赛状态机 `MatchStateMachine`（原 `VM`），完整支持 5 分钟常规赛、开球 321 倒计时、进球 3 秒缓冲回放、触地终场死球裁决（零秒绝平判定）以及金球加时赛（Golden Goal Sudden Death Overtime）。
+   - 收敛比赛模式常量与阶段常量（`MATCH_MODES`, `MATCH_PHASES`, `DEFAULT_MATCH_STATE` / `qM`）。
+   - 提供时间格式化工具函数 `formatMatchTime(seconds, ceil)`（原 `sm`）。
+2. 创建 `src/ai/RLBotAgent.js`：
+   - 收敛 3 大竞技级 Bot 元数据配置表 `BOT_POLICIES`（`seer`, `necto`, `nexto`，原 `pl`）与策略检索函数 `getBotPolicy`（原 `JA`）。
+   - 解耦 RocketSim 控制量序列化与反序列化算法（`encodeCarControls` / `Eg`, `decodeCarControls` / `ed`）。
+   - 抽离 Nexto 90 项离散动作决策空间表 `NEXTO_ACTION_TABLE`（原 `Am`）与极速 Speed-flip 开球动作机 `getNextoKickoffControls`（原 `XM`）。
+   - 抽离三大 ONNX 模型适配器（`NextoAdapter` / `JM`, `NectoAdapter` / `KM`, `SeerAdapter` / `ZM`）以及模型张量输入构造器（`buildNextoObservation` / `WM`, `wrapTensorInputs` / `lm`）。
+   - 封装 `RLBotAgent`（原 `QM`）统一调度门面，集成 ONNX Web Worker 调度、超时重试与自适应降级至智能启发式 AI（`heuristicDecide`）。
+   - 抽离 Bot 选型持久化存储 `botSettingsStore`（原 `dm`）。
+3. 创建 `src/ui/MatchDialog.js`：
+   - 抽离比赛控制面板与人机难度选择弹窗 `MatchDialog`（原 `$M`）。
+   - 集成实时比分板 HUD、动态开球/进球/加时播报横幅以及全平台键鼠/手柄（PlayStation/Xbox）焦点无缝导航。
+4. 创建单元测试套件 `tests/match_and_rlbot.test.js`：涵盖比赛全生命周期、开球与倒计时判定、加时赛流转、控制量编解码、Nexto 开球序列、三种 Bot 适配器张量结构、Worker 离线启发式保底与全套兼容别名，4 大测试集 100% 通过。
+5. 重构 `src/game/CarSoccerEngine.js`：精简移除 835 行内联混淆实现，以干净别名桥接，消除 TDZ 风险。
 
-### 阶段六：AI 智能体模块化
-- 目标：抽取 `QM`（ONNX 神经网络推理调度）至 `src/ai/RLBotAgent.js`。
+### 阶段六：车库与全局设置面板抽离
+- 目标：解耦 `SettingsSheet` (`BM`)、`GarageTurntable` (`HM`) 与 `GarageDialog` (`UM`)。
 
 ### 阶段七：相机控制器与三维球场解耦
 - 目标：解耦跟随相机 `cw`（Ball Cam 球心锁定、镜头震动与穿墙防穿刺）与球场世界实体 `ow`。
