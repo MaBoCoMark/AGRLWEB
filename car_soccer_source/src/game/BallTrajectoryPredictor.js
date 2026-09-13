@@ -1,16 +1,18 @@
 /**
  * BallTrajectoryPredictor.js
  * High-performance, deterministic Rocket League ball trajectory prediction system.
- * Simulates future ball trajectory at 120Hz with realistic arena collisions,
- * generates world-space fixed time-sliced dashed patterns, and provides an independent UI control panel.
+ * Simulates future ball trajectory at 120Hz via an isolated, hidden RocketSim physics simulation
+ * with exact arena collision meshes (.cmf), spin coupling, and Bullet rigid body dynamics.
+ * Updates prediction state ONLY on car-ball impact, kickoff reset, or ball control actions (1/2/3/4).
  */
 
 import * as THREE from 'three';
+import jC from '../physics/RocketSimWasm.js';
 
 export const DEFAULT_TRAJECTORY_SETTINGS = {
   enabled: true,          // Default enabled in Free Play
   duration: 2.5,          // 0.5s - 5.0s, step 0.1s
-  lineThickness: 4.0,     // 1.0 - 10.0, step 0.5
+  lineThickness: 4.0,     // 1.0 - 100.0, step 0.5
   existTime: 80,          // 0ms - 100ms, default 80ms
   hiddenTime: 20,         // 0ms - 100ms, default 20ms
   color: '#00f0ff',       // Cyan neon glow
@@ -19,8 +21,9 @@ export const DEFAULT_TRAJECTORY_SETTINGS = {
 const STORAGE_KEY = 'car_soccer_trajectory_settings';
 
 export class BallTrajectoryPredictor {
-  constructor(container) {
+  constructor(container, physicsInstance = null) {
     this.container = container;
+    this.physicsInstance = physicsInstance;
     this.settings = this.loadSettings();
 
     // Scene visual objects
@@ -74,39 +77,46 @@ export class BallTrajectoryPredictor {
         varying vec3 vColor;
         void main() {
           if (vAlpha <= 0.001) discard;
-          gl_FragColor = vec4(uColor * vColor, vAlpha * 0.92);
+          vec3 finalColor = uColor * vColor;
+          gl_FragColor = vec4(finalColor, vAlpha * 0.92);
         }
       `,
       transparent: true,
-      depthTest: true,
       depthWrite: false,
+      depthTest: true,
+      blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending,
     });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 3;
+    this.mesh.visible = this.settings.enabled;
     this.group.add(this.mesh);
 
-    // Trajectory state
-    this.simulatedPoints = [];     // Array of {x, y, z, isVisible, tMs}
-    this.lastHitSerial = -1;
-    this.lastSimTime = 0;
+    // Simulated trajectory points
+    this.simulatedPoints = [];
     this.currentBallIndex = 0;
     this.geometryDirty = false;
+    this.lastCameraPos = null;
+
+    // Track state changes
+    this.lastHitSerial = -1;
+    this.lastBallState = null;
+    this.lastBallPos = null;
+    this.lastBallVel = null;
     this.isActive = false;
 
-    // Scratch math vectors
+    // Scratch vector instances to avoid per-frame allocations
+    this.camPos = new THREE.Vector3();
+    this.curP = new THREE.Vector3();
     this.tangent = new THREE.Vector3();
     this.viewDir = new THREE.Vector3();
     this.side = new THREE.Vector3();
-    this.camPos = new THREE.Vector3();
-    this.curP = new THREE.Vector3();
+    this.prevP = new THREE.Vector3();
     this.nextP = new THREE.Vector3();
     this.fallbackAxis = new THREE.Vector3(0, 1, 0);
 
-    // Physics constants (Unreal/RocketSim units, Three.js coords: Y is up, X width, Z length)
+    // Physics constants (fallback / reference)
     this.BALL_RADIUS = 91.25;
     this.GRAVITY = -650;
     this.DRAG = 0.0305;
@@ -119,7 +129,16 @@ export class BallTrajectoryPredictor {
     this.GOAL_HEIGHT = 642.97;
     this.GOAL_DEPTH = 880;
 
-    // Create UI Panel & inject styles
+    // Hidden RocketSim simulation environment
+    this.hiddenSimReady = false;
+    this.hiddenMod = null;
+    this.hiddenArenaPtr = 0;
+    this.hiddenBallPtr = 0;
+    this.hiddenState = null;
+    this.hiddenBallStateBuf = 0;
+    this.hiddenBs = null;
+
+    this.initHiddenSim();
     this.createUI();
   }
 
@@ -127,7 +146,13 @@ export class BallTrajectoryPredictor {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return { ...DEFAULT_TRAJECTORY_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const merged = { ...DEFAULT_TRAJECTORY_SETTINGS, ...parsed };
+        merged.lineThickness = Math.max(1.0, Math.min(100.0, Number(merged.lineThickness) || 4.0));
+        merged.duration = Math.max(0.5, Math.min(5.0, Number(merged.duration) || 2.5));
+        merged.existTime = Math.max(0, Math.min(100, parseInt(merged.existTime, 10) || 80));
+        merged.hiddenTime = Math.max(0, Math.min(100, parseInt(merged.hiddenTime, 10) || 20));
+        return merged;
       }
     } catch (_) {}
     return { ...DEFAULT_TRAJECTORY_SETTINGS };
@@ -140,22 +165,147 @@ export class BallTrajectoryPredictor {
   }
 
   /**
-   * Run 120Hz physics simulation forward in time.
-   * Deterministically calculates trajectory points and marks visible/hidden time slices.
+   * Initializes isolated RocketSim physics environment with full arena collision meshes.
    */
-  simulate(startPos, startVel) {
-    if (!startPos || !startVel) return;
+  async initHiddenSim() {
+    try {
+      let chunks = null;
+      if (this.physicsInstance && this.physicsInstance.constructor && this.physicsInstance.constructor.cachedCollisionData) {
+        chunks = this.physicsInstance.constructor.cachedCollisionData;
+      }
+      if (!chunks && typeof window !== 'undefined' && window.__cachedCollisionData) {
+        chunks = window.__cachedCollisionData;
+      }
+      if (!chunks) {
+        const mRes = await fetch('/assets/arena/collision/manifest.json');
+        const manifest = await mRes.json();
+        chunks = await Promise.all(manifest.map(async f => {
+          const res = await fetch(`/assets/arena/collision/${f}`);
+          return new Uint8Array(await res.arrayBuffer());
+        }));
+        if (this.physicsInstance && this.physicsInstance.constructor) {
+          this.physicsInstance.constructor.cachedCollisionData = chunks;
+        }
+      }
 
-    const speedSq = startVel.x * startVel.x + startVel.y * startVel.y + startVel.z * startVel.z;
-    // When resting motionless on the arena floor, do not draw an unnecessary static clump
-    if (speedSq < 25 && startPos.y <= this.BALL_RADIUS + 2) {
-      this.simulatedPoints = [];
-      this.currentBallIndex = 0;
-      this.geometry.setDrawRange(0, 0);
-      this.geometryDirty = false;
+      const mod = await jC();
+      const totalBytes = chunks.reduce((acc, c) => acc + c.length, 0);
+      const dataPtr = mod._malloc(totalBytes);
+      const sizesPtr = mod._malloc(chunks.length * 4);
+      let offset = 0;
+      chunks.forEach((c, idx) => {
+        mod.HEAPU8.set(c, dataPtr + offset);
+        mod.HEAP32[sizesPtr / 4 + idx] = c.length;
+        offset += c.length;
+      });
+      const rInit = mod._physics_init(dataPtr, sizesPtr, chunks.length);
+      mod._free(dataPtr);
+      mod._free(sizesPtr);
+      if (rInit !== 1) throw new Error('Physics init failed: ' + rInit);
+      if (mod._physics_createArena() !== 1) throw new Error('Create arena failed');
+
+      this.hiddenMod = mod;
+      this.hiddenArenaPtr = mod.HEAP32[43444 / 4];
+      this.hiddenBallPtr = mod.HEAP32[(this.hiddenArenaPtr + 52) / 4];
+      this.hiddenState = new Float32Array(mod.HEAPF32.buffer, mod._physics_getStatePtr(), mod._physics_getStateSize());
+      this.hiddenBallStateBuf = mod._malloc(96);
+      this.hiddenBs = new Float32Array(mod.HEAPF32.buffer, this.hiddenBallStateBuf, 24);
+      this.hiddenSimReady = true;
+
+      if (this.lastBallState) {
+        this.simulateFromState(this.lastBallState);
+      }
+    } catch (err) {
+      console.warn('[BallTrajectoryPredictor] Failed to initialize hidden RocketSim physics:', err);
+    }
+  }
+
+  /**
+   * Run RocketSim physics forward in time using hidden environment.
+   */
+  simulateFromState(liveBallState) {
+    if (!liveBallState) return;
+    this.lastBallState = (liveBallState.slice ? liveBallState.slice() : new Float32Array(liveBallState));
+
+    if (!this.settings.enabled) {
+      this.clear();
       return;
     }
 
+    // Fallback if hidden simulation is still loading
+    if (!this.hiddenSimReady || !this.hiddenMod) {
+      if (this.lastBallPos && this.lastBallVel) {
+        this.simulateEuler(this.lastBallPos, this.lastBallVel);
+      }
+      return;
+    }
+
+    const b = this.lastBallState;
+    // Check if ball is essentially resting motionless on arena floor
+    // RocketSim linear velocity indices: 16, 17, 18
+    const velSq = b[16] * b[16] + b[17] * b[17] + b[18] * b[18];
+    if (velSq < 15 && b[6] <= 95) {
+      this.clear();
+      return;
+    }
+
+    // Load full 96-byte BallState into hidden RocketSim
+    const bs = this.hiddenBs;
+    // Position (x, y, z in RocketSim)
+    bs[0] = b[4]; bs[1] = b[5]; bs[2] = b[6]; bs[3] = 0;
+    // 3x3 Rotation matrix (rows with padding)
+    bs[4] = b[7];  bs[5] = b[8];  bs[6] = b[9];  bs[7] = 0;
+    bs[8] = b[10]; bs[9] = b[11]; bs[10] = b[12]; bs[11] = 0;
+    bs[12] = b[13]; bs[13] = b[14]; bs[14] = b[15]; bs[15] = 0;
+    // Linear velocity (vx, vy, vz)
+    bs[16] = b[16]; bs[17] = b[17]; bs[18] = b[18]; bs[19] = 0;
+    // Angular velocity / spin (wx, wy, wz)
+    bs[20] = b[19]; bs[21] = b[20]; bs[22] = b[21]; bs[23] = 0;
+
+    this.hiddenMod._physics_setBallState(this.hiddenBallPtr, this.hiddenBallStateBuf);
+
+    const totalTicks = Math.min(this.maxTicks, Math.max(2, Math.round(this.settings.duration * 120)));
+    const tickDtMs = 1000 / 120;
+    const cycleMs = this.settings.existTime + this.settings.hiddenTime;
+    const existMs = this.settings.existTime;
+    const nowMs = performance.now();
+
+    const points = [];
+    // t=0 initial point (RS coords -> Three.js coords: X->X, Z->Y, Y->Z)
+    points.push({
+      x: bs[0],
+      y: bs[2],
+      z: bs[1],
+      isVisible: cycleMs > 0 ? ((nowMs % cycleMs) < existMs) : true,
+      tMs: 0,
+      tickIndex: 0
+    });
+
+    const hState = this.hiddenState;
+    for (let k = 1; k < totalTicks; k++) {
+      this.hiddenMod._physics_step(1);
+      const tMs = k * tickDtMs;
+      const arrivalTimeMs = nowMs + tMs;
+      const isVisible = cycleMs > 0 ? ((arrivalTimeMs % cycleMs) < existMs) : true;
+      points.push({
+        x: hState[4],
+        y: hState[6], // RocketSim Z is up -> Three.js Y
+        z: hState[5], // RocketSim Y is forward -> Three.js Z
+        isVisible,
+        tMs,
+        tickIndex: k
+      });
+    }
+
+    this.simulatedPoints = points;
+    this.currentBallIndex = 0;
+    this.geometryDirty = true;
+  }
+
+  /**
+   * Analytical Euler simulation fallback.
+   */
+  simulateEuler(startPos, startVel) {
     const dt = 1 / 120;
     const tickDtMs = 1000 / 120;
     const totalTicks = Math.min(this.maxTicks, Math.max(2, Math.round(this.settings.duration * 120)));
@@ -176,12 +326,10 @@ export class BallTrajectoryPredictor {
     for (let k = 0; k < totalTicks; k++) {
       const tMs = k * tickDtMs;
       const arrivalTimeMs = nowMs + tMs;
-      // World-space fixed dash pattern:
       const isVisible = cycleMs > 0 ? ((arrivalTimeMs % cycleMs) < existMs) : true;
 
       points.push({ x, y, z, isVisible, tMs, tickIndex: k });
 
-      // Ball in-flight physics
       vx -= vx * this.DRAG * dt;
       vy += (this.GRAVITY - vy * this.DRAG) * dt;
       vz -= vz * this.DRAG * dt;
@@ -190,62 +338,29 @@ export class BallTrajectoryPredictor {
       y += vy * dt;
       z += vz * dt;
 
-      // Arena Ground collision
       if (y <= R) {
         y = R;
         vy = -vy * this.RESTITUTION;
         vx *= this.SURFACE_FRICTION;
         vz *= this.SURFACE_FRICTION;
       }
-
-      // Arena Ceiling collision
       if (y >= this.ARENA_HEIGHT - R) {
         y = this.ARENA_HEIGHT - R;
         vy = -vy * this.RESTITUTION;
         vx *= this.SURFACE_FRICTION;
         vz *= this.SURFACE_FRICTION;
       }
-
-      // Arena Side Walls (|X| = 4096)
       if (Math.abs(x) >= this.ARENA_HALF_W - R) {
         x = Math.sign(x) * (this.ARENA_HALF_W - R);
         vx = -vx * this.RESTITUTION;
         vy *= this.SURFACE_FRICTION;
         vz *= this.SURFACE_FRICTION;
       }
-
-      // End Walls (|Z| = 5120) & Goals
-      const isInsideGoalOpening = Math.abs(x) <= this.GOAL_HALF_W - R && y <= this.GOAL_HEIGHT - R;
-      if (!isInsideGoalOpening) {
-        if (Math.abs(z) >= this.ARENA_HALF_L - R) {
-          z = Math.sign(z) * (this.ARENA_HALF_L - R);
-          vz = -vz * this.RESTITUTION;
-          vx *= this.SURFACE_FRICTION;
-          vy *= this.SURFACE_FRICTION;
-        }
-      } else {
-        // Inside Goal mouth
-        const maxGoalZ = this.ARENA_HALF_L + this.GOAL_DEPTH - R;
-        if (Math.abs(z) >= maxGoalZ) {
-          z = Math.sign(z) * maxGoalZ;
-          vz = -vz * this.RESTITUTION;
-        }
-      }
-
-      // 45-degree Corner Bevels (|x| + |z| >= 8060)
-      const cornerThreshold = 8064 - R;
-      if (Math.abs(x) + Math.abs(z) >= cornerThreshold) {
-        const excess = (Math.abs(x) + Math.abs(z)) - cornerThreshold;
-        const nx = -Math.sign(x) * 0.70710678;
-        const nz = -Math.sign(z) * 0.70710678;
-        const vDotN = vx * nx + vz * nz;
-        if (vDotN < 0) {
-          vx -= (1 + this.RESTITUTION) * vDotN * nx;
-          vz -= (1 + this.RESTITUTION) * vDotN * nz;
-          vy *= this.SURFACE_FRICTION;
-          x += nx * excess;
-          z += nz * excess;
-        }
+      if (Math.abs(z) >= this.ARENA_HALF_L - R) {
+        z = Math.sign(z) * (this.ARENA_HALF_L - R);
+        vz = -vz * this.RESTITUTION;
+        vx *= this.SURFACE_FRICTION;
+        vy *= this.SURFACE_FRICTION;
       }
     }
 
@@ -254,17 +369,20 @@ export class BallTrajectoryPredictor {
     this.geometryDirty = true;
   }
 
-  /**
-   * Recalculates trajectory immediately from current ball physics.
-   */
-  recalculate(ballPos, ballVelocity) {
-    if (!this.settings.enabled) {
-      this.clear();
-      return;
+  notifyBallControl(ballState) {
+    if (ballState) this.lastBallState = ballState;
+    this.simulateFromState(this.lastBallState);
+  }
+
+  notifyKickoffReset(ballState) {
+    if (ballState) this.lastBallState = ballState;
+    this.clear();
+  }
+
+  forceRecalculate() {
+    if (this.lastBallState) {
+      this.simulateFromState(this.lastBallState);
     }
-    this.lastBallPos = ballPos;
-    this.lastBallVel = ballVelocity;
-    this.simulate(ballPos, ballVelocity);
   }
 
   clear() {
@@ -276,8 +394,9 @@ export class BallTrajectoryPredictor {
 
   /**
    * Per-frame update hook.
+   * Trajectory recalculation triggers ONLY on car-ball impact, kickoff reset, or ball control.
    */
-  update({ active, ballPosition, ballVelocity, ballHitSerial, kickoffReset }) {
+  update({ active, ballPosition, ballVelocity, ballState, ballHitSerial, kickoffReset }) {
     this.isActive = active;
 
     if (!this.isActive || !this.settings.enabled) {
@@ -287,24 +406,51 @@ export class BallTrajectoryPredictor {
 
     this.mesh.visible = true;
 
-    // Cache latest physics state for instant UI re-simulation
-    this.lastBallPos = ballPosition;
-    this.lastBallVel = ballVelocity;
-
-    const hitChanged = ballHitSerial !== this.lastHitSerial && ballHitSerial !== undefined;
-    if (hitChanged) {
-      this.lastHitSerial = ballHitSerial;
+    if (ballState) {
+      this.lastBallState = ballState;
+    }
+    if (ballPosition) {
+      this.lastBallPos = ballPosition;
+    }
+    if (ballVelocity) {
+      this.lastBallVel = ballVelocity;
     }
 
-    const speedSq = ballVelocity ? (ballVelocity.x * ballVelocity.x + ballVelocity.y * ballVelocity.y + ballVelocity.z * ballVelocity.z) : 0;
-    const isAtRest = speedSq < 25 && ballPosition.y <= this.BALL_RADIUS + 2;
-
-    if (isAtRest) {
-      this.clear();
+    if (kickoffReset) {
+      this.notifyKickoffReset(ballState);
       return;
     }
 
-    this.simulate(ballPosition, ballVelocity);
+    // Recalculate trajectory ONLY when car collides with ball!
+    const hitChanged = (ballHitSerial !== undefined && ballHitSerial !== this.lastHitSerial);
+    if (hitChanged) {
+      this.lastHitSerial = ballHitSerial;
+      this.simulateFromState(ballState || this.lastBallState);
+      return;
+    }
+
+    // In-flight without car collision:
+    // Advance currentBallIndex to track ball location along pre-simulated trajectory
+    if (this.simulatedPoints.length > 0 && ballPosition) {
+      let bestIdx = this.currentBallIndex;
+      let bestDistSq = Infinity;
+      const maxSearch = Math.min(this.simulatedPoints.length, this.currentBallIndex + 30);
+      for (let i = this.currentBallIndex; i < maxSearch; i++) {
+        const pt = this.simulatedPoints[i];
+        const dx = pt.x - ballPosition.x;
+        const dy = pt.y - ballPosition.y;
+        const dz = pt.z - ballPosition.z;
+        const dSq = dx * dx + dy * dy + dz * dz;
+        if (dSq < bestDistSq) {
+          bestDistSq = dSq;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx !== this.currentBallIndex) {
+        this.currentBallIndex = bestIdx;
+        this.geometryDirty = true;
+      }
+    }
   }
 
   /**
@@ -348,7 +494,6 @@ export class BallTrajectoryPredictor {
       const isVisible = p.isVisible;
 
       if (!isVisible) {
-        // End current dash if active
         inVisibleDash = false;
         continue;
       }
@@ -372,19 +517,17 @@ export class BallTrajectoryPredictor {
         if (this.side.lengthSq() < 1e-5) this.side.set(1, 0, 0);
       }
 
-      // Subtle scale with camera distance to ensure consistent pixel legibility
+      // Scale ribbon width according to thickness (up to 100) and distance
       const camDist = this.camPos.distanceTo(this.curP);
       const scaleFactor = Math.max(0.6, Math.min(2.5, camDist / 1200));
       const halfWidth = (thickness * 0.5) * scaleFactor;
       this.side.normalize().multiplyScalar(halfWidth);
 
-      // Fade alpha towards the very end of the trajectory
-      const progressToEnd = (i - startIdx) / Math.max(1, totalPts - 1 - startIdx);
-      const alpha = progressToEnd > 0.85 ? (1.0 - progressToEnd) / 0.15 : 1.0;
+      const progress = (i - startIdx) / Math.max(1, totalPts - 1 - startIdx);
+      const alpha = Math.max(0.15, 1.0 - progress * 0.7);
 
       if (vertCount + 2 > this.maxVertices) break;
 
-      // Add 2 ribbon vertices (left, right)
       const vLeft = vertCount++;
       const vRight = vertCount++;
 
@@ -407,11 +550,9 @@ export class BallTrajectoryPredictor {
       this.colors[baseIdxR + 2] = 1.0;
 
       if (!inVisibleDash) {
-        // Started a new dash
         inVisibleDash = true;
         dashStartVert = vLeft;
       } else {
-        // Connect quad to previous vertices in this dash
         const prevL = vLeft - 2;
         const prevR = vRight - 2;
 
@@ -439,30 +580,35 @@ export class BallTrajectoryPredictor {
    * Independent UI settings panel & HUD button.
    */
   createUI() {
-    // Inject stylesheet
     const styleId = 'trajectory-predictor-styles';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
       style.id = styleId;
       style.textContent = `
+        #app.trajectory-open > canvas {
+          cursor: default !important;
+        }
         .trajectory-panel {
           position: absolute;
           top: 64px;
           right: 20px;
-          width: 310px;
+          width: 320px;
           background: rgba(14, 20, 32, 0.94);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border: 1px solid rgba(0, 229, 255, 0.28);
+          border: 1px solid rgba(0, 240, 255, 0.35);
           border-radius: 12px;
-          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 229, 255, 0.08);
-          color: #e2e8f0;
-          font-family: var(--sans, system-ui, -apple-system, sans-serif);
+          color: #f0f4f8;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-size: 13px;
+          box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 240, 255, 0.15);
+          backdrop-filter: blur(12px);
           z-index: 1000;
           user-select: none;
-          pointer-events: auto;
+          pointer-events: auto !important;
+          cursor: default !important;
           transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .trajectory-panel * {
+          pointer-events: auto;
         }
         .trajectory-panel[hidden] {
           display: none !important;
@@ -481,13 +627,12 @@ export class BallTrajectoryPredictor {
           font-weight: 600;
           font-size: 14px;
           color: #fff;
-          letter-spacing: -0.01em;
         }
         .trajectory-badge {
-          background: rgba(0, 229, 255, 0.15);
+          background: rgba(0, 240, 255, 0.2);
           color: #00f0ff;
-          border: 1px solid rgba(0, 229, 255, 0.3);
-          border-radius: 999px;
+          border: 1px solid rgba(0, 240, 255, 0.4);
+          border-radius: 4px;
           font-size: 10px;
           font-weight: 700;
           padding: 1px 7px;
@@ -498,9 +643,9 @@ export class BallTrajectoryPredictor {
           border: none;
           color: rgba(255, 255, 255, 0.5);
           font-size: 18px;
-          cursor: pointer;
-          padding: 2px 6px;
-          border-radius: 4px;
+          cursor: pointer !important;
+          padding: 4px;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -526,39 +671,41 @@ export class BallTrajectoryPredictor {
           flex-direction: row;
           align-items: center;
           justify-content: space-between;
-          padding-bottom: 4px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
         .trajectory-row__header {
           display: flex;
-          align-items: center;
           justify-content: space-between;
+          align-items: center;
         }
         .trajectory-label {
           font-weight: 500;
-          color: rgba(255, 255, 255, 0.9);
-          font-size: 12px;
+          color: rgba(255, 255, 255, 0.85);
         }
         .trajectory-val {
-          font-family: var(--mono, monospace);
+          font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
           font-size: 12px;
-          font-weight: 600;
           color: #00f0ff;
+          font-weight: 600;
         }
         .trajectory-hint {
           font-size: 11px;
           color: rgba(255, 255, 255, 0.45);
-          line-height: 1.3;
         }
         .trajectory-slider {
           -webkit-appearance: none;
           appearance: none;
           width: 100%;
           height: 6px;
-          border-radius: 3px;
           background: rgba(255, 255, 255, 0.12);
+          border-radius: 3px;
           outline: none;
-          accent-color: #00e5ff;
-          cursor: pointer;
+          cursor: pointer !important;
+          transition: background 0.15s;
+        }
+        .trajectory-slider:hover {
+          background: rgba(255, 255, 255, 0.2);
         }
         .trajectory-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
@@ -567,46 +714,45 @@ export class BallTrajectoryPredictor {
           height: 16px;
           border-radius: 50%;
           background: #00f0ff;
-          cursor: pointer;
-          box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
+          cursor: pointer !important;
+          box-shadow: 0 0 8px rgba(0, 240, 255, 0.8);
+          transition: transform 0.1s;
+        }
+        .trajectory-slider::-webkit-slider-thumb:hover {
+          transform: scale(1.2);
         }
         .trajectory-toggle {
-          position: relative;
-          width: 38px;
-          height: 20px;
-          -webkit-appearance: none;
           appearance: none;
+          -webkit-appearance: none;
+          width: 40px;
+          height: 22px;
           background: rgba(255, 255, 255, 0.15);
+          border-radius: 12px;
+          position: relative;
+          cursor: pointer !important;
           outline: none;
-          border-radius: 10px;
-          cursor: pointer;
           transition: background 0.2s;
         }
         .trajectory-toggle:checked {
-          background: #00e5ff;
+          background: #00f0ff;
         }
         .trajectory-toggle::before {
           content: '';
           position: absolute;
-          top: 2px;
-          left: 2px;
           width: 16px;
           height: 16px;
           border-radius: 50%;
+          top: 3px;
+          left: 3px;
           background: #fff;
           transition: transform 0.2s;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
         .trajectory-toggle:checked::before {
           transform: translateX(18px);
         }
-        #trajectory-button svg {
-          stroke: currentColor;
-          fill: none;
-        }
-        #trajectory-button.is-active {
-          color: #00f0ff;
-          border-color: rgba(0, 229, 255, 0.4);
-          background: rgba(0, 229, 255, 0.1);
+        #trajectory-button {
+          cursor: pointer !important;
         }
       `;
       document.head.appendChild(style);
@@ -649,8 +795,8 @@ export class BallTrajectoryPredictor {
             <label class="trajectory-label" for="traj-thickness">Line Thickness</label>
             <span class="trajectory-val" id="traj-thickness-val">${Number(this.settings.lineThickness).toFixed(1)}</span>
           </div>
-          <input type="range" id="traj-thickness" class="trajectory-slider" min="1.0" max="10.0" step="0.5" value="${this.settings.lineThickness}" />
-          <span class="trajectory-hint">3D ribbon line thickness</span>
+          <input type="range" id="traj-thickness" class="trajectory-slider" min="1.0" max="100.0" step="0.5" value="${this.settings.lineThickness}" />
+          <span class="trajectory-hint">3D ribbon line thickness (1.0 – 100.0)</span>
         </div>
 
         <div class="trajectory-row">
@@ -681,6 +827,11 @@ export class BallTrajectoryPredictor {
       </div>
     `;
 
+    panel.addEventListener('pointerenter', () => {
+      const appEl = document.getElementById('app') || document.body;
+      if (appEl) appEl.classList.add('trajectory-open');
+    });
+
     this.container.appendChild(panel);
     this.panel = panel;
 
@@ -705,9 +856,7 @@ export class BallTrajectoryPredictor {
       } else {
         this.mesh.visible = true;
         this.geometryDirty = true;
-        if (this.lastBallPos && this.lastBallVel) {
-          this.simulate(this.lastBallPos, this.lastBallVel);
-        }
+        this.forceRecalculate();
       }
     });
 
@@ -717,13 +866,11 @@ export class BallTrajectoryPredictor {
       durationVal.textContent = `${val.toFixed(1)}s`;
       this.saveSettings();
       this.geometryDirty = true;
-      if (this.lastBallPos && this.lastBallVel) {
-        this.simulate(this.lastBallPos, this.lastBallVel);
-      }
+      this.forceRecalculate();
     });
 
     thicknessInput.addEventListener('input', (e) => {
-      const val = parseFloat(e.target.value);
+      const val = Math.max(1.0, Math.min(100.0, parseFloat(e.target.value) || 4.0));
       this.settings.lineThickness = val;
       thicknessVal.textContent = val.toFixed(1);
       this.saveSettings();
@@ -736,9 +883,7 @@ export class BallTrajectoryPredictor {
       existVal.textContent = `${val} ms`;
       this.saveSettings();
       this.geometryDirty = true;
-      if (this.lastBallPos && this.lastBallVel) {
-        this.simulate(this.lastBallPos, this.lastBallVel);
-      }
+      this.forceRecalculate();
     });
 
     hiddenInput.addEventListener('input', (e) => {
@@ -747,9 +892,7 @@ export class BallTrajectoryPredictor {
       hiddenVal.textContent = `${val} ms`;
       this.saveSettings();
       this.geometryDirty = true;
-      if (this.lastBallPos && this.lastBallVel) {
-        this.simulate(this.lastBallPos, this.lastBallVel);
-      }
+      this.forceRecalculate();
     });
 
     const colorInput = panel.querySelector('#traj-color');
@@ -819,6 +962,11 @@ export class BallTrajectoryPredictor {
       this.togglePanel();
     });
 
+    btn.addEventListener('pointerenter', () => {
+      const appEl = document.getElementById('app') || document.body;
+      if (appEl) appEl.classList.add('trajectory-open');
+    });
+
     hudTools.insertBefore(btn, hudTools.querySelector('#settings-button') || hudTools.firstChild);
     this.hudButton = btn;
   }
@@ -827,6 +975,10 @@ export class BallTrajectoryPredictor {
     if (!this.panel) return;
     const shouldOpen = forceState !== undefined ? forceState : this.panel.hidden;
     this.panel.hidden = !shouldOpen;
+    const appEl = document.getElementById('app') || document.body;
+    if (appEl) {
+      appEl.classList.toggle('trajectory-open', shouldOpen);
+    }
     if (shouldOpen) {
       this.syncUI();
     }

@@ -18173,8 +18173,17 @@ class SC{
     var n,r,s,a;
     if(this.captureActive)return!1;
     if(this.matches("toggleSettings",e))return t.preventDefault(),(n = this.onSettingsToggle) == null || n.call(this),!0;
+    const isTyping = t && t.target instanceof HTMLElement && (t.target.tagName === "INPUT" && (t.target.type === "text" || t.target.type === "password" || t.target.type === "search") || t.target.tagName === "TEXTAREA");
+    if (!isTyping) {
+      for(const o of to) {
+        if (this.matches(o, e)) {
+          t.preventDefault();
+          (r = this.onBallControl) == null || r.call(this, o);
+          return !0;
+        }
+      }
+    }
     if(!this.inputEnabled)return!1;
-    for(const o of to)this.matches(o,e) && (t.preventDefault(),(r = this.onBallControl) == null || r.call(this,o));
     return this.matches("ballCam",e) && (t.preventDefault(),(s = this.onBallCamToggle) == null || s.call(this)),this.matches("resetShot",e) && (t.preventDefault(),(a = this.onReset) == null || a.call(this)),!1
   }
   suppressBrowserDefault(e,t){
@@ -29108,7 +29117,7 @@ async function dB(){
     for(const W of E)W.reset()
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
-    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity))
+    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(n.state))
   }
   ;
   x.onReset = T;
@@ -29119,7 +29128,7 @@ async function dB(){
   const N = new ow(n.ballRadius,i);
   await Promise.all([N.loadArena(),N.loadBall(),N.loadCarAndPadAssets()]),N.addCar(0),N.addPads(n.getPads());
   const X = W=>{
-    a.state.mode !== "match" && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail())
+    a.state.mode !== "match" && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyBallControl(n.state))
   }
   ;
   x.onBallControl = X,R.onBallControl = X,D.onBallControl = X;
@@ -29170,7 +29179,7 @@ We = Xe.attachGraphics(W=>{
 }
 );
 const speedometerHUD = new SpeedometerHUD(an);
-const trajectoryPredictor = new BallTrajectoryPredictor(an);
+const trajectoryPredictor = new BallTrajectoryPredictor(an, n);
 N.scene.add(trajectoryPredictor.object);
 const ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
@@ -29197,7 +29206,7 @@ const st = ()=>{
 }
 ;
 x.onSettingsToggle = ue,ct.addEventListener("click",ue),an.querySelector(".hud-tools").appendChild(ct),an.querySelector("#settings-button").setAttribute("title","Settings"),an.addEventListener("pointerdown",W=>{
-  W.pointerType !== "mouse" || !(W.target instanceof Element) || W.target.closest("#settings-button, #car-button, #match-button") && (ne = !0,ge())
+  W.pointerType !== "mouse" || !(W.target instanceof Element) || W.target.closest("#settings-button, #car-button, #match-button, #trajectory-button, #trajectory-panel") && (ne = !0,ge())
 }
 ,!0),R.onActivity = ()=>{
   ml("gamepad"),D.hideForExternalInput(),ne && (ne = !1,ge())
@@ -29212,7 +29221,7 @@ const _e = ()=>{
   ),m.update({
     carSerial:W[fe + ye.BALL_HIT_SERIAL] + (W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0),carSpeed:0,worldSerial:W[fe + ye.BALL_WORLD_IMPACT_SERIAL],worldSpeed:0,worldSurface:0,worldPan:0,audible:!1
   }
-  ),y[0] = W[fe + ye.BALL_HIT_SERIAL],y[1] = W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0,N.resetBallTrail(),n.resetView(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity)
+  ),y[0] = W[fe + ye.BALL_HIT_SERIAL],y[1] = W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0,N.resetBallTrail(),n.resetView(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(n.state)
 }
 ;
 pe = new $M(an,{
@@ -29443,7 +29452,7 @@ function wt(W){
   }
   const fe = Math.min((W - ze) / 1e3,.1);
   ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0;
-  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity)),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
+  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(n.state)),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
   const activeCar = r;
@@ -29475,6 +29484,7 @@ function wt(W){
       active: a.state.mode === "freeplay",
       ballPosition: N.ball.position,
       ballVelocity: N.ballVelocity,
+      ballState: n.state,
       ballHitSerial: Rn,
       kickoffReset: goalScored,
     });
