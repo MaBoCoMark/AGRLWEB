@@ -133,9 +133,33 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 3. 创建单元测试套件 `tests/audio_subsystem.test.js`：涵盖全部 8 组音频类、数学公式、序列号触发及别名映射，8 组测试用例 100% 通过。
 4. 重构 `src/game/CarSoccerEngine.js`：精简移除 901 行内联混淆音频实现，代之以清晰的模块导入与别名桥接，并通过 `node --check` 语法校验。
 
-### 阶段四：全平台输入子系统统一（建议下一阶段执行）
-- 目标：解耦键鼠控制器 `SC`、手柄控制器 `XC`、移动端触控摇杆 `ib` 以及按键绑定配置持久化 `BC` / `io` / `Rf`，整合至 `src/input/MultiPlatformInput.js`。
-- 收益：将混杂在主引擎中的事件监听器和按键映射矩阵解耦为声明式配置，彻底解决全平台操作控制器的跨设备一致性。
+### 阶段四：全平台输入子系统统一（✅ 已落地）
+1. 创建 `src/utils/StorageHelper.js`：
+   - 封装类型安全的 `createLocalStorageStore`（原混淆 `rr`），支持 JSON 反序列化、多版本迁移回调与异常静默兜底。
+   - 提供通用类型校验与安全裁剪辅助：`isPlainObject` (`Dr`)、`booleanOrDefault` (`jr`)、`clampNumberOrDefault` (`_r`)、`stringOrDefault` (`cl`)、`filterArraySlice` (`MC`)。
+2. 创建 `src/input/InputConstants.js`：
+   - 规范化 RocketSim 8 维度控制约束（`throttle`, `steer`, `pitch`, `yaw`, `roll`, `jump`, `boost`, `handbrake`）。
+   - 收敛全部 21 项游戏可配置动作元数据（`INPUT_ACTIONS`，原 `io`）与 5 大动作组（`Driving`, `Aerial`, `Camera`, `Ball Control`, `Session`）。
+   - 定义按键与手柄按钮跨平台展示名矩阵（`KEY_DISPLAY_NAMES`, `MOUSE_BUTTON_NAMES`, `XBOX_BUTTON_NAMES`, `PLAYSTATION_BUTTON_NAMES`, `AXIS_NAMES`）。
+3. 创建 `src/input/InputBindings.js`：
+   - 抽离键鼠与手柄默认按键布局配置器（`createDefaultKeyboardBindings`, `createDefaultGamepadBindings`, `createDefaultInputBindings`）。
+   - 抽离按键绑定增删改与比对算法（`assignBinding`, `removeBinding`, `resetDeviceBindings`, `resetAxisBindings`, `areBindingsEqual`）。
+   - 抽离手柄品牌自适应识别（`detectControllerType`，识别 PlayStation DualSense/DualShock 与 Xbox 标准映射）。
+   - 抽离 Gamepad 自动捕获与多手柄热插拔选择器（`getConnectedGamepads`, `getSelectedController`, `setSelectedController`, `getEffectiveGamepad`）。
+4. 创建 `src/input/KeyboardMouseController.js`：
+   - 抽离键盘鼠标高响应控制器 `KeyboardMouseController`（原 `SC`），内置 UI 穿透防护（`isEventWithinUI`，原 `Tf`）。
+   - 优化空翻与空中俯仰滚转控制模型（Air Roll 与 Pitch 严格分离，消除 -0 精度毛刺）。
+5. 创建 `src/input/GamepadController.js`：
+   - 抽离专业级手柄控制器 `GamepadController`（原 `XC`），集成基于线性斜率补正的径向死区算法（`dz`）、扳机渐进行程、摇杆看球视角平移与训练动作触发。
+6. 创建 `src/input/TouchControls.js`：
+   - 抽离移动端触控控制器 `TouchControls`（原 `ib`）与嵌入式虚拟摇杆（`VirtualJoystick`）。
+   - 抽离触控安全区适配与自适应布局解算器（`getScreenSafeArea`, `computeTouchLayoutBounds`, `normalizeTouchLayoutRect`, `applyTouchLayoutToDom`）。
+   - 抽离触控自定义布局编辑器 `TouchLayoutEditor`（原 `_M`）。
+7. 创建 `src/input/MultiPlatformInput.js`：
+   - 提供全平台统合外观门面与多设备动态切换调度器 `MultiPlatformInputCoordinator`。
+   - 保持 100% 向后兼容别名桥接（`SC`, `XC`, `ib`, `_M`, `io`, `BC`, `Rf`, `UC`, `qC`, `Li`, `Hi`, `TC`, `RC`, `Pf`, `PC`, `OA`, `Hd`, `$C`, `Ks` 等）。
+8. 创建测试套件 `tests/input_subsystem.test.js`：涵盖配置存取、按键映射、设备识别、控制器读取及触控布局数学，全部 7 组测试用例 100% 通过。
+9. 重构 `src/game/CarSoccerEngine.js`：移除 2,178 行内联高混淆输入与布局编辑代码，替换为现代 ES Module 导入。
 
 ### 阶段五：弹窗与比赛状态机模块化
 - 目标：抽取 `SettingsSheet` (`BM`)、`GarageDialog` (`UM`/`HM`)、`MatchDialog` (`$M`) 与 `MatchStateMachine` (`VM`)。
