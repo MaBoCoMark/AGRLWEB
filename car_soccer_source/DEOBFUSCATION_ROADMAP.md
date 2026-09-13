@@ -18,7 +18,7 @@
 ### 1.2 成功的破局之道：外向内剥离 + 别名平滑过渡
 正确且工业级可靠的重构范式为：
 - **自底向上，逐模块拆分**：先解耦无外部闭包缠绕的基础底座（物理引擎、常量映射、时钟调度），再解耦外围独立 UI/音频，最后处理高度耦合的 3D 场景与相机。
-- **保留向下兼容别名 (Backward-Compatibility Aliases)**：每个解耦后的独立 ES 模块既导出语义化类名（如 `RocketSimPhysicsEngine`），又重导出原混淆别名（如 `export { RocketSimPhysicsEngine as yC }`），确保未重构部分无缝运行，**实现 0 回归风险**。
+- **保留向下兼容别名 (Backward-Compatibility Aliases)**：每个解耦后的独立 ES 模块既导出语义化类名（如 `RocketSimPhysicsEngine`, `BoostGaugeHUD`, `PerformanceOverlayHUD`），又重导出原混淆别名（如 `export { BoostGaugeHUD as nB }`），确保未重构部分无缝运行，**实现 0 回归风险**。
 
 ---
 
@@ -83,22 +83,23 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **02** | **RocketSim 物理外壳** | `class yC` | `src/physics/RocketSimPhysicsEngine.js` | ✅ **已完成** | 依赖 WASM 加载器与碰撞网格加载 |
 | **03** | **120Hz 物理插值器** | `class CC` | `src/physics/PhysicsStateInterpolator.js`| ✅ **已完成** | 定步长累加器，Lerp 插值与防螺旋停滞 |
 | **04** | **GPU 渲染时钟调度器**| `class bC` | `src/game/RenderClockScheduler.js` | ✅ **已完成** | RAF + WebGL2 fenceSync，解耦帧率限制 |
-| **05** | **喷气量弧形表盘 HUD**| `class nB` | `src/ui/BoostGaugeHUD.js` | ⏳ *阶段二* | 纯 DOM/SVG 渲染，监听 boost 浮点数 |
-| **06** | **性能监控与帧耗时** | `class aB`, `class iB` | `src/ui/PerformanceOverlayHUD.js` | ⏳ *阶段二* | 极简与详情 FPS / p95 耗时视图 |
-| **07** | **综合音效总线与合成**| `class Lw`, `Sw`, `kw`, `gameAudio` | `src/audio/GameAudioSubsystem.js` | ⏳ *阶段三* | Web Audio API、立体声空间音效、程序化轮胎/撞击声 |
-| **08** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M` | `src/input/MultiPlatformInput.js` | ⏳ *阶段四* | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆 |
-| **09** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段五* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
-| **10** | **比赛与模式状态机** | `class VM`, `class $M` | `src/game/MatchController.js` | ⏳ *阶段五* | Kickoff 开球、321 倒计时、进球判定、加时赛判定 |
-| **11** | **RL Bot 强化学习代理**| `class QM` | `src/ai/RLBotAgent.js` | ⏳ *阶段六* | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer) |
-| **12** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
-| **13** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
-| **14** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段七* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
+| **05** | **喷气量弧形表盘 HUD**| `class nB`, `um` | `src/ui/BoostGaugeHUD.js` | ✅ **已完成** | 纯 DOM/SVG 渲染，监听 boost 浮点数与点火状态 |
+| **06** | **性能监控与帧耗时** | `class aB`, `class iB` | `src/ui/PerformanceOverlayHUD.js` | ✅ **已完成** | 极简与详情 FPS / p95 耗时视图、SVG 折线图与环形缓冲 |
+| **07** | **全局 UI 矢量图标库**| `jM`, `Vt` | `src/ui/Icons.js` | ✅ **已完成** | 包含 20 个高精度 SVG 矢量图标库与格式化输出 |
+| **08** | **综合音效总线与合成**| `class Lw`, `Sw`, `kw`, `cg`, `GameAudioManager` | `src/audio/GameAudioSubsystem.js` | ⏳ *阶段三* | Web Audio HRTF 空间化、超音速音爆、起跳翻滚撞球声效 |
+| **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M` | `src/input/MultiPlatformInput.js` | ⏳ *阶段四* | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆 |
+| **10** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段五* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
+| **11** | **比赛与模式状态机** | `class VM`, `class $M` | `src/game/MatchController.js` | ⏳ *阶段五* | Kickoff 开球、321 倒计时、进球判定、加时赛判定 |
+| **12** | **RL Bot 强化学习代理**| `class QM` | `src/ai/RLBotAgent.js` | ⏳ *阶段六* | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer) |
+| **13** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
+| **14** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
+| **15** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
 
 ## 4. 阶段实施蓝图 (Phased Implementation Blueprint)
 
-### 阶段一：物理层与时钟调度器规范化（本次已落地）
+### 阶段一：物理层与时钟调度器规范化（✅ 已落地）
 1. 创建 `src/physics/RocketSimConstants.js`：定义严格与 C++ 源码一致的结构体偏移与物理常量。
 2. 创建 `src/physics/RocketSimPhysicsEngine.js`：封装 RocketSim C++ WASM 胶水层，命名所有方法，添加 JSDoc。
 3. 创建 `src/physics/PhysicsStateInterpolator.js`：将 120Hz 物理累加步进与状态插值独立封装。
@@ -106,19 +107,22 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 5. 更新 `src/physics/PhysicsManager.js`：使原有的空壳管理器变更为功能完整的统一门面导出层。
 6. 重构 `src/game/CarSoccerEngine.js`：引入上述模块，删除内联的 270 余行混淆实现，以干净别名保障零回归。
 
-### 阶段二：UI HUD 组件抽离（建议下一阶段执行）
-- 目标：将 `nB`（喷气表盘 HUD，约 45 行）与 `aB`/`iB`（性能与帧率监控面板，约 370 行）抽取为独立模块：
-  - `src/ui/BoostGaugeHUD.js`
-  - `src/ui/PerformanceOverlayHUD.js`
-- 收益：精简主文件 400 余行，使 HUD 的样式与逻辑完全可复用。
+### 阶段二：UI HUD 与性能监控抽离（✅ 已落地）
+1. 创建 `src/ui/Icons.js`：收敛全部 20 项矢量图标（`play`, `gear`, `bolt`, `car-profile`, `arrows-clockwise` 等），封装 `renderIcon(name, size)` 并提供向后兼容别名 `Vt` 与 `jM`。
+2. 创建 `src/ui/BoostGaugeHUD.js`：解耦线性喷气计量表盘（原混淆类 `nB` 与算法 `um`），封装 `boostToTrackX`，支持刻度绘制、瞬时喷气动态高光以及无限气模式（`∞`）。
+3. 创建 `src/ui/PerformanceOverlayHUD.js`：
+   - 抽离 `PerformanceProfiler`（原 `iB`）：基于 10000 槽位的高性能环形数组统计单帧耗时、CPU 渲染耗时、6 大细分渲染阶段（`sim`, `scene`, `camera`, `prep`, `bloom`, `final`）、120Hz 仿真子步、丢帧分析以及屏幕刷新率自适应识别（30Hz 至 600Hz）。
+   - 抽离 `PerformanceOverlayHUD`（原 `aB`）：解耦状态监视器 DOM 浮层、Summary 极简指示器、SVG 实时延迟折线波动图、Three.js 显存与渲染绘制调用（Draw Calls）统计、以及手柄按键导航响应。
+4. 创建单元测试套件 `tests/hud_and_profiler.test.js`，通过 Node.js 运行全量功能与别名兼容性校验（100% 通过）。
+5. 重构 `src/game/CarSoccerEngine.js`：移除 460 余行高混淆 DOM/HUD 逻辑，替换为清晰的模块引用。
 
-### 阶段三：音频子系统统一与空间化解耦
-- 目标：整合 `Lw`（Web Audio 总线）、`tm`（电机合成器）、`Sw`（轮胎抓地声）、`kw`（撞击声）与 `gameAudio`（空间化音效管理器）：
-  - `src/audio/GameAudioSubsystem.js`
-- 收益：消除主渲染循环中繁杂的临时变量判断，实现声明式音效触发。
+### 阶段三：音频子系统统一与空间化解耦（建议下一阶段执行）
+- 目标：整合 `Lw`（超音速音效）、`Sw`（跳跃与悬挂撞击声）、`kw`（赛车撞球与撞墙声）、`cg`（HRTF 空间化立体声源）与 `GameAudioManager`（自定义音频资源播放）：
+  - 新建模块：`src/audio/GameAudioSubsystem.js` 与 `src/audio/SpatialAudioSource.js`
+- 收益：消除游戏主循环中对音频计数器（`jumpSerial`, `ballHitSerial` 等）的密集散落判断，将声音触发收敛为声明式事件驱动。
 
-### 阶段四：输入子系统统一
-- 目标：合并键鼠 (`SC`)、手柄 (`XC`)、移动触控 (`ib`) 与按键重映射编辑器 (`_M`) 至 `src/input/`。
+### 阶段四：全平台输入子系统统一
+- 目标：解耦键鼠控制器 `SC`、手柄控制器 `XC`、移动端触控摇杆 `ib` 以及按键绑定配置持久化 `co` / `_M`，整合至 `src/input/MultiPlatformInput.js`。
 
 ### 阶段五：弹窗与比赛状态机模块化
 - 目标：抽取 `SettingsSheet` (`BM`)、`GarageDialog` (`UM`/`HM`)、`MatchDialog` (`$M`) 与 `MatchStateMachine` (`VM`)。
@@ -126,5 +130,8 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 ### 阶段六：AI 智能体模块化
 - 目标：抽取 `QM`（ONNX 神经网络推理调度）至 `src/ai/RLBotAgent.js`。
 
-### 阶段七：Three.js 外部化与 ArenaWorld 解耦
+### 阶段七：相机控制器与三维球场解耦
+- 目标：解耦跟随相机 `cw`（Ball Cam 球心锁定、镜头震动与穿墙防穿刺）与球场世界实体 `ow`。
+
+### 阶段八：Three.js 内核外部化
 - 目标：将内联的 1.7 万行 Three.js 替换为外部 `import * as THREE from 'three'`，彻底完成整个项目的现代工程化转型。
