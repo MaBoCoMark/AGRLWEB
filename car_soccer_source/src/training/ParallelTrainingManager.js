@@ -654,7 +654,7 @@ export class ParallelTrainingManager {
     const arena = this.arenas[worldId];
     if (!arena || !arena.module) return;
 
-    const { ht, ln } = this.constants;
+    const { ht, ln, ye } = this.constants;
     const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
     const presentIds = Array.from(world.presentPlayerIds);
 
@@ -799,6 +799,12 @@ export class ParallelTrainingManager {
     }
     const arena = this.arenas[worldId];
     if (arena && arena.state) {
+      if (typeof arena.module._physics_clearGoalFlag === "function") {
+        try { arena.module._physics_clearGoalFlag(); } catch (e) {}
+      }
+      arena.state[this.constants.ht.GOAL] = 0;
+      if (this.currStates[worldId]) this.currStates[worldId][this.constants.ht.GOAL] = 0;
+      if (this.prevStates[worldId]) this.prevStates[worldId][this.constants.ht.GOAL] = 0;
       const bOff = this.constants.ht.BALL;
       arena.state[bOff] = 0;
       arena.state[bOff + 1] = 0;

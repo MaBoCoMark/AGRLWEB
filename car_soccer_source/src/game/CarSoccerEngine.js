@@ -22541,6 +22541,68 @@ class GameAudioManager {
       src.start();
     } catch (e) {}
   }
+
+  playSpatial(key, pos, baseVol = 1.0, camera = null, minInterval = 0) {
+    const now = performance.now();
+    if (minInterval > 0) {
+      const last = this.lastPlayTime.get(key) || 0;
+      if (now - last < minInterval) return;
+    }
+    this.lastPlayTime.set(key, now);
+
+    const buf = this.buffers.get(key);
+    if (!buf) {
+      if (this.soundDefs[key] && !this.buffers.has(key)) {
+        this.loadSound(key, this.soundDefs[key]);
+      }
+      return;
+    }
+
+    try {
+      const ctx = qr();
+      if (!ctx || ctx.state === "suspended") return;
+      let vol = baseVol;
+      let pan = 0;
+
+      if (pos && camera && camera.position) {
+        const camPos = camera.position;
+        const dx = pos.x - camPos.x;
+        const dy = pos.y - camPos.y;
+        const dz = pos.z - camPos.z;
+        const dist = Math.hypot(dx, dy, dz);
+        const refDist = 900;
+        const falloff = refDist / (refDist + Math.max(0, dist - 250));
+        vol = Math.max(0.08, Math.min(1.0, baseVol * falloff));
+
+        if (camera.matrixWorld) {
+          const m = camera.matrixWorld.elements;
+          const rx = m[0], ry = m[1], rz = m[2];
+          const rLen = Math.hypot(rx, ry, rz) || 1;
+          const dLen = dist || 1;
+          pan = Gt.clamp((dx * rx + dy * ry + dz * rz) / (rLen * dLen), -1, 1);
+        }
+      }
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      const master = (En.settings.masterVolume ?? 1.0);
+      const fxVol = (En.settings.boostVolume ?? 0.8);
+      const finalVol = Math.max(0, Math.min(1, vol * master * fxVol));
+      gain.gain.setValueAtTime(finalVol, ctx.currentTime);
+      src.connect(gain);
+
+      if (typeof ctx.createStereoPanner === "function") {
+        const panner = ctx.createStereoPanner();
+        panner.pan.setValueAtTime(pan, ctx.currentTime);
+        gain.connect(panner);
+        panner.connect($r());
+      } else {
+        gain.connect($r());
+      }
+      src.start();
+    } catch (e) {}
+  }
 }
 const gameAudio = new GameAudioManager();
 gameAudio.loadAll();
@@ -22552,7 +22614,11 @@ let __audioLastPhase = "playing";
 let __audioLastOvertime = false;
 let __audioLastRemainingSec = 300;
 let __audioLastSupersonic = false;
-let __audioLastNoBoostPlay = 0;
+let __audioLastBoostPressed = false;
+let __audioLastGoalScored = false;
+let __audioLastCountdown = -1;
+const __audioCollidingPairs = new Set();
+const __audioCarHitSerials = [];
 const fp = 250,g1 = 4500,v1 = .4;
 function j1(i){
   if(!Number.isFinite(i))return 0;
@@ -29180,7 +29246,15 @@ async function dB(){
     ,u = 0
   }
   ,g = new Sw,m = new kw,y = [0,0],C = new Lw,E = [new tm,new tm(!0)],w = ()=>{
-    for(const W of E)W.reset()
+    for(const W of E)W.reset();
+    if (g) g.previous = null;
+    if (m) { m.previousCarSerial = null; m.previousWorldSerial = null; }
+    y[0] = 0; y[1] = 0;
+    __audioCarHitSerials.length = 0;
+    __audioCollidingPairs.clear();
+    __audioLastGoalScored = false;
+    __audioLastCountdown = -1;
+    __audioLastBoostPressed = false;
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
     if (a.state.mode !== "match") {
@@ -29635,12 +29709,52 @@ function wt(W){
   H.update(activeCarMesh, N.ball, fe, be);
   N.updateBallLocatorArrow(H.ballCam, activeCar, N.ball, activeCarMesh);
   He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
-  for(let bn = 0;bn < E.length;bn++){
-    const B = ht.CARS + bn * ln,pi = bn === activeCar?ke:l,In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
-    E[bn].update({
-      forwardSpeed:Ys,throttle:pi.throttle,handbrake:pi.handbrake,boosting:In && Mt[B + ye.IS_BOOSTING] === 1,onGround:In && Mt[B + ye.ON_GROUND] === 1,alive:In && Mt[B + ye.DEMOED] !== 1,audible:x.enabled && Ft,controllerActive:R.active() || D.active(),position:(bn === activeCar && activeCarMesh ? activeCarMesh.position : ((ar = N.cars[bn]) == null?void 0:ar.position))
+  const numCarsInArena = Mt[ht.NUM_CARS] || 0;
+  while (E.length < Math.max(2, numCarsInArena)) {
+    E.push(new tm(!0));
+  }
+  for (let bn = 0; bn < E.length; bn++) {
+    const isThisActiveCar = (bn === activeCar);
+    E[bn].setSpatial(!isThisActiveCar);
+    const In = bn < numCarsInArena;
+    if (!In) {
+      E[bn].silence();
+      continue;
     }
-    ,fe)
+    const B = ht.CARS + bn * ln;
+    let carPosVec = null;
+    let carControls = (isThisActiveCar ? ke : l);
+
+    if (isParallelActive) {
+      const activeWorldId = (typeof parallelManager !== "undefined" && parallelManager.players) ? (parallelManager.players[parallelManager.activePlayerIndex]?.currentWorldId ?? 0) : 0;
+      let pObj = null;
+      if (typeof parallelManager !== "undefined" && parallelManager.players) {
+        for (const p of parallelManager.players) {
+          if (p && p.currentWorldId === activeWorldId && p.arenaCarIndex === bn) {
+            pObj = p;
+            break;
+          }
+        }
+      }
+      if (pObj && parallelManager.carMeshes && parallelManager.carMeshes[pObj.id]) {
+        carPosVec = parallelManager.carMeshes[pObj.id].position;
+      }
+    } else {
+      carPosVec = (isThisActiveCar && activeCarMesh) ? activeCarMesh.position : ((ar = N.cars[bn]) == null ? void 0 : ar.position);
+    }
+
+    const Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
+    E[bn].update({
+      forwardSpeed: Ys,
+      throttle: carControls.throttle,
+      handbrake: carControls.handbrake,
+      boosting: In && Mt[B + ye.IS_BOOSTING] === 1,
+      onGround: In && Mt[B + ye.ON_GROUND] === 1,
+      alive: In && Mt[B + ye.DEMOED] !== 1,
+      audible: x.enabled && Ft,
+      controllerActive: R.active() || D.active(),
+      position: carPosVec
+    }, fe);
   }
   N.prepareBallSpeedTrail(H.camera);
   if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
@@ -29687,10 +29801,13 @@ function wt(W){
 
   // --- Game Audio Triggers ---
   if (typeof gameAudio !== "undefined" && gameAudio) {
-    // 1. Goal scored poof SFX
-    if (goalScored) {
-      gameAudio.play("sfx_goal_poof", 1.0, 1000);
+    // 1. Goal scored poof SFX (rising-edge trigger, strictly avoids repeated playback per goal event)
+    const isGoalNow = goalScored || (a.state.mode === "match" && a.state.phase === "goal");
+    if (isGoalNow && !__audioLastGoalScored) {
+      gameAudio.play("sfx_goal_poof", 1.0);
     }
+    __audioLastGoalScored = isGoalNow;
+
     // 2. Match 30 seconds left SFX
     if (a.state.mode === "match" && !a.state.overtime && a.state.phase === "playing") {
       if (__audioLastRemainingSec > 30 && a.state.remainingSeconds <= 30 && a.state.remainingSeconds > 0) {
@@ -29705,39 +29822,52 @@ function wt(W){
     }
     __audioLastOvertime = a.state.overtime;
 
-    // 4. Kickoff countdown 321 SFX
-    if (a.state.mode === "match" && a.state.phase === "kickoff" && __audioLastPhase !== "kickoff") {
-      gameAudio.play("match_countdown_321", 1.0, 3000);
+    // 4. Kickoff countdown 321 SFX (triggers once per 3, 2, 1 transition, allowing overlap)
+    if (a.state.mode === "match" && a.state.phase === "kickoff") {
+      const currentCount = Math.ceil(a.state.countdown);
+      if (currentCount >= 1 && currentCount <= 3 && currentCount !== __audioLastCountdown) {
+        __audioLastCountdown = currentCount;
+        gameAudio.play("match_countdown_321", 1.0);
+      }
+    } else {
+      __audioLastCountdown = -1;
     }
 
     // 5. Match start / kickoff Go! SFX
     if (a.state.mode === "match" && __audioLastPhase === "kickoff" && a.state.phase === "playing") {
-      gameAudio.play("match_start_go", 1.0, 2000);
+      gameAudio.play("match_start_go", 1.0);
     }
     __audioLastPhase = a.state.phase;
 
-    // 6. Supersonic enter SFX
+    // 6. Supersonic enter SFX (clean rising edge from non-supersonic to supersonic, allowing overlap)
     if (ir && !__audioLastSupersonic) {
-      gameAudio.play("sfx_state_supersonic", 0.9, 1000);
+      gameAudio.play("sfx_state_supersonic", 0.9);
     }
     __audioLastSupersonic = ir;
 
-    // 7. Ball hit SFX
-    if (Rn !== y[0] && Rn > 0) {
-      const hitVol = Math.min(1.0, Math.max(0.35, Sr / 1500));
-      gameAudio.play("sfx_ball_hit", hitVol, 60);
-    }
-
-    // 8. No boost SFX
-    if (ke && ke.boost && curBoost <= 0) {
-      const now = performance.now();
-      if (now - __audioLastNoBoostPlay > 600) {
-        __audioLastNoBoostPlay = now;
-        gameAudio.play("sfx_error_no_boost", 0.85);
+    // 7. Ball hit SFX (all cars in active world, spatialized at ball position, allowing overlap)
+    const numActiveArenaCars = Mt[ht.NUM_CARS] || 1;
+    let anyCarHitBall = false;
+    for (let ci = 0; ci < numActiveArenaCars; ci++) {
+      const hitSerial = Mt[ht.CARS + ci * ln + ye.BALL_HIT_SERIAL];
+      const lastHit = __audioCarHitSerials[ci];
+      if (lastHit !== undefined && hitSerial !== lastHit && hitSerial > 0) {
+        anyCarHitBall = true;
       }
+      __audioCarHitSerials[ci] = hitSerial;
+    }
+    if (anyCarHitBall && N.ball && N.ball.position) {
+      gameAudio.playSpatial("sfx_ball_hit", N.ball.position, 1.0, H.camera);
     }
 
-    // 9. Car-to-car collision SFX
+    // 8. No boost SFX (edge-triggered on pressing boost when boost is zero, allowing overlap)
+    const isBoostPressed = Boolean(ke && ke.boost);
+    if (isBoostPressed && !__audioLastBoostPressed && curBoost <= 0.001) {
+      gameAudio.play("sfx_error_no_boost", 0.85);
+    }
+    __audioLastBoostPressed = isBoostPressed;
+
+    // 9. Car-to-car collision SFX (physical contact edge detection, spatialized at midpoint, allowing overlap)
     if (Mt[ht.NUM_CARS] > 1) {
       const numCars = Mt[ht.NUM_CARS];
       for (let ci = 0; ci < numCars; ci++) {
@@ -29747,14 +29877,19 @@ function wt(W){
           const dx = Mt[offI + ye.POS] - Mt[offJ + ye.POS];
           const dy = Mt[offI + ye.POS + 1] - Mt[offJ + ye.POS + 1];
           const dz = Mt[offI + ye.POS + 2] - Mt[offJ + ye.POS + 2];
-          if (dx * dx + dy * dy + dz * dz < 230 * 230) {
-            const rvx = Mt[offI + ye.VEL] - Mt[offJ + ye.VEL];
-            const rvy = Mt[offI + ye.VEL + 1] - Mt[offJ + ye.VEL + 1];
-            const rvz = Mt[offI + ye.VEL + 2] - Mt[offJ + ye.VEL + 2];
-            const relSpeed = Math.hypot(rvx, rvy, rvz);
-            if (relSpeed > 180) {
-              gameAudio.play("sfx_car_collision", Math.min(1.0, Math.max(0.35, relSpeed / 1500)), 300);
+          const distSq = dx * dx + dy * dy + dz * dz;
+          const pairKey = ci + "_" + cj;
+          // Octane length 118, width 84, height 36. Contact occurs when center distance < 120
+          if (distSq < 120 * 120) {
+            if (!__audioCollidingPairs.has(pairKey)) {
+              __audioCollidingPairs.add(pairKey);
+              const midX = (Mt[offI + ye.POS] + Mt[offJ + ye.POS]) * 0.5;
+              const midY = (Mt[offI + ye.POS + 2] + Mt[offJ + ye.POS + 2]) * 0.5;
+              const midZ = (Mt[offI + ye.POS + 1] + Mt[offJ + ye.POS + 1]) * 0.5;
+              gameAudio.playSpatial("sfx_car_collision", { x: midX, y: midY, z: midZ }, 1.0, H.camera);
             }
+          } else if (distSq > 140 * 140) {
+            __audioCollidingPairs.delete(pairKey);
           }
         }
       }
