@@ -27,6 +27,12 @@ import { DemolitionEffect, nS } from './DemolitionEffect.js';
 import { loadBallAsset, aS } from './BallVisual.js';
 import { HITBOX_PRESETS, createWhiteboxCarModel } from '../ui/GarageDialog.js';
 import { onThemeChange } from '../ui/ThemeManager.js';
+import {
+  SIM_OFFSETS,
+  CAR_STATE_OFFSETS as ROCKETSIM_CAR_STATE_OFFSETS,
+  CAR_STATE_STRIDE as ROCKETSIM_CAR_STATE_STRIDE,
+  MAX_CARS
+} from '../physics/RocketSimConstants.js';
 
 // Arena Dimensions & Coordinate Constants (Unreal Units)
 export const ARENA_WIDTH = 8192;           // Fi
@@ -63,28 +69,11 @@ export const STADIUM_MATERIAL_COLORS = {
   "Seat ochre": TEAM_BLUE_HEX
 };
 
-// Physics Buffer Offsets (matching RocketSim C++ Memory Layout)
-export const BUFFER_OFFSETS = {
-  NUM_CARS: 0,
-  BALL: 1,
-  CARS: 19
-};
-
-export const CAR_STATE_OFFSETS = {
-  VEL: 6,
-  FWD: 9,
-  ON_GROUND: 16,
-  IS_FLIPPING: 17,
-  IS_BOOSTING: 18,
-  BOOST: 19,
-  SUPERSONIC: 20,
-  DEMOED: 21,
-  BALL_HIT_SERIAL: 22,
-  WHEELS: 23
-};
-
-export const CAR_STATE_STRIDE = 35; // ln
-export const BOOST_PAD_OFFSET = 89; // ro
+// Physics Buffer Offsets & Strides (RocketSim Memory Layout)
+export const BUFFER_OFFSETS = SIM_OFFSETS;
+export const CAR_STATE_OFFSETS = ROCKETSIM_CAR_STATE_OFFSETS;
+export const CAR_STATE_STRIDE = ROCKETSIM_CAR_STATE_STRIDE; // 51
+export const BOOST_PAD_OFFSET = SIM_OFFSETS.CARS + MAX_CARS * CAR_STATE_STRIDE; // 430
 export const WHEEL_STATE_STRIDE = 3; // EC
 export const BOT_CAR_INDEX = 1;      // no
 
@@ -112,6 +101,7 @@ let arenaWorldThreeContext = {
   Vector3: null,
   Color: null,
   Quaternion: null,
+  Matrix4: null,
   Scene: null,
   DirectionalLight: null,
   HemisphereLight: null,
@@ -122,18 +112,18 @@ let arenaWorldThreeContext = {
   RepeatWrapping: null,
   LinearFilter: null,
   LinearMipmapLinearFilter: null,
-  SRGBColorSpace: 'srgb',
+  SRGBColorSpace: null,
   mergeVertices: null,
   mergeGeometries: null,
   GLTFLoader: null,
   TextureLoader: null,
   OBJLoader: null,
   VehicleBoostEmitter: null,
-  multiThemeMaterial: null,
-  getThemeMaterial: null,
-  cloneMaterial: null,
-  markMatrixDirty: null,
-  setShadowFlags: null
+  multiThemeMaterial: (m1, m2) => m1,
+  getThemeMaterial: (m, mode) => m,
+  cloneMaterial: (m) => ({ ...m }),
+  markMatrixDirty: () => {},
+  setShadowFlags: () => {}
 };
 
 let arenaWorldCarLoaders = {
@@ -145,6 +135,10 @@ let arenaWorldCarLoaders = {
   assembleRealisticCar: null,
   createGameCarModel: null,
   createFlatCarModel: null,
+  createGameCarWheel: null,
+  createGameCarWheelHardware: null,
+  createFlatCarWheel: null,
+  updateRealisticCockpitGimbal: null,
   getCarVisualTheme: null,
   wheelSpecs: null,
   suspensionSpecs: null,
@@ -228,7 +222,7 @@ function resolveContext() {
       constructor(pts = []) { this.points = pts; }
     }),
     LatheGeometry: G.LatheGeometry || (typeof THREE !== 'undefined' ? THREE.LatheGeometry : class {
-      constructor(pts = []) { this.points = pts; }
+      constructor() {}
       dispose() {}
     }),
     TorusGeometry: G.TorusGeometry || (typeof THREE !== 'undefined' ? THREE.TorusGeometry : class {
@@ -236,142 +230,174 @@ function resolveContext() {
       dispose() {}
     }),
     RingGeometry: G.RingGeometry || (typeof THREE !== 'undefined' ? THREE.RingGeometry : class {
-      constructor() {}
+      constructor(inner = 0.5, outer = 1, thetaSegments = 8) {
+        this.inner = inner; this.outer = outer; this.thetaSegments = thetaSegments;
+      }
       dispose() {}
     }),
     CanvasTexture: G.CanvasTexture || (typeof THREE !== 'undefined' ? THREE.CanvasTexture : class {
-      constructor(canvas) { this.image = canvas; }
+      constructor(canvas) { this.image = canvas; this.needsUpdate = false; }
     }),
     MeshStandardMaterial: G.MeshStandardMaterial || (typeof THREE !== 'undefined' ? THREE.MeshStandardMaterial : class {
-      constructor(opt = {}) {
-        Object.assign(this, opt);
-        this.color = new (resolveContext().Color)(opt.color || 0xffffff);
-        this.emissive = new (resolveContext().Color)(opt.emissive || 0x000000);
-      }
-      clone() { return new this.constructor(this); }
+      constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
+      clone() { return new (resolveContext().MeshStandardMaterial)(this); }
       dispose() {}
     }),
     MeshBasicMaterial: G.MeshBasicMaterial || (typeof THREE !== 'undefined' ? THREE.MeshBasicMaterial : class {
-      constructor(opt = {}) {
-        Object.assign(this, opt);
-        this.color = new (resolveContext().Color)(opt.color || 0xffffff);
-      }
-      clone() { return new this.constructor(this); }
+      constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
+      clone() { return new (resolveContext().MeshBasicMaterial)(this); }
       dispose() {}
     }),
     ShaderMaterial: G.ShaderMaterial || (typeof THREE !== 'undefined' ? THREE.ShaderMaterial : class {
-      constructor(opt = {}) {
-        Object.assign(this, opt);
-        this.uniforms = opt.uniforms || {};
+      constructor(params = {}) {
+        Object.assign(this, params);
+        this.userData = {};
+        this.uniforms = params.uniforms || {};
       }
-      clone() { return new this.constructor(this); }
+      clone() { return new (resolveContext().ShaderMaterial)(this); }
       dispose() {}
     }),
     Vector2: G.Vector2 || (typeof THREE !== 'undefined' ? THREE.Vector2 : class {
       constructor(x = 0, y = 0) { this.x = x; this.y = y; }
       set(x, y) { this.x = x; this.y = y; return this; }
+      copy(v) { this.x = v.x; this.y = v.y; return this; }
+      clone() { return new (resolveContext().Vector2)(this.x, this.y); }
     }),
     Vector3: G.Vector3 || (typeof THREE !== 'undefined' ? THREE.Vector3 : class {
-      constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+      constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; this.isVector3 = true; }
       set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
       copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
-      clone() { return new this.constructor(this.x, this.y, this.z); }
+      clone() { return new (resolveContext().Vector3)(this.x, this.y, this.z); }
       add(v) { this.x += v.x; this.y += v.y; this.z += v.z; return this; }
       sub(v) { this.x -= v.x; this.y -= v.y; this.z -= v.z; return this; }
       multiplyScalar(s) { this.x *= s; this.y *= s; this.z *= s; return this; }
-      divideScalar(s) { if (s !== 0) { this.x /= s; this.y /= s; this.z /= s; } return this; }
+      divideScalar(s) { this.x /= s; this.y /= s; this.z /= s; return this; }
+      addScaledVector(v, s) { this.x += v.x * s; this.y += v.y * s; this.z += v.z * s; return this; }
       dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
       cross(v) {
-        const ax = this.x, ay = this.y, az = this.z, bx = v.x, by = v.y, bz = v.z;
-        this.x = ay * bz - az * by; this.y = az * bx - ax * bz; this.z = ax * by - ay * bx;
+        const ax = this.x, ay = this.y, az = this.z;
+        const bx = v.x, by = v.y, bz = v.z;
+        this.x = ay * bz - az * by;
+        this.y = az * bx - ax * bz;
+        this.z = ax * by - ay * bx;
         return this;
       }
       crossVectors(a, b) {
-        const ax = a.x, ay = a.y, az = a.z, bx = b.x, by = b.y, bz = b.z;
-        this.x = ay * bz - az * by; this.y = az * bx - ax * bz; this.z = ax * by - ay * bx;
-        return this;
-      }
-      normalize() {
-        const l = Math.hypot(this.x, this.y, this.z);
-        if (l > 1e-6) { this.x /= l; this.y /= l; this.z /= l; }
+        const ax = a.x, ay = a.y, az = a.z;
+        const bx = b.x, by = b.y, bz = b.z;
+        this.x = ay * bz - az * by;
+        this.y = az * bx - ax * bz;
+        this.z = ax * by - ay * bx;
         return this;
       }
       length() { return Math.hypot(this.x, this.y, this.z); }
-      distanceTo(v) { return Math.hypot(this.x - v.x, this.y - v.y, this.z - v.z); }
+      distanceTo(v) { return Math.hypot(this.x - (v.x || 0), this.y - (v.y || 0), this.z - (v.z || 0)); }
+      distanceToSquared(v) { const dx = this.x - (v.x || 0), dy = this.y - (v.y || 0), dz = this.z - (v.z || 0); return dx*dx + dy*dy + dz*dz; }
+      lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
+      normalize() { const l = this.length(); return l > 0 ? this.divideScalar(l) : this; }
       lerpVectors(v1, v2, alpha) {
         this.x = v1.x + (v2.x - v1.x) * alpha;
         this.y = v1.y + (v2.y - v1.y) * alpha;
         this.z = v1.z + (v2.z - v1.z) * alpha;
         return this;
       }
-      addScaledVector(v, s) {
-        this.x += v.x * s; this.y += v.y * s; this.z += v.z * s;
-        return this;
-      }
       applyAxisAngle(axis, angle) {
-        // Mock rotation around axis
+        // Simplified fallback axis rotation around Y
+        if (axis.y === 1) {
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const x = this.x * cos + this.z * sin;
+          const z = -this.x * sin + this.z * cos;
+          this.x = x; this.z = z;
+        }
         return this;
       }
     }),
     Color: G.Color || (typeof THREE !== 'undefined' ? THREE.Color : class {
-      constructor(hex = 0xffffff) {
-        if (typeof hex === 'number') this.setHex(hex);
-        else this.r = this.g = this.b = 1;
-      }
-      setHex(hex) {
-        this.r = ((hex >> 16) & 255) / 255;
-        this.g = ((hex >> 8) & 255) / 255;
-        this.b = (hex & 255) / 255;
-        return this;
-      }
-      getHexString() {
-        return Math.floor(this.r * 255).toString(16).padStart(2, '0') +
-               Math.floor(this.g * 255).toString(16).padStart(2, '0') +
-               Math.floor(this.b * 255).toString(16).padStart(2, '0');
-      }
-      copy(c) { this.r = c.r; this.g = c.g; this.b = c.b; return this; }
-      multiplyScalar(s) { this.r *= s; this.g *= s; this.b *= s; return this; }
+      constructor(val = 0) { this.val = val; }
+      setHex(h) { this.val = h; return this; }
+      getHexString() { return (this.val & 0xffffff).toString(16).padStart(6, '0'); }
+      copy(c) { this.val = c.val; return this; }
+      multiplyScalar() { return this; }
     }),
     Quaternion: G.Quaternion || (typeof THREE !== 'undefined' ? THREE.Quaternion : class {
-      constructor(x = 0, y = 0, z = 0, w = 1) { this.x = x; this.y = y; this.z = z; this.w = w; }
+      constructor(x = 0, y = 0, z = 0, w = 1) { this.x = x; this.y = y; this.z = z; this.w = w; this.isQuaternion = true; }
       set(x, y, z, w) { this.x = x; this.y = y; this.z = z; this.w = w; return this; }
       copy(q) { this.x = q.x; this.y = q.y; this.z = q.z; this.w = q.w; return this; }
+      slerpQuaternions(qa, qb, t) {
+        this.x = qa.x + (qb.x - qa.x) * t;
+        this.y = qa.y + (qb.y - qa.y) * t;
+        this.z = qa.z + (qb.z - qa.z) * t;
+        this.w = qa.w + (qb.w - qa.w) * t;
+        return this;
+      }
       setFromUnitVectors() { return this; }
-      slerpQuaternions(q1, q2, alpha) { return this.copy(q1); }
-      invert() { return this; }
+      setFromRotationMatrix(m) {
+        if (!m || !m.elements) return this;
+        const te = m.elements;
+        const m11 = te[0], m12 = te[4], m13 = te[8];
+        const m21 = te[1], m22 = te[5], m23 = te[9];
+        const m31 = te[2], m32 = te[6], m33 = te[10];
+        const trace = m11 + m22 + m33;
+        if (trace > 0) {
+          const s = 0.5 / Math.sqrt(trace + 1.0);
+          this.w = 0.25 / s;
+          this.x = (m32 - m23) * s;
+          this.y = (m13 - m31) * s;
+          this.z = (m21 - m12) * s;
+        } else if (m11 > m22 && m11 > m33) {
+          const s = 2.0 * Math.sqrt(1.0 + m11 - m22 - m33);
+          this.w = (m32 - m23) / s;
+          this.x = 0.25 * s;
+          this.y = (m12 + m21) / s;
+          this.z = (m13 + m31) / s;
+        } else if (m22 > m33) {
+          const s = 2.0 * Math.sqrt(1.0 + m22 - m11 - m33);
+          this.w = (m13 - m31) / s;
+          this.x = (m12 + m21) / s;
+          this.y = 0.25 * s;
+          this.z = (m23 + m32) / s;
+        } else {
+          const s = 2.0 * Math.sqrt(1.0 + m33 - m11 - m22);
+          this.w = (m21 - m12) / s;
+          this.x = (m13 + m31) / s;
+          this.y = (m23 + m32) / s;
+          this.z = 0.25 * s;
+        }
+        return this;
+      }
+    }),
+    Matrix4: G.Matrix4 || (typeof THREE !== 'undefined' ? THREE.Matrix4 : class {
+      constructor() { this.elements = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); this.isMatrix4 = true; }
+      makeBasis(xAxis, yAxis, zAxis) {
+        const te = this.elements;
+        te[0] = xAxis.x; te[1] = xAxis.y; te[2] = xAxis.z; te[3] = 0;
+        te[4] = yAxis.x; te[5] = yAxis.y; te[6] = yAxis.z; te[7] = 0;
+        te[8] = zAxis.x; te[9] = zAxis.y; te[10] = zAxis.z; te[11] = 0;
+        te[12] = 0; te[13] = 0; te[14] = 0; te[15] = 1;
+        return this;
+      }
+      copy(m) { this.elements.set(m.elements); return this; }
+      identity() { return this.makeBasis({x:1,y:0,z:0}, {x:0,y:1,z:0}, {x:0,y:0,z:1}); }
     }),
     Scene: G.Scene || (typeof THREE !== 'undefined' ? THREE.Scene : class {
-      constructor() {
-        this.children = [];
-        this.background = null;
-        this.fog = null;
-        this.environment = null;
-      }
+      constructor() { this.children = []; this.background = null; }
       add(...items) { this.children.push(...items); }
-      traverse(fn) { fn(this); this.children.forEach(c => c.traverse?.(fn)); }
+      remove(...items) { this.children = this.children.filter(c => !items.includes(c)); }
     }),
     DirectionalLight: G.DirectionalLight || (typeof THREE !== 'undefined' ? THREE.DirectionalLight : class {
-      constructor(color, intensity) {
-        this.color = new (resolveContext().Color)(color);
+      constructor(color = 0xffffff, intensity = 1) {
+        this.color = color;
         this.intensity = intensity;
         this.position = new (resolveContext().Vector3)();
         this.target = null;
-        this.shadow = {
-          mapSize: new (resolveContext().Vector2)(1024, 1024),
-          camera: {
-            left: -100, right: 100, top: 100, bottom: -100,
-            near: 10, far: 5000,
-            updateProjectionMatrix() {}
-          },
-          bias: 0,
-          normalBias: 0
-        };
+        this.shadow = { camera: { left: 0, right: 0, top: 0, bottom: 0, near: 0, far: 0 } };
+        this.castShadow = false;
       }
     }),
     HemisphereLight: G.HemisphereLight || (typeof THREE !== 'undefined' ? THREE.HemisphereLight : class {
-      constructor(sky, ground, intensity) {
-        this.skyColor = new (resolveContext().Color)(sky);
-        this.groundColor = new (resolveContext().Color)(ground);
+      constructor(skyColor, groundColor, intensity) {
+        this.skyColor = skyColor;
+        this.groundColor = groundColor;
         this.intensity = intensity;
       }
     }),
@@ -382,49 +408,124 @@ function resolveContext() {
     RepeatWrapping: G.RepeatWrapping ?? 1000,
     LinearFilter: G.LinearFilter ?? 1006,
     LinearMipmapLinearFilter: G.LinearMipmapLinearFilter ?? 1008,
-    SRGBColorSpace: G.SRGBColorSpace ?? 'srgb',
-    mergeVertices: G.mergeVertices || (g => g),
-    mergeGeometries: G.mergeGeometries || (arr => arr[0] || null),
-    GLTFLoader: (() => {
-      try { return G.GLTFLoader || (typeof THREE !== 'undefined' && THREE.GLTFLoader ? THREE.GLTFLoader : class {}); }
-      catch { return class {}; }
-    })(),
-    TextureLoader: G.TextureLoader || (typeof THREE !== 'undefined' && THREE.TextureLoader ? THREE.TextureLoader : class {}),
-    OBJLoader: G.OBJLoader || (typeof THREE !== 'undefined' && THREE.OBJLoader ? THREE.OBJLoader : class {}),
+    SRGBColorSpace: G.SRGBColorSpace || 'srgb',
+    mergeVertices: G.mergeVertices || ((geo) => geo),
+    mergeGeometries: G.mergeGeometries || ((geos) => geos[0]),
+    GLTFLoader: G.GLTFLoader || class { loadAsync() { return Promise.resolve({ scene: new (resolveContext().Group)() }); } },
+    TextureLoader: G.TextureLoader || class { loadAsync() { return Promise.resolve({}); } },
+    OBJLoader: G.OBJLoader || class { loadAsync() { return Promise.resolve(new (resolveContext().Group)()); } },
     VehicleBoostEmitter: G.VehicleBoostEmitter || class {
       constructor() { this.bloomActive = false; }
       setSpatial() {}
       update() {}
       preload() { return Promise.resolve(); }
     },
-    multiThemeMaterial: G.multiThemeMaterial || ((a, b) => a),
-    getThemeMaterial: G.getThemeMaterial || ((m) => m),
-    cloneMaterial: G.cloneMaterial || ((m) => m),
+    multiThemeMaterial: G.multiThemeMaterial || ((m1, m2) => m1),
+    getThemeMaterial: G.getThemeMaterial || ((m, mode) => m),
+    cloneMaterial: G.cloneMaterial || ((m) => ({ ...m })),
     markMatrixDirty: G.markMatrixDirty || (() => {}),
     setShadowFlags: G.setShadowFlags || (() => {})
   };
 }
 
 /**
- * Coordinate mapping: Converts RocketSim / Unreal Units (X right, Y forward, Z up)
- * to Three.js coordinates (X right, Y up, Z forward).
+ * Coordinate mapping: Converts RocketSim / Unreal space (X forward, Y right, Z up)
+ * to Three.js space (X forward, Y up, Z right).
  */
-export function unrealToThreeCoords(target, x, y, z) {
-  return target.set(x, z, y);
+export function unrealToThreeCoords(target, x = 0, y = 0, z = 0) {
+  return target.set(x || 0, z || 0, y || 0);
+}
+
+let basisFwd = null;
+let basisRight = null;
+let basisUp = null;
+let basisMatrix = null;
+
+/**
+ * Reconstructs orientation quaternion from RocketSim state 3 basis vectors:
+ * offset + 0: forward (3 floats)
+ * offset + 3: right (3 floats)
+ * offset + 6: up (3 floats)
+ */
+export function bufferBasisToQuaternion(targetQuat, buffer, offset) {
+  const { Vector3, Matrix4 } = resolveContext();
+  if (!basisFwd) basisFwd = new Vector3();
+  if (!basisRight) basisRight = new Vector3();
+  if (!basisUp) basisUp = new Vector3();
+  if (!basisMatrix) basisMatrix = new Matrix4();
+
+  unrealToThreeCoords(basisFwd, buffer[offset], buffer[offset + 1], buffer[offset + 2]);
+  unrealToThreeCoords(basisRight, buffer[offset + 3], buffer[offset + 4], buffer[offset + 5]);
+  unrealToThreeCoords(basisUp, buffer[offset + 6], buffer[offset + 7], buffer[offset + 8]);
+
+  if (basisFwd.lengthSq() < 1e-6 || basisUp.lengthSq() < 1e-6 || basisRight.lengthSq() < 1e-6) {
+    targetQuat.set(0, 0, 0, 1);
+    return targetQuat;
+  }
+
+  basisMatrix.makeBasis(basisFwd, basisUp, basisRight);
+  targetQuat.setFromRotationMatrix(basisMatrix);
+  return targetQuat;
 }
 
 /**
- * Unpacks 4-float quaternion from physics state buffer at offset.
+ * Backward compatibility quaternion unpacker: supports either 9-float basis vector extraction
+ * or fallback 4-float quaternion unpacking.
  */
-export function unpackBufferQuaternion(target, buffer, offset) {
-  return target.set(buffer[offset], buffer[offset + 2], buffer[offset + 1], buffer[offset + 3]);
+export function unpackBufferQuaternion(targetQuat, buffer, offset) {
+  if (!buffer || buffer.length < offset + 9) {
+    if (buffer && buffer.length >= offset + 4 && (buffer[offset] || buffer[offset + 1] || buffer[offset + 2] || buffer[offset + 3])) {
+      targetQuat.set(buffer[offset], buffer[offset + 2], buffer[offset + 1], buffer[offset + 3]);
+      return targetQuat;
+    }
+    targetQuat.set(0, 0, 0, 1);
+    return targetQuat;
+  }
+  return bufferBasisToQuaternion(targetQuat, buffer, offset);
+}
+
+/**
+ * Updates suspension A-arm orientation and extension.
+ */
+export function updateSuspensionArm(armMesh, rootMesh, knucklePos) {
+  if (!armMesh || !rootMesh || !knucklePos) return;
+  const { Vector3 } = resolveContext();
+  const rootPos = rootMesh.position || rootMesh;
+  const mid = new Vector3().copy(rootPos).add(knucklePos).multiplyScalar(0.5);
+  armMesh.position.copy(mid);
+  const dir = new Vector3().copy(knucklePos).sub(rootPos);
+  const len = dir.length();
+  dir.divideScalar(len || 1);
+  armMesh.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir);
+  armMesh.scale.set(1, len, 1);
+}
+
+/**
+ * Updates suspension coil spring scale and damper rod height.
+ */
+export function updateSuspensionUnitSpring(susUnit, knucklePos) {
+  if (!susUnit || !susUnit.group || !knucklePos) return;
+  const { Vector3 } = resolveContext();
+  const dir = new Vector3(knucklePos.x - susUnit.top.x, knucklePos.y - susUnit.top.y, knucklePos.z - susUnit.top.z);
+  const len = dir.length();
+  dir.divideScalar(len || 1);
+  susUnit.group.quaternion.setFromUnitVectors(new Vector3(0, -1, 0), dir);
+  if (susUnit.spring) susUnit.spring.scale.y = len / susUnit.built;
+  const shaftLen = Math.max(1, len - susUnit.bodyLen * 0.5);
+  if (susUnit.shaft) {
+    susUnit.shaft.scale.y = shaftLen;
+    susUnit.shaft.position.y = -shaftLen / 2;
+  }
+  if (susUnit.body) {
+    susUnit.body.position.y = -(len - susUnit.bodyLen / 2);
+  }
 }
 
 /**
  * Generates procedural wireframe box for visual hitbox debugging.
  */
 export function createCarHitboxWireframe(preset = OCTANE_HITBOX_PRESET) {
-  const { Group, BoxGeometry, MeshBasicMaterial, Mesh } = resolveContext();
+  const { BoxGeometry, MeshBasicMaterial, Mesh } = resolveContext();
   const boxGeom = new BoxGeometry(preset.length, preset.height, preset.width);
   const boxMat = new MeshBasicMaterial({
     color: 16777215,
@@ -457,7 +558,6 @@ export function createStadiumTurfTexture(wornFineStripes = false) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return new CanvasTexture(canvas);
 
-  // Seeded PRNG for turf blade variation
   let seed = 1296388681;
   const prng = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -513,14 +613,12 @@ export function createStadiumTurfTexture(wornFineStripes = false) {
     if (fill) ctx.fill(); else ctx.stroke();
   };
 
-  // Outer pitch boundaries & center line
   const halfPitchX = 3500, halfPitchY = 4700;
   ctx.strokeRect(-halfPitchX, -halfPitchY, halfPitchX * 2, halfPitchY * 2);
   drawLine(-halfPitchX, 0, halfPitchX, 0);
   drawArc(0, 0, 915);
   drawArc(0, 0, 23, true);
 
-  // Goal areas and penalty circles
   for (const sign of [-1, 1]) {
     const goalY = sign * halfPitchY;
     const penY = sign * 3350;
@@ -604,7 +702,7 @@ export function createCompetitionTurfMesh() {
 }
 
 /**
- * Stamps boost pad boundary rings and trails directly onto the procedural pitch texture.
+ * Stamps boost pad boundary rings directly onto the procedural pitch texture.
  */
 export function updateTurfPadDecals(turfGroup, padDefs) {
   const cached = turfDecalCache.get(turfGroup);
@@ -630,7 +728,6 @@ export function updateTurfPadDecals(turfGroup, padDefs) {
     for (const pad of padDefs) {
       const [px, py] = pad.pos;
       const radius = pad.isBig ? 163 : 69;
-      const angle = Math.atan2(-py, -px);
       const teamColor = py < -50 ? "43, 85, 235" : py > 50 ? "255, 120, 30" : "201, 221, 195";
 
       ctx.strokeStyle = `rgba(${teamColor}, ${pad.isBig ? 0.82 : 0.64})`;
@@ -698,7 +795,7 @@ export function createStadiumDomeSky() {
 }
 
 /**
- * Creates vehicle offroad wheel procedural mesh with rims, lugs, and tire tread.
+ * Creates vehicle offroad wheel procedural mesh with rims and tire tread.
  */
 export function createOffroadWheelMesh(radius, width, mats) {
   const { Group, LatheGeometry, CylinderGeometry, Vector2, Mesh } = resolveContext();
@@ -731,7 +828,7 @@ export function createOffroadWheelMesh(radius, width, mats) {
  * Creates vehicle suspension unit (spring coil, shock shaft, and damper body).
  */
 export function createSuspensionUnit(length, matSpring, matShaft, matBody) {
-  const { Group, CylinderGeometry, SphereGeometry, Mesh } = resolveContext();
+  const { Group, CylinderGeometry, Mesh } = resolveContext();
   const group = new Group();
   const spring = new Mesh(new CylinderGeometry(2.5, 2.5, length, 12), matSpring);
   const shaft = new Mesh(new CylinderGeometry(0.8, 0.8, 1, 10), matShaft);
@@ -768,7 +865,7 @@ export function createSuspensionKnuckle(innerZ, mat) {
  * Creates reaction control thruster jet nozzle and animated flame cone.
  */
 export function createReactionControlJet(pos, dirX, dirY, dirZ) {
-  const { Group, LatheGeometry, MeshStandardMaterial, MeshBasicMaterial, Mesh, Vector2, Vector3 } = resolveContext();
+  const { Group } = resolveContext();
   const jetGroup = new Group();
   jetGroup.position.copy(pos);
   const flameGroup = new Group();
@@ -803,6 +900,12 @@ export function setupCarReactionJets(vehicleGimbals) {
     jump: makeJet(jets.jump, 0, -1, 0)
   };
 }
+
+const DEFAULT_WHEEL_SPECS = {
+  game: [[45.5, 30.5, 13.5], [45.5, -30.5, 13.5], [-35.5, 30.5, 13.5], [-35.5, -30.5, 13.5]],
+  flat: [[50.3, 31.1, 12], [50.3, -31.1, 12], [-34.75, 33, 13.5], [-34.75, -33, 13.5]],
+  realistic: [[63.88, 34, 13], [63.88, -34, 13], [-36.12, 34, 16], [-36.12, -34, 16]]
+};
 
 /**
  * ArenaWorld (aliased as ow)
@@ -918,22 +1021,42 @@ export class ArenaWorld {
   }
 
   async loadBall() {
-    const ballAsset = await loadBallAsset();
-    this.ball.add(ballAsset);
+    try {
+      const ballAsset = await loadBallAsset();
+      this.ball.add(ballAsset);
+    } catch (err) {
+      console.warn("Ball asset failed to load, keeping default procedural mesh:", err);
+    }
     this.markRenderTreeChanged();
   }
 
   updateBallLocatorArrow(ballCamActive, carIndex = 0, targetBall = this.ball, targetCar = null) {
-    this.ballLocatorArrow.update(targetCar || this.cars[carIndex] || this.cars[0], targetBall || this.ball, ballCamActive);
+    this.ballLocatorArrow?.update(targetCar || this.cars[carIndex] || this.cars[0], targetBall || this.ball, ballCamActive);
   }
 
   async loadCarAndPadAssets() {
     if (arenaWorldCarLoaders.loadGameCarAsset) {
-      this.gameCarAsset = await arenaWorldCarLoaders.loadGameCarAsset();
+      try {
+        this.gameCarAsset = await arenaWorldCarLoaders.loadGameCarAsset();
+      } catch (err) {
+        console.warn("Game car asset failed to load:", err);
+      }
     }
     if (arenaWorldCarLoaders.loadFlatCarAsset) {
-      this.flatCarAsset = await arenaWorldCarLoaders.loadFlatCarAsset();
+      try {
+        this.flatCarAsset = await arenaWorldCarLoaders.loadFlatCarAsset();
+      } catch (err) {
+        console.warn("Flat car asset failed to load:", err);
+      }
     }
+    if (arenaWorldCarLoaders.loadRealisticCarAsset) {
+      try {
+        this.realisticCarAsset = await arenaWorldCarLoaders.loadRealisticCarAsset();
+      } catch (err) {
+        console.warn("Realistic car asset failed to load:", err);
+      }
+    }
+    this.markRenderTreeChanged();
   }
 
   async loadArena() {
@@ -956,7 +1079,11 @@ export class ArenaWorld {
   async ensureOpponent() {
     if (this.cars.length <= 1) {
       if (!this.gameCarAsset && arenaWorldCarLoaders.loadGameCarAsset) {
-        this.gameCarAsset = await arenaWorldCarLoaders.loadGameCarAsset();
+        try {
+          this.gameCarAsset = await arenaWorldCarLoaders.loadGameCarAsset();
+        } catch (err) {
+          console.warn("Opponent game car asset load skipped:", err);
+        }
       }
       this.opponentSun = this.makeSubjectSun(this.opponentSunTarget, 260);
       this.opponentSun.visible = false;
@@ -972,11 +1099,16 @@ export class ArenaWorld {
   }
 
   addCar(teamIndex, visual = this.carVisual) {
-    const { Group, Vector3, Mesh } = resolveContext();
+    const { Group, Vector3, Mesh, CylinderGeometry, MeshStandardMaterial } = resolveContext();
     const carRoot = new Group();
     const isBot = this.cars.length === BOT_CAR_INDEX;
     const isHitbox = visual.startsWith("hitbox-");
+    const isRealistic = visual === "realistic";
+    const isFlat = visual === "flat-car";
     const teamColor = arenaWorldCarLoaders.teamColors?.[teamIndex] ?? DEFAULT_TEAM_COLORS[teamIndex % 2];
+
+    let gimbals = null;
+    let boostOutlets = null;
 
     if (isHitbox) {
       const preset = HITBOX_PRESETS[visual] || HITBOX_PRESETS["hitbox-octane"];
@@ -992,12 +1124,36 @@ export class ArenaWorld {
       this.carHitboxes.push(hitboxBox);
       this.carGimbals.push(null);
       carRoot.add(hitboxBox);
+      boostOutlets = [new Vector3(0, 10, -50)];
+    } else if (isRealistic && arenaWorldCarLoaders.createRealisticCarModel) {
+      const realisticGroup = new Group();
+      realisticGroup.name = "realistic-car";
+      const model = arenaWorldCarLoaders.createRealisticCarModel(teamColor);
+      realisticGroup.add(model.group);
+      gimbals = arenaWorldCarLoaders.createRealisticCarGimbals ? arenaWorldCarLoaders.createRealisticCarGimbals() : null;
+      if (this.realisticCarAsset && arenaWorldCarLoaders.assembleRealisticCar) {
+        arenaWorldCarLoaders.assembleRealisticCar(this.realisticCarAsset, model, gimbals, teamColor);
+      }
+      if (gimbals?.hitbox) {
+        gimbals.hitbox.visible = this.carHitboxesVisible;
+        this.carHitboxes.push(gimbals.hitbox);
+        this.carGimbals.push(gimbals);
+        carRoot.add(realisticGroup, gimbals.root);
+      } else {
+        const hitboxBox = createCarHitboxWireframe(OCTANE_HITBOX_PRESET);
+        hitboxBox.visible = this.carHitboxesVisible;
+        this.carHitboxes.push(hitboxBox);
+        this.carGimbals.push(null);
+        carRoot.add(realisticGroup, hitboxBox);
+      }
+      boostOutlets = [model.boostOutlet || new Vector3(0, 10, -50)];
     } else {
       let carModel;
-      if (visual === "flat-car" && arenaWorldCarLoaders.createFlatCarModel && this.flatCarAsset) {
+      if (isFlat && arenaWorldCarLoaders.createFlatCarModel && this.flatCarAsset) {
         carModel = arenaWorldCarLoaders.createFlatCarModel(this.flatCarAsset, teamColor);
       } else if (arenaWorldCarLoaders.createGameCarModel && this.gameCarAsset) {
-        carModel = arenaWorldCarLoaders.createGameCarModel(this.gameCarAsset, teamColor);
+        const theme = arenaWorldCarLoaders.getCarVisualTheme ? arenaWorldCarLoaders.getCarVisualTheme(this.carVisual) : undefined;
+        carModel = arenaWorldCarLoaders.createGameCarModel(this.gameCarAsset, teamColor, isBot ? theme : undefined);
       } else {
         try {
           carModel = createWhiteboxCarModel("hitbox-octane", teamColor);
@@ -1011,14 +1167,70 @@ export class ArenaWorld {
       this.carHitboxes.push(hitboxBox);
       this.carGimbals.push(null);
       carRoot.add(hitboxBox);
+      boostOutlets = [new Vector3(0, 10, -50)];
+    }
+
+    let wheelSpecs;
+    if (isHitbox) {
+      const cfg = HITBOX_PRESETS[visual] || HITBOX_PRESETS["hitbox-octane"];
+      const xF = cfg.forward + cfg.length * 0.35, xR = cfg.forward - cfg.length * 0.35, zS = (cfg.width * 0.5) + 5;
+      wheelSpecs = [[xF, zS, 12.5], [xF, -zS, 12.5], [xR, zS, 15], [xR, -zS, 15]];
+    } else {
+      const specs = arenaWorldCarLoaders.wheelSpecs;
+      wheelSpecs = isRealistic ? (specs?.realistic || DEFAULT_WHEEL_SPECS.realistic) :
+                   isFlat ? (specs?.flat || DEFAULT_WHEEL_SPECS.flat) :
+                   (specs?.game || DEFAULT_WHEEL_SPECS.game);
     }
 
     const wheels = [];
+    if (isHitbox || !this.gameCarAsset) {
+      const wheelGeom = new CylinderGeometry(13.5, 13.5, 9, 16);
+      wheelGeom.rotateX?.(Math.PI / 2);
+      const wheelMat = new MeshStandardMaterial({ color: 2171169, roughness: 0.9, metalness: 0.1 });
+      for (let u = 0; u < 4; u++) {
+        const steerGroup = new Group();
+        const spinGroup = new Group();
+        const wm = new Mesh(wheelGeom, wheelMat);
+        wm.castShadow = true;
+        spinGroup.add(wm);
+        steerGroup.add(spinGroup);
+        carRoot.add(steerGroup);
+        wheels.push({ steer: steerGroup, spin: spinGroup });
+      }
+    } else {
+      for (let u = 0; u < wheelSpecs.length; u++) {
+        const [px, pz, pradius] = wheelSpecs[u];
+        const steerGroup = new Group();
+        steerGroup.position.set(px, isFlat ? (arenaWorldCarLoaders.suspensionSpecs?.flatY?.[u] ?? -6.2) : (pradius - 17), pz);
+        const spinGroup = new Group();
+        let wheelMesh;
+        if (isRealistic) {
+          wheelMesh = createOffroadWheelMesh(pradius, 16, {
+            tire: new MeshStandardMaterial({ color: 1447965, roughness: 0.96 }),
+            rim: new MeshStandardMaterial({ color: 1909033, roughness: 0.3, metalness: 0.9 })
+          });
+        } else if (isFlat && arenaWorldCarLoaders.createFlatCarWheel && this.flatCarAsset) {
+          wheelMesh = arenaWorldCarLoaders.createFlatCarWheel(this.flatCarAsset, u, teamColor);
+        } else if (arenaWorldCarLoaders.createGameCarWheel && this.gameCarAsset) {
+          wheelMesh = arenaWorldCarLoaders.createGameCarWheel(this.gameCarAsset, u, teamColor);
+          if (arenaWorldCarLoaders.createGameCarWheelHardware) {
+            steerGroup.add(arenaWorldCarLoaders.createGameCarWheelHardware(this.gameCarAsset, u, teamColor));
+          }
+        } else {
+          wheelMesh = new Group();
+        }
+        spinGroup.add(wheelMesh);
+        steerGroup.add(spinGroup);
+        carRoot.add(steerGroup);
+        wheels.push({ steer: steerGroup, spin: spinGroup });
+      }
+    }
+
     this.carWheels.push(wheels);
-    this.carWheelSpecs.push([]);
+    this.carWheelSpecs.push(wheelSpecs);
     this.wheelSpin.push([0, 0, 0, 0]);
     this.carSuspension.push([]);
-    this.carJets.push(null);
+    this.carJets.push(gimbals ? setupCarReactionJets(gimbals) : null);
     this.jumpPrev.push(false);
     this.jumpTimer.push(-1);
     this.flipPrev.push(false);
@@ -1032,7 +1244,7 @@ export class ArenaWorld {
       update() {}
       preload() { return Promise.resolve(); }
     };
-    this.carBoosts.push([new BoostEmitterClass(this.scene, carRoot, new Vector3(0, 10, -50), true, isBot)]);
+    this.carBoosts.push((boostOutlets || [new Vector3(0, 10, -50)]).map(pos => new BoostEmitterClass(this.scene, carRoot, pos, true, isBot)));
 
     const demoEffect = new DemolitionEffect();
     this.carDemolitions.push(demoEffect);
@@ -1060,10 +1272,24 @@ export class ArenaWorld {
     this.markRenderTreeChanged();
   }
 
-  update(prevState, currState, alpha, throttle = 0, delta = 0, opponentControls, controls, activeVisuals = true) {
+  /**
+   * Performs per-frame 120Hz physics interpolation and visual component updates.
+   */
+  update(prevState, currState, alpha, delta = 0, throttle = 0, controls, opponentControls, activeVisuals = true) {
+    let actualDelta = delta;
+    let actualThrottle = throttle;
+    let actualControls = controls;
+    let actualOpponentControls = opponentControls;
+
+    // Gracefully handle inverted delta/throttle parameter callers
+    if (actualDelta > 0.1 && actualThrottle > 0 && actualThrottle < 0.05) {
+      actualDelta = throttle;
+      actualThrottle = delta;
+    }
+
     this.applyPhys(this.ball, prevState, currState, BUFFER_OFFSETS.BALL, alpha);
     unrealToThreeCoords(this.ballVelocity, currState[BUFFER_OFFSETS.BALL + 12], currState[BUFFER_OFFSETS.BALL + 13], currState[BUFFER_OFFSETS.BALL + 14]);
-    this.ballSpeedTrail?.update(this.ball.position, this.ballVelocity, delta);
+    this.ballSpeedTrail?.update(this.ball.position, this.ballVelocity, actualDelta);
 
     const ballPos = this.ball.position;
     this.indicatorRing.position.set(ballPos.x, 2, ballPos.z);
@@ -1072,17 +1298,143 @@ export class ArenaWorld {
     const scale = 0.86 - 0.68 * Math.min(1, height / 1600);
     this.indicatorHeightRing.scale.set(scale, scale, 1);
 
+    const { Vector3 } = resolveContext();
+    const axisY = new Vector3(0, 1, 0);
+
     for (let u = 0; u < this.cars.length; u++) {
       const p = BUFFER_OFFSETS.CARS + u * CAR_STATE_STRIDE;
       if (u >= currState[BUFFER_OFFSETS.NUM_CARS]) {
         this.cars[u].visible = false;
-        this.carDemolitions[u]?.update(delta, false, this.cars[u].position, false);
+        this.carDemolitions[u]?.update(actualDelta, false, this.cars[u].position, false);
         continue;
       }
+      const v = u === 0 ? actualControls : actualOpponentControls;
+      const g = u === 0 ? actualThrottle : (actualOpponentControls?.throttle ?? 0);
+      const isRespawning = prevState[p + CAR_STATE_OFFSETS.DEMOED] === 1 && currState[p + CAR_STATE_OFFSETS.DEMOED] !== 1;
+      this.applyPhys(this.cars[u], isRespawning ? currState : prevState, currState, p, alpha);
+
       const isAlive = currState[p + CAR_STATE_OFFSETS.DEMOED] !== 1;
-      this.applyPhys(this.cars[u], prevState, currState, p, alpha);
-      this.carDemolitions[u]?.update(delta, !isAlive, this.cars[u].position, activeVisuals);
+      this.carDemolitions[u]?.update(actualDelta, !isAlive, this.cars[u].position, activeVisuals);
       this.cars[u].visible = isAlive;
+
+      const gimbal = this.carGimbals[u];
+      if (gimbal && arenaWorldCarLoaders.updateRealisticCockpitGimbal) {
+        arenaWorldCarLoaders.updateRealisticCockpitGimbal(
+          this.cars[u].quaternion,
+          currState[p + CAR_STATE_OFFSETS.VEL],
+          currState[p + CAR_STATE_OFFSETS.VEL + 1],
+          actualDelta,
+          gimbal
+        );
+      }
+
+      const forwardSpeed = currState[p + CAR_STATE_OFFSETS.VEL] * currState[p + CAR_STATE_OFFSETS.FWD] +
+                           currState[p + CAR_STATE_OFFSETS.VEL + 1] * currState[p + CAR_STATE_OFFSETS.FWD + 1] +
+                           currState[p + CAR_STATE_OFFSETS.VEL + 2] * currState[p + CAR_STATE_OFFSETS.FWD + 2];
+
+      const wheels = this.carWheels[u];
+      const wheelSpecs = this.carWheelSpecs[u];
+      const suspension = this.carSuspension[u];
+      const spin = this.wheelSpin[u];
+
+      if (wheels && wheelSpecs && spin) {
+        for (let R = 0; R < 4; R++) {
+          if (!wheelSpecs[R] || !wheels[R]) continue;
+          const D = p + CAR_STATE_OFFSETS.WHEELS + R * WHEEL_STATE_STRIDE;
+          const susLength = currState[D];
+          const steerAngle = currState[D + 1];
+          const hasContact = currState[D + 2] === 1;
+          const [specX, specZ, wheelRadius] = wheelSpecs[R];
+          const restHeight = this.carVisuals[u] === "flat-car" ? 15.75 : 20.755;
+          const mountY = restHeight - susLength;
+
+          wheels[R].steer.position.set(specX, mountY, specZ);
+          wheels[R].steer.rotation.y = -steerAngle;
+
+          const sus = suspension?.[R];
+          if (sus) {
+            const pe = new Vector3(0, 0, sus.innerZ - specZ).applyAxisAngle(axisY, -steerAngle).add(new Vector3(specX, mountY, specZ));
+            updateSuspensionUnitSpring(sus, pe);
+            updateSuspensionArm(sus.armFore, sus.foreRoot, pe);
+            updateSuspensionArm(sus.armAft, sus.aftRoot, pe);
+          }
+
+          const spinDelta = hasContact ? (forwardSpeed / wheelRadius) : (g * 1410 / wheelRadius);
+          spin[R] += spinDelta * actualDelta;
+          wheels[R].spin.rotation.z = -spin[R];
+        }
+      }
+
+      const jets = this.carJets[u];
+      if (jets) {
+        const inAir = currState[p + CAR_STATE_OFFSETS.ON_GROUND] !== 1 ? 1 : 0;
+        const roll = v?.roll ?? 0;
+        const yaw = v?.yaw ?? 0;
+        const pitch = v?.pitch ?? 0;
+        const rollPos = inAir * Math.max(0, roll);
+        const rollNeg = inAir * Math.max(0, -roll);
+        const yawPos = inAir * Math.max(0, yaw);
+        const yawNeg = inAir * Math.max(0, -yaw);
+        const isFlipping = currState[p + CAR_STATE_OFFSETS.IS_FLIPPING] === 1;
+
+        if (isFlipping && !this.flipPrev[u]) {
+          this.dodgeBurst[u] = 0.22;
+          this.dodgeRoll[u] = roll;
+          this.dodgeYaw[u] = yaw;
+          this.dodgePitch[u] = pitch;
+        }
+        this.flipPrev[u] = isFlipping;
+
+        let burstFactor = 0;
+        if (this.dodgeBurst[u] > 0) {
+          this.dodgeBurst[u] -= actualDelta;
+          burstFactor = 2 * Math.max(0, this.dodgeBurst[u] / 0.22);
+        }
+
+        const bRollPos = burstFactor * Math.max(0, this.dodgeRoll[u]);
+        const bRollNeg = burstFactor * Math.max(0, -this.dodgeRoll[u]);
+        const bYawPos = burstFactor * Math.max(0, this.dodgeYaw[u]);
+        const bYawNeg = burstFactor * Math.max(0, -this.dodgeYaw[u]);
+        const bPitchPos = burstFactor * Math.max(0, this.dodgePitch[u]);
+        const bPitchNeg = burstFactor * Math.max(0, -this.dodgePitch[u]);
+
+        const rollNet = Math.max(rollNeg, bRollNeg) - Math.max(rollPos, bRollPos);
+        this.setJet(jets.roll.fP, Math.max(0, rollNet));
+        this.setJet(jets.roll.bP, Math.max(0, rollNet));
+        this.setJet(jets.roll.fN, Math.max(0, -rollNet));
+        this.setJet(jets.roll.bN, Math.max(0, -rollNet));
+
+        const yawNet = Math.max(yawNeg, bYawNeg) - Math.max(yawPos, bYawPos);
+        this.setJet(jets.yaw.fP, Math.max(0, -yawNet));
+        this.setJet(jets.yaw.fN, Math.max(0, yawNet));
+        this.setJet(jets.yaw.bP, Math.max(0, -yawNet));
+        this.setJet(jets.yaw.bN, Math.max(0, yawNet));
+
+        const pitchBackNet = Math.max(inAir * Math.max(0, pitch), bPitchPos) - Math.max(inAir * Math.max(0, -pitch), bPitchNeg);
+        this.setJet(jets.pitchBack, Math.max(0, pitchBackNet));
+        this.setJet(jets.pitchFront, Math.max(0, -pitchBackNet));
+
+        const isJumping = v?.jump ?? false;
+        const isAirInput = inAir === 1 && (roll !== 0 || yaw !== 0 || pitch !== 0);
+        if (isJumping && !this.jumpPrev[u] && !isAirInput) {
+          this.jumpTimer[u] = 0;
+        }
+        this.jumpPrev[u] = isJumping;
+        if (isFlipping) this.jumpTimer[u] = -1;
+
+        let jumpActive = 0;
+        if (this.jumpTimer[u] >= 0) {
+          this.jumpTimer[u] += actualDelta;
+          const jt = this.jumpTimer[u];
+          const upwardVel = currState[p + CAR_STATE_OFFSETS.VEL + 2] > 0 || jt < 0.05;
+          if (jt <= 0.2 && upwardVel && (isJumping || jt < 0.07)) {
+            jumpActive = 1;
+          } else {
+            this.jumpTimer[u] = -1;
+          }
+        }
+        this.setJet(jets.jump, jumpActive, 2);
+      }
     }
 
     if (this.opponentSun) {
@@ -1091,8 +1443,8 @@ export class ArenaWorld {
       this.opponentSun.intensity = 2 / 3;
     }
     this.updateSubjectShadows();
-    this.boostPadSystem.update(currState, BOOST_PAD_OFFSET);
-    this.updateBoostVisuals(currState, throttle, delta, opponentControls?.throttle ?? 0, activeVisuals);
+    this.boostPadSystem?.update(currState, BOOST_PAD_OFFSET);
+    this.updateBoostVisuals(currState, actualThrottle, actualDelta, actualOpponentControls?.throttle ?? 0, activeVisuals);
   }
 
   setJet(jet, active, intensity = 1) {
@@ -1114,7 +1466,7 @@ export class ArenaWorld {
   }
 
   makeSubjectSun(targetGroup, frustumSize) {
-    const { DirectionalLight, Vector3 } = resolveContext();
+    const { DirectionalLight } = resolveContext();
     const sun = new DirectionalLight(16777215, 1);
     sun.position.set(2500, 4000, 1500);
     sun.castShadow = true;
@@ -1138,18 +1490,30 @@ export class ArenaWorld {
     this.updateSubjectShadow(this.ballSun, this.ballSunTarget, this.ball.position, 190);
   }
 
-  updateSubjectShadow(sun, targetGroup, worldPos) {
-    targetGroup.position.copy(worldPos);
-    sun.position.set(worldPos.x + 2500, worldPos.y + 4000, worldPos.z + 1500);
+  updateSubjectShadow(sun, targetGroup, worldPos, frustumSize = 260) {
+    const { Vector3 } = resolveContext();
+    const shadowDir = new Vector3(2500, 4000, 1500).normalize();
+    const shadowX = new Vector3(0, 1, 0).cross(shadowDir).normalize();
+    const shadowY = new Vector3().crossVectors(shadowDir, shadowX).normalize();
+
+    const s = frustumSize * 2 / 1024;
+    const a = Math.round(worldPos.dot(shadowX) / s) * s;
+    const o = Math.round(worldPos.dot(shadowY) / s) * s;
+    const A = worldPos.dot(shadowDir);
+    this.shadowFocus.copy(shadowX).multiplyScalar(a).addScaledVector(shadowY, o).addScaledVector(shadowDir, A);
+    targetGroup.position.copy(this.shadowFocus);
+    sun.position.copy(this.shadowFocus).add(new Vector3(2500, 4000, 1500));
+    targetGroup.updateMatrixWorld?.();
   }
 
-  updateBoostVisuals(currState, throttle, delta, opponentThrottle = 0, isAudibleActive = true) {
+  updateBoostVisuals(currState, throttle, delta, opponentThrottle = 0, activeVisuals = true) {
     for (let a = 0; a < this.cars.length; a++) {
-      const isBoosting = currState[BUFFER_OFFSETS.CARS + a * CAR_STATE_STRIDE + CAR_STATE_OFFSETS.IS_BOOSTING] === 1;
-      const isActiveCar = a === 0;
-      for (const emitter of this.carBoosts[a]) {
-        emitter.setSpatial?.(!isActiveCar);
-        emitter.update?.(isBoosting, (isActiveCar ? throttle : opponentThrottle) > 0.01, this.cars[a].visible, delta, isAudibleActive);
+      const isBoosting = activeVisuals && currState[BUFFER_OFFSETS.CARS + a * CAR_STATE_STRIDE + CAR_STATE_OFFSETS.IS_BOOSTING] === 1;
+      const isAudibleActive = a === 0;
+      const thr = isAudibleActive ? throttle : opponentThrottle;
+      for (const emitter of this.carBoosts[a] ?? []) {
+        emitter.setSpatial?.(!isAudibleActive);
+        emitter.update?.(isBoosting, activeVisuals && thr > 0.01, this.cars[a].visible, delta, activeVisuals);
       }
     }
   }
@@ -1175,5 +1539,11 @@ export {
   createOffroadWheelMesh as gg,
   createSuspensionKnuckle as vg,
   setupCarReactionJets as jg,
-  DEFAULT_TEAM_COLORS as xn
+  DEFAULT_TEAM_COLORS as xn,
+  BUFFER_OFFSETS as ht,
+  CAR_STATE_OFFSETS as ye,
+  CAR_STATE_STRIDE as ln,
+  BOOST_PAD_OFFSET as ro,
+  WHEEL_STATE_STRIDE as EC,
+  BOT_CAR_INDEX as no
 };

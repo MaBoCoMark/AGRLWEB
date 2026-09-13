@@ -21775,7 +21775,8 @@ setArenaWorldThreeContext({
   getThemeMaterial: Vi,
   cloneMaterial: Nr,
   markMatrixDirty: Ji,
-  setShadowFlags: N0
+  setShadowFlags: N0,
+  Matrix4: mt
 });
 
 setArenaWorldCarLoaders({
@@ -21787,6 +21788,10 @@ setArenaWorldCarLoaders({
   assembleRealisticCar: Ag,
   createGameCarModel: z0,
   createFlatCarModel: Z0,
+  createGameCarWheel: V0,
+  createGameCarWheelHardware: W0,
+  createFlatCarWheel: Q0,
+  updateRealisticCockpitGimbal: h1,
   getCarVisualTheme: r1,
   wheelSpecs: { realistic: VA, flat: X0, game: q0 },
   suspensionSpecs: { realisticZ: zA, flatY: J0 },
