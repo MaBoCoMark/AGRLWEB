@@ -25,7 +25,9 @@ let ballVisualThreeContext = {
 };
 
 export function setBallVisualThreeContext(context) {
-  ballVisualThreeContext = { ...ballVisualThreeContext, ...context };
+  if (!context) return;
+  const descriptors = Object.getOwnPropertyDescriptors(context);
+  Object.defineProperties(ballVisualThreeContext, descriptors);
 }
 
 function resolveContext() {
@@ -138,7 +140,13 @@ function resolveContext() {
         this.b = (hex & 255) / 255;
       }
     }),
-    GLTFLoader: G.GLTFLoader || (typeof THREE !== 'undefined' && THREE.GLTFLoader ? THREE.GLTFLoader : class {}),
+    GLTFLoader: (() => {
+      try {
+        return G.GLTFLoader || (typeof THREE !== 'undefined' && THREE.GLTFLoader ? THREE.GLTFLoader : class {});
+      } catch (e) {
+        return class {};
+      }
+    })(),
     TextureLoader: G.TextureLoader || (typeof THREE !== 'undefined' && THREE.TextureLoader ? THREE.TextureLoader : class {}),
     SRGBColorSpace: G.SRGBColorSpace ?? 'srgb'
   };

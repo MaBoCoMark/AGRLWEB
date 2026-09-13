@@ -18330,20 +18330,6 @@ setSpeedTrailThreeContext({
   NormalBlending: Gr,
   SRGBColorSpace: Ht
 });
-setBallVisualThreeContext({
-  Group: dt,
-  Mesh: Ee,
-  BufferGeometry: Ct,
-  BufferAttribute: Ke,
-  IcosahedronGeometry: Td,
-  MeshStandardMaterial: lt,
-  Vector2: Ae,
-  Vector3: F,
-  Color: Ne,
-  GLTFLoader: ho,
-  TextureLoader: Ao,
-  SRGBColorSpace: Ht
-});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -21717,6 +21703,21 @@ class K1{
 }
 // --- Phase 7 Part 3 Deobfuscation: DemolitionEffect (nS) extracted to src/entities/DemolitionEffect.js ---
 // --- Phase 7 Part 3 Deobfuscation: BallVisual (rS, iS, sS, aS) extracted to src/entities/BallVisual.js ---
+// Wire inlined Three.js classes and loaders (including GLTFLoader ho defined above) to decoupled BallVisual
+setBallVisualThreeContext({
+  Group: dt,
+  Mesh: Ee,
+  BufferGeometry: Ct,
+  BufferAttribute: Ke,
+  IcosahedronGeometry: Td,
+  MeshStandardMaterial: lt,
+  Vector2: Ae,
+  Vector3: F,
+  Color: Ne,
+  get GLTFLoader() { return ho; },
+  TextureLoader: Ao,
+  SRGBColorSpace: Ht
+});
 // --- Phase 7 Part 3 Deobfuscation: SpeedTrail (pS, fS) extracted to src/entities/SpeedTrail.js ---
 // --- Phase 7 Part 3 Deobfuscation: BallLocatorArrow (bS) extracted to src/entities/BallLocatorArrow.js ---
 const SS = 120.507,wS = 86.6994,MS = 38.6591,BS = 13.8757,kS = 20.755,TS = {

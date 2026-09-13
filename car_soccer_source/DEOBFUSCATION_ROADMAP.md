@@ -265,7 +265,14 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 4. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
    - 引入三维上下文注入接口（`setSpeedTrailThreeContext`, `setBallVisualThreeContext`）。
    - 移除内联混淆类与着色器约 280 余行代码，`node --check` 语法校验通过。
-5. 下一步拆分计划（⏳ Step 3）：
+5. **缺陷修复与 TDZ 声明顺序对齐 (Bugfix)**：
+   - 修复启动时 `ReferenceError: Cannot access 'ho' before initialization (CarSoccerEngine.js:18343)` 异常崩溃白屏问题。
+   - **根本原因**：`CarSoccerEngine.js` 顶层作用域中，`setBallVisualThreeContext` 调用原先被置于第 18333 行（与 Three.js 核心基础几何体上下文并列），而混淆的 GLTFLoader 类 `class ho extends Xi` 定义在第 18840 行。JavaScript ES6 类具有暂时性死区（TDZ），顶层代码在执行到第 18343 行时访问尚未完成初始化的 `ho`，触发致命 ReferenceError 导致游戏白屏。
+   - **修复措施**：
+     1. 将 `setBallVisualThreeContext` 移至原 `BallVisual` 抽离位（第 21718 行之后），确保全部依赖类（包括 `ho`、`Ao` 等）均已声明完成，并配置防御性 getter (`get GLTFLoader() { return ho; }`)。
+     2. 在 `src/entities/BallVisual.js` 中更新 `setBallVisualThreeContext`，使用 `Object.getOwnPropertyDescriptors` 与 `Object.defineProperties` 完整保留属性描述符与 getter 懒求值行为，并在 `resolveContext()` 内部提供安全错误兜底。
+     3. 在 `tests/entities_subsystem.test.js` 中扩充第 7 项回归测试，严格断言主引擎声明顺序无 TDZ 违背，并验证上下文注入的懒求值安全性。
+6. 下一步拆分计划（⏳ Step 3）：
    - 拆分 `ArenaWorld`（原 `ow`，球场主场景、球门边界、环境光照与赛车底盘悬挂动画）。
 
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）

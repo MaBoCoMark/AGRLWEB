@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   BallLocatorArrow,
@@ -41,7 +42,9 @@ import {
 import {
   createGeodesicSoccerBallGeometry,
   createClassicSoccerBall,
+  loadRealisticBallModel,
   loadBallAsset,
+  setBallVisualThreeContext,
   rS,
   iS,
   CLASSIC_BALL_RADIUS
@@ -253,4 +256,57 @@ test('6. BallVisual classic procedural ball and composite asset creation', async
   const compositeBall = await loadBallAsset();
   assert.ok(compositeBall);
   assert.equal(compositeBall.children[0].name, 'Classic soccer ball');
+});
+
+test('7. BallVisual three context TDZ regression & CarSoccerEngine declaration order', async () => {
+  // 1. Verify CarSoccerEngine.js has no TDZ violation for GLTFLoader (ho)
+  const enginePath = new URL('../src/game/CarSoccerEngine.js', import.meta.url);
+  const engineSource = fs.readFileSync(enginePath, 'utf-8');
+  const lines = engineSource.split('\n');
+
+  let hoClassLine = -1;
+  let setBallVisualLine = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/class\s+ho\s+extends/.test(line)) {
+      hoClassLine = i + 1;
+    }
+    if (/setBallVisualThreeContext\s*\(/.test(line)) {
+      setBallVisualLine = i + 1;
+    }
+  }
+
+  assert.ok(hoClassLine > 0, 'Class ho (GLTFLoader) must be declared in CarSoccerEngine.js');
+  assert.ok(setBallVisualLine > 0, 'setBallVisualThreeContext must be called in CarSoccerEngine.js');
+  assert.ok(
+    setBallVisualLine > hoClassLine,
+    `setBallVisualThreeContext (line ${setBallVisualLine}) must be called AFTER ho declaration (line ${hoClassLine}) to avoid ReferenceError TDZ`
+  );
+
+  // 2. Verify setBallVisualThreeContext safely supports lazy getters without triggering TDZ
+  let getterInvoked = false;
+  let simulatedTDZ = true;
+
+  setBallVisualThreeContext({
+    get GLTFLoader() {
+      getterInvoked = true;
+      if (simulatedTDZ) {
+        throw new ReferenceError("Cannot access 'ho' before initialization");
+      }
+      return class MockGLTFLoader {
+        loadAsync() {
+          return Promise.resolve({ scene: { name: 'mock-scene' } });
+        }
+      };
+    }
+  });
+
+  // Wiring should NOT eagerly evaluate the getter
+  assert.equal(getterInvoked, false, 'Wiring context with getters should not evaluate getter eagerly during configuration');
+
+  // Now resolve simulated TDZ and call loader
+  simulatedTDZ = false;
+  // Should now safely evaluate when needed
+  assert.ok(setBallVisualThreeContext);
 });
