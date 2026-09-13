@@ -4,6 +4,34 @@ import { EMotorSynth } from '../audio/EMotorSynth.js';
 import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
 import { BallTrajectoryPredictor } from './BallTrajectoryPredictor.js';
 import { ParallelTrainingManager, PARALLEL_SLOTS } from '../training/ParallelTrainingManager.js';
+import {
+  RocketSimPhysicsEngine,
+  getTeamAssignment,
+  PLAYER_CAR_INDEX,
+  BOT_CAR_INDEX
+} from "../physics/RocketSimPhysicsEngine.js";
+import { PhysicsStateInterpolator } from "../physics/PhysicsStateInterpolator.js";
+import {
+  SIM_OFFSETS,
+  CAR_STATE_OFFSETS,
+  CAR_STATE_STRIDE,
+  CONTROLS_STRIDE,
+  MAX_CARS,
+  PHYSICS_TICK_RATE,
+  FIXED_TIMESTEP,
+  MAX_PHYSICS_SUBSTEPS,
+  BALL_CONTROL_MODES,
+  ht,
+  ye,
+  ln,
+  kf,
+  u0,
+  xC,
+  da,
+  oc,
+  to
+} from "../physics/RocketSimConstants.js";
+import { RenderClockScheduler } from "./RenderClockScheduler.js";
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
   enumerable:!0,configurable:!0,writable:!0,value:t
@@ -17826,278 +17854,17 @@ return r.then(a=>{
 )
 }
 ;
-// RocketSim WebAssembly module loader (jC) is imported from RocketSimWasm.js
-const to = ["takePossession","startDribble","passBall","launchBall"],_C = 0,no = 1;
-function Gd(i){
-  return i?{
-    playerTeam:0,botTeam:1
-  }
-  :{
-    playerTeam:1,botTeam:0
-  }
+// RocketSim Physics Engine, State Interpolator, & Render Scheduler (Deobfuscated & Modularized)
+// Upstream reference: https://github.com/zealanL/rocketsim
+const yC = RocketSimPhysicsEngine;
+const CC = PhysicsStateInterpolator;
+const bC = RenderClockScheduler;
+const Gd = getTeamAssignment;
+const _C = PLAYER_CAR_INDEX;
+const no = BOT_CAR_INDEX;
+const EC = 3; // WHEEL_STATE_STRIDE (contact, susLength, wheelSpeed)
+const ro = ht.CARS + u0 * ln; // BOOST_PAD_STATES_OFFSET
 
-}
-const ht = {
-  TICK:0,GOAL:1,NUM_CARS:2,NUM_PADS:3,BALL:4,CARS:22
-}
-,ln = 51,kf = 8,u0 = 8,ro = ht.CARS + u0 * ln,ye = {
-  POS:0,FWD:3,RIGHT:6,UP:9,VEL:12,ANG_VEL:15,BOOST:18,ON_GROUND:19,SUPERSONIC:20,DEMOED:21,HAS_FLIP_OR_JUMP:22,IS_BOOSTING:23,IS_FLIPPING:24,FLIP_RESET_SERIAL:25,WHEELS:26,GROUND_NORMAL:38,JUMP_SERIAL:41,DODGE_SERIAL:42,DOUBLE_JUMP_SERIAL:43,WHEEL_IMPACT_SERIAL:44,WHEEL_IMPACT_SPEED:45,BALL_HIT_SERIAL:46,BALL_HIT_SPEED:47,BALL_WORLD_IMPACT_SERIAL:48,BALL_WORLD_IMPACT_SPEED:49,BALL_WORLD_SURFACE:50
-}
-,EC = 3;
-class yC{
-  static cachedCollisionData = null;
-  constructor(){
-    _(this,"module");
-    _(this,"statePtr",0);
-    _(this,"controlsPtr",0);
-    _(this,"viewPtr",0);
-    _(this,"stateLen",0);
-    _(this,"stateView",null);
-    _(this,"controlsView",null);
-    _(this,"viewView",null)
-  }
-  get state(){
-    const e = this.module.HEAPF32.buffer;
-    return(!this.stateView || this.stateView.buffer !== e) && (this.stateView = new Float32Array(e,this.statePtr,this.stateLen)),this.stateView
-  }
-  async init(){
-    this.module = await jC();
-    let t = yC.cachedCollisionData;
-    if (!t) {
-      const mRes = await fetch("/assets/arena/collision/manifest.json");
-      const mCheck = validateAssetResponse(mRes, "/assets/arena/collision/manifest.json", "json");
-      if (!mCheck.ok) throw mCheck.error;
-      const e = await mRes.json();
-      t = await Promise.all(e.map(async A => {
-        const cPath = `/assets/arena/collision/${A}`;
-        const cRes = await fetch(cPath);
-        const cCheck = validateAssetResponse(cRes, cPath, "cmf");
-        if (!cCheck.ok) throw cCheck.error;
-        return new Uint8Array(await cRes.arrayBuffer());
-      }));
-      yC.cachedCollisionData = t;
-    }
-    const n = t.reduce((A, l) => A + l.length, 0), r = this.module._malloc(n), s = this.module._malloc(t.length * 4);
-    let a = 0;
-    t.forEach((A,l)=>{
-      this.module.HEAPU8.set(A,r + a),this.module.HEAP32[s / 4 + l] = A.length,a+=A.length
-    });
-    const o = this.module._physics_init(r,s,t.length);
-    if(this.module._free(r),this.module._free(s),o !== 1)throw new Error("Physics initialization failed — check collision meshes");
-    if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
-    this.statePtr = this.module._physics_getStatePtr(),this.stateLen = this.module._physics_getStateSize(),this.controlsPtr = this.module._physics_getControlsPtr(),this.viewPtr = this.module._v0(),this.stateView = null,this.controlsView = null,this.viewView = null,this.module._v2()
-  }
-addCar(e,t = "default"){
-  return this.module._physics_addCar(e,t === "flat"?1:0)
-}
-
-configureCars(e,t,n = 0){
-  const{
-    playerTeam:r,botTeam:s
-  }
-   = Gd(e === "flat");
-  if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
-  if(this.addCar(t?r:n,e) !== _C)throw new Error("Player creation failed");
-  if(t && this.addCar(s,"default") !== no)throw new Error("Opponent creation failed");
-  this.resetKickoff(),this.resetView()
-}
-setControls(e,t){
-  const n = this.module.HEAPF32.buffer;
-  (!this.controlsView || this.controlsView.buffer !== n) && (this.controlsView = new Float32Array(n,this.controlsPtr,u0 * kf));
-  const r = this.controlsView,s = e * kf;
-  r[s] = t.throttle,r[s + 1] = t.steer,r[s + 2] = t.pitch,r[s + 3] = t.yaw,r[s + 4] = t.roll,r[s + 5] = t.jump?1:0,r[s + 6] = t.boost?1:0,r[s + 7] = t.handbrake?1:0
-}
-stepView(e){
-  const t = this.module.HEAPF64.buffer;
-  return(!this.viewView || this.viewView.buffer !== t) && (this.viewView = new Float64Array(t,this.viewPtr,42)),this.viewView.set(e,0),this.module._v1(),this.viewView
-}
-resetView(){
-  this.module._v2(),this.viewView = null
-}
-step(e){
-  this.module._physics_step(e)
-}
-resetKickoff(e = - 1){
-  this.module._physics_resetKickoff(e)
-}
-controlBall(e,t){
-  return this.module._physics_controlBall(e,to.indexOf(t)) === 1
-}
-setUnlimitedBoost(e){
-  this.module._physics_setUnlimitedBoost(e?1:0)
-}
-pollGoal(){
-  const e = this.state[ht.GOAL];
-  return e !== 0 && this.module._physics_clearGoalFlag(),e
-}
-get ballRadius(){
-  return this.module._physics_getBallRadius()
-}
-get ballOnGround(){
-  return this.module._physics_getBallOnGround() === 1
-}
-getPads(){
-  const e = this.state[ht.NUM_PADS],t = this.module._physics_getPadInfoPtr(),n = new Float32Array(this.module.HEAPF32.buffer,t,e * 4);
-  return Array.from({
-    length:e
-  }
-  ,(r,s)=>({
-    pos:[n[s * 4],n[s * 4 + 1],n[s * 4 + 2]],isBig:n[s * 4 + 3] === 1
-  }
-  ))
-}
-}
-const xC = 120,da = 1 / xC,oc = 12;
-class CC{
-  constructor(e){
-    _(this,"prevState");
-    _(this,"currState");
-    _(this,"alpha",0);
-    _(this,"lastTicks",0);
-    _(this,"lastDropped",0);
-    _(this,"lastStalled",!1);
-    _(this,"accumulator",0);
-    _(this,"lastTime", - 1);
-    _(this,"sim");
-    this.sim = e,this.prevState = e.state.slice(),this.currState = e.state.slice()
-  }
-  syncBall(){
-    const e = this.sim.state.subarray(ht.BALL,ht.BALL + 18);
-    this.prevState.set(e,ht.BALL),this.currState.set(e,ht.BALL)
-  }
-  sync(e = performance.now()){
-    this.prevState.set(this.sim.state),this.currState.set(this.sim.state),this.accumulator = 0,this.alpha = 0,this.lastTime = e,this.lastTicks = 0
-  }
-  update(e,t,n){
-    this.lastTime < 0 && (this.lastTime = e);
-    const r = (e - this.lastTime) / 1e3;
-    this.lastStalled = r > .25,this.accumulator+=Math.min(r,.25),this.lastTime = e;
-    let s = Math.floor(this.accumulator / da);
-    if(this.accumulator = Math.max(0,this.accumulator - s * da),this.lastDropped = Math.max(0,s - oc),s > oc && (s = oc),this.lastTicks = s,s > 0){
-      if(t(),n){
-        this.lastTicks = 0;
-        for(let a = 0;a < s;a++){
-          if(this.prevState.set(this.currState),!n()){
-            this.accumulator = 0;
-            break
-          }
-          this.currState.set(this.sim.state),this.lastTicks++
-        }
-        this.alpha = this.accumulator / da;
-        return
-      }
-      if(s > 1){
-        this.sim.step(s - 1);
-        this.prevState.set(this.sim.state);
-        this.sim.step(1);
-      }else{
-        const a = this.prevState;
-        this.prevState = this.currState;
-        this.currState = a;
-        this.sim.step(1);
-      }
-      this.currState.set(this.sim.state),this.alpha = this.accumulator / da
-    }
-    else this.alpha = Math.min(this.accumulator / da,1)
-  }
-
-}
-class bC{
-  constructor(e,t,n){
-    _(this,"channel",new MessageChannel);
-    _(this,"pending",[]);
-    _(this,"gl");
-    _(this,"render");
-    _(this,"displayFrame");
-    _(this,"running",!1);
-    _(this,"queued",!1);
-    _(this,"displayRequest",null);
-    _(this,"frameTimer",null);
-    _(this,"frameTask",null);
-    _(this,"frameInterval",0);
-    _(this,"nextFrameTime",0);
-    _(this,"wake",()=>{
-      if(!this.active()){
-        this.clearFrameTimer(),this.nextFrameTime = 0,this.clearPending(),this.displayRequest !== null && cancelAnimationFrame(this.displayRequest),this.displayRequest = null;return
-      }
-      this.displayRequest === null && (this.displayRequest = requestAnimationFrame(this.measureDisplay)),this.schedule()
-    }
-    );
-    _(this,"measureDisplay",e=>{
-      this.displayRequest = null,this.active() && (this.displayFrame(e),this.displayRequest = requestAnimationFrame(this.measureDisplay))
-    }
-    );
-    _(this,"queueTick",()=>{
-      this.frameTimer = null,this.frameTask = null,!(this.queued || !this.active()) && (this.queued = !0,this.channel.port2.postMessage(null))
-    }
-    );
-    _(this,"tick",()=>{
-      if(this.queued = !1,!this.active())return;const e = performance.now();if(this.frameInterval > 0 && e < this.nextFrameTime){
-        this.schedule();return
-      }
-      const t = this.gl;for(;this.pending.length > 0;){
-        const n = t.clientWaitSync(this.pending[0],0,0);if(n === t.TIMEOUT_EXPIRED)break;if(n === t.WAIT_FAILED)throw this.dispose(),new Error("Could not check completion of a rendered frame.");t.deleteSync(this.pending.shift())
-      }
-      if(this.pending.length < 2){
-        if(this.frameInterval > 0){
-          const r = this.nextFrameTime + this.frameInterval;this.nextFrameTime = r > e?r:e + this.frameInterval
-        }
-        this.render(e);const n = t.fenceSync(t.SYNC_GPU_COMMANDS_COMPLETE,0);if(n)this.pending.push(n);else if(!t.isContextLost())throw this.dispose(),new Error("Could not track completion of a rendered frame.");t.flush()
-      }
-      this.schedule()
-    }
-    );
-    this.gl = e,this.render = t,this.displayFrame = n,this.channel.port1.onmessage = this.tick,document.addEventListener("visibilitychange",this.wake),e.canvas.addEventListener("webglcontextlost",this.wake),e.canvas.addEventListener("webglcontextrestored",this.wake)
-  }
-  start(){
-    this.running = !0,this.wake()
-  }
-  setFpsLimit(e){
-    const t = e !== null && Number.isFinite(e) && e > 0?1e3 / e:0;
-    t !== this.frameInterval && (this.frameInterval = t,this.nextFrameTime = 0,this.clearFrameTimer(),this.schedule())
-  }
-  dispose(){
-    this.running = !1,this.clearFrameTimer(),this.clearPending(),this.displayRequest !== null && cancelAnimationFrame(this.displayRequest),this.channel.port1.close(),this.channel.port2.close(),document.removeEventListener("visibilitychange",this.wake),this.gl.canvas.removeEventListener("webglcontextlost",this.wake),this.gl.canvas.removeEventListener("webglcontextrestored",this.wake)
-  }
-  active(){
-    return this.running && !document.hidden && !this.gl.isContextLost()
-  }
-  clearPending(){
-    for(const e of this.pending)this.gl.deleteSync(e);
-    this.pending.length = 0
-  }
-  clearFrameTimer(){
-    var e;
-    this.frameTimer !== null && clearTimeout(this.frameTimer),this.frameTimer = null,(e = this.frameTask) == null || e.abort(),this.frameTask = null
-  }
-  schedule(){
-    var e;
-    if(!(this.queued || this.frameTimer !== null || this.frameTask !== null || !this.active())){
-      if(this.frameInterval > 0){
-        const t = Math.max(this.nextFrameTime - performance.now(),this.pending.length >= 2?1:0);
-        if(t > 0){
-          const n = Math.max(1,Math.floor(t));
-          if((e = globalThis.scheduler) != null && e.postTask){
-            const r = new AbortController;
-            this.frameTask = r,globalThis.scheduler.postTask(this.queueTick,{
-              delay:n,signal:r.signal
-            }
-            ).catch(s=>{
-              if(!r.signal.aborted)throw s
-            }
-            )
-          }
-          else this.frameTimer = setTimeout(this.queueTick,n);
-          return
-        }
-
-      }
-      this.queueTick()
-    }
-
-  }
-
-}
 function Tf(i){
   return i instanceof Element && i.closest(".hud-tools, .sheet-overlay, .car-tab, .car-overlay, .match-tab, .match-overlay, .match-hud, .match-result, .status, .touch-controls") !== null
 }
