@@ -390,12 +390,37 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 
 ## 5. 后续反混淆与现代化演进路线（Roadmap）
 
-### 阶段 7.8：Three.js 外部加载器与几何工具模块化（⏳ 下一步）
-- **目标**：将 `CarSoccerEngine.js` 第 18428~20380 行的 ~1,950 行 Three.js Addons 独立为专用模块：
-  - `src/loaders/OBJLoader.js`（原 `cb` / `lb` 及 `MTLLoader`）
-  - `src/loaders/GLTFLoader.js`（原 `ho` 及 `GLTFParser` / `$b`）
-  - `src/utils/BufferGeometryUtils.js`（`mergeVertices` / `hb`, `mergeGeometries` / `hl`, `toTrianglesDrawMode` / `Jf`, `cloneSkinnedMesh` / `db`）
-- **收益**：直接移除主引擎内约 2,000 行第三方内联胶水，为主引擎核心生命周期的抽取扫清阻碍。
+16. **几何后处理与模型加载工具解耦（✅ Phase 7.8 Part 1 已落地）**：
+    - `src/utils/BufferGeometryUtils.js`（原 `CarSoccerEngine.js` 第 18767~18954 行）：
+      - `mergeGeometries`（原 `hl`）：合并多几何体网格并处理多组材质分组（`addGroup`）与统一索引。
+      - `mergeVertices`（原 `hb`）：距离容差顶峰点重合消重（Welding），保持法线与 UV 连续性。
+      - `toTrianglesDrawMode`（原 `Jf`）：TriangleFan / TriangleStrip 三角带转独立三角形列表。
+      - `cloneSkinnedMesh`（原 `db`）：骨骼层级遍历克隆与蒙皮网格骨骼矩阵重绑定。
+      - `computeInterleavedAttributes`（原 `Xf`）与 `traverseHierarchy`（原 `T0`）。
+    - `src/loaders/OBJLoader.js`（原 `CarSoccerEngine.js` 第 18481~18766 行）：
+      - `OBJParser`（原 `lb`）：高效流式解析 Wavefront .obj 顶点、法线、纹理坐标、面与平滑组。
+      - `OBJLoader`（原 `cb`）：支持按物料分组划分、材质继承与网格实例化，集成 `setOBJLoaderThreeContext` 上下文注入与向后兼容别名。
+    - **测试验收与主引擎瘦身**：
+      - 新增专用单元测试套件 `tests/loaders_and_geometry.test.js`（6 项测试 100% 通过）。
+      - 主引擎通过 ES Module 引入两子系统并配置上下文依赖注入，从 `CarSoccerEngine.js` 彻底剥离 425 行混淆代码。
+      - 全量 15 个测试套件、73 项单元测试全部通过（100% 通过率）。
+
+---
+
+## 5. 后续反混淆与现代化演进路线（Roadmap）
+
+### 阶段 7.8（Part 2）：后处理管线与离屏展台环境解耦（⏳ 下一步）
+- **目标**：将 `CarSoccerEngine.js` 第 17900~18480 行的 ~580 行后处理模块抽离为 `src/effects/PostprocessingPipeline.js`：
+  - `EffectComposer`（原 `uC`）、`RenderPass`（原 `fC`）、`ShaderPass`（原 `dC`）、`OutputPass`（原 `pC`）
+  - `FullScreenQuad`（原 `cC`）、`Pass`（原 `Js`）、`CopyShader`（原 `_A`）
+  - `RoomEnvironment`（原 `c0`）与 `PMREMGenerator`
+- **收益**：彻底解耦主画面的多级后期与车库离屏 PMREM 渲染管线。
+
+### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（⏳ 待实施）
+- **目标**：将 `CarSoccerEngine.js` 第 18955~20426 行的 ~1,470 行 `GLTFLoader` 抽离为独立模块 `src/loaders/GLTFLoader.js`：
+  - 核心解析器 `GLTFParser`（原 `$b`）与 `GLTFLoader`（原 `ho`）
+  - 插件扩展集：Draco、Meshopt、KTX2、PBR Specular/Glossiness 等解析器。
+- **收益**：从主引擎完全消除所有外部模型加载胶水，主引擎代码体积骤降至仅约 1,000 行。
 
 ### 阶段 8.1：主引擎生命周期与 120Hz 渲染时钟解耦（⏳ 待实施）
 - **目标**：将 `CarSoccerEngine.js` 剩余的 `dB()` 初始化引导流与 `wt()` 120Hz 主时钟渲染循环重构并抽取为模块化运行时：
