@@ -10,15 +10,15 @@
 ### 1.1 混淆的本质与历史教训
 `dist_game/js/index-Dm9xG-kJ.js` 以及 `car_soccer_source/src/game/CarSoccerEngine.js` 是由 Rollup/Vite 打包器从多文件 TypeScript 工程构建出的单一产物。打包过程中：
 1. **作用域拍平 (Scope Hoisting)**：将全部模块内联在顶层作用域，所有函数和类相互直接捕获外部局部变量。
-2. **标识符高频混淆 (Identifier Mangling)**：核心类名（如 `yC`, `CC`, `bC`, `ow`, `cw`, `Lw`, `BM`, `UM`, `VM`, `QM`, `nB`, `aB`）和变量名（`Mt`, `ke`, `Fe`, `be`, `Rn`, `zn`）均被降维为单双字母。
+2. **标识符高频混淆 (Identifier Mangling)**：核心类名（如 `yC`, `CC`, `bC`, `ow`, `cw`, `Lw`, `BM`, `UM`, `VM`, `QM`, `nB`, `aB`, `Sw`, `kw`, `V1`, `jw`, `tm`, `u1`, `cg`）和变量名（`Mt`, `ke`, `Fe`, `be`, `Rn`, `zn`）均被降维为单双字母。
 3. **内联依赖 (Inlined Three.js)**：文件前 17,824 行（占总体积 61%）为完整打包的 Three.js r185，且内部所有导出类被混淆为单字母变量（例如 `Zd` = Vector3, `Yd` = Vector2, `jn` = Quaternion, `KA` = Matrix4）。
 
 历史提交（如 `a8c6c76 AG refused to split car_soccer.JS`）表明：**盲目对 3 万行代码进行一刀切物理拆分，会直接触发 JavaScript TDZ (Temporal Dead Zone - 变量未初始化即被调用) 或循环引用异常，导致整个游戏白屏崩溃**。
 
 ### 1.2 成功的破局之道：外向内剥离 + 别名平滑过渡
 正确且工业级可靠的重构范式为：
-- **自底向上，逐模块拆分**：先解耦无外部闭包缠绕的基础底座（物理引擎、常量映射、时钟调度），再解耦外围独立 UI/音频，最后处理高度耦合的 3D 场景与相机。
-- **保留向下兼容别名 (Backward-Compatibility Aliases)**：每个解耦后的独立 ES 模块既导出语义化类名（如 `RocketSimPhysicsEngine`, `BoostGaugeHUD`, `PerformanceOverlayHUD`），又重导出原混淆别名（如 `export { BoostGaugeHUD as nB }`），确保未重构部分无缝运行，**实现 0 回归风险**。
+- **自底向上，逐模块拆分**：先解耦无外部闭包缠绕的基础底座（物理引擎、常量映射、时钟调度），再解耦外围独立 UI/音频，随后统一输入与状态机，最后处理高度耦合的 3D 场景与相机。
+- **保留向下兼容别名 (Backward-Compatibility Aliases)**：每个解耦后的独立 ES 模块既导出语义化类名（如 `RocketSimPhysicsEngine`, `BoostGaugeHUD`, `PerformanceOverlayHUD`, `SpatialAudioSource`, `GameAudioSubsystem`），又重导出原混淆别名（如 `export { BoostGaugeHUD as nB }`，`export { SpatialAudioSource as cg }`），确保未重构部分无缝运行，**实现 0 回归风险**。
 
 ---
 
@@ -86,8 +86,8 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **05** | **喷气量弧形表盘 HUD**| `class nB`, `um` | `src/ui/BoostGaugeHUD.js` | ✅ **已完成** | 纯 DOM/SVG 渲染，监听 boost 浮点数与点火状态 |
 | **06** | **性能监控与帧耗时** | `class aB`, `class iB` | `src/ui/PerformanceOverlayHUD.js` | ✅ **已完成** | 极简与详情 FPS / p95 耗时视图、SVG 折线图与环形缓冲 |
 | **07** | **全局 UI 矢量图标库**| `jM`, `Vt` | `src/ui/Icons.js` | ✅ **已完成** | 包含 20 个高精度 SVG 矢量图标库与格式化输出 |
-| **08** | **综合音效总线与合成**| `class Lw`, `Sw`, `kw`, `cg`, `GameAudioManager` | `src/audio/GameAudioSubsystem.js` | ⏳ *阶段三* | Web Audio HRTF 空间化、超音速音爆、起跳翻滚撞球声效 |
-| **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M` | `src/input/MultiPlatformInput.js` | ⏳ *阶段四* | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆 |
+| **08** | **综合音效总线与空间音频**| `class Lw`, `Sw`, `kw`, `V1`, `jw`, `tm`, `u1`, `cg`, `GameAudioManager` | `src/audio/SpatialAudioSource.js`<br>`src/audio/GameAudioSubsystem.js` | ✅ **已完成** | Web Audio HRTF 空间化立体声、Smoothstep 距离衰减、多层撞球撞墙声、起跳翻滚与着陆悬挂声、超音速音爆与循环、黄金喷气火焰粒子声效、引擎音频桥接、比赛播报与设置持久化 |
+| **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M`, `BC` | `src/input/MultiPlatformInput.js` | ⏳ *阶段四* | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆、Bindings 存储与重映射 |
 | **10** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段五* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
 | **11** | **比赛与模式状态机** | `class VM`, `class $M` | `src/game/MatchController.js` | ⏳ *阶段五* | Kickoff 开球、321 倒计时、进球判定、加时赛判定 |
 | **12** | **RL Bot 强化学习代理**| `class QM` | `src/ai/RLBotAgent.js` | ⏳ *阶段六* | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer) |
@@ -116,13 +116,26 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 4. 创建单元测试套件 `tests/hud_and_profiler.test.js`，通过 Node.js 运行全量功能与别名兼容性校验（100% 通过）。
 5. 重构 `src/game/CarSoccerEngine.js`：移除 460 余行高混淆 DOM/HUD 逻辑，替换为清晰的模块引用。
 
-### 阶段三：音频子系统统一与空间化解耦（建议下一阶段执行）
-- 目标：整合 `Lw`（超音速音效）、`Sw`（跳跃与悬挂撞击声）、`kw`（赛车撞球与撞墙声）、`cg`（HRTF 空间化立体声源）与 `GameAudioManager`（自定义音频资源播放）：
-  - 新建模块：`src/audio/GameAudioSubsystem.js` 与 `src/audio/SpatialAudioSource.js`
-- 收益：消除游戏主循环中对音频计数器（`jumpSerial`, `ballHitSerial` 等）的密集散落判断，将声音触发收敛为声明式事件驱动。
+### 阶段三：音频子系统统一与空间化解耦（✅ 已落地）
+1. 创建 `src/audio/SpatialAudioSource.js`：
+   - 抽离 `SpatialAudioSource`（原混淆类 `cg`）：Web Audio HRTF 空间化立体声源，设置单声道扬声器输出与零滚降因子。
+   - 抽离 `calculateDistanceGain(distance)`（原混淆函数 `j1`）：实现基于三次 Hermite 样条曲线的距离增益平滑衰减算法（`MIN_DISTANCE = 250`, `MAX_DISTANCE = 4500`, `MAX_GAIN = 0.4`）。
+   - 抽离 `updateAudioListener(camera)`（原混淆函数 `_1`）：全自动解算 3D 相机朝向与四元数旋转，无缝适配 AudioParam 与 legacy Web Audio Listener 接口。
+2. 创建 `src/audio/GameAudioSubsystem.js`：
+   - 抽离 `AudioMixer`（原 `u1`）与主混音通道（`qr`, `$r`, `up`, `setEngineVolume`, `setBoostVolume`），支持窗口失焦静音与 localStorage 音量配置同步。
+   - 抽离 `VehicleActionAudio`（原 `Sw`）：根据物理 Tick 序列号监听起跳（`jumpSerial`）、翻滚（`dodgeSerial`）、二段跳（`doubleJumpSerial`）以及着陆悬挂冲击（`wheelImpactSerial` / `wheelImpactSpeed`）。
+   - 抽离 `BallImpactAudio`（原 `kw`）：实现 8 层音频材质声效的叠加播放，支持车球碰撞（`carCore`, `carDetail`, `carHard`, `carSweetener`）与球场碰撞（`surfaceDetail`, `surfaceBody`, `grass`, `arena`）。
+   - 抽离 `SupersonicAudio`（原 `Lw`）：支持音爆瞬间 Stinger 音效与持续超音速高频环绕循环（`supersonic-loop`），集成用户手势解锁机制。
+   - 抽离 `BoostAudio`（原 `V1`）：多喷口 3D 空间火焰音效，维护 WeakMap 缓冲池与启停交叉淡入淡出。
+   - 抽离 `FlipResetAudio`（原 `jw`）：四轮重置触发声效。
+   - 抽离 `VehicleEngineAudio`（原 `tm`）：桥接赛车速度、物理负载与 `EMotorSynth`。
+   - 抽离 `GameAudioManager`、`gameAudio` 与 `boostCollectAudio`：比赛开球、进球、倒计时与拾取大喷气声效。
+3. 创建单元测试套件 `tests/audio_subsystem.test.js`：涵盖全部 8 组音频类、数学公式、序列号触发及别名映射，8 组测试用例 100% 通过。
+4. 重构 `src/game/CarSoccerEngine.js`：精简移除 901 行内联混淆音频实现，代之以清晰的模块导入与别名桥接，并通过 `node --check` 语法校验。
 
-### 阶段四：全平台输入子系统统一
-- 目标：解耦键鼠控制器 `SC`、手柄控制器 `XC`、移动端触控摇杆 `ib` 以及按键绑定配置持久化 `co` / `_M`，整合至 `src/input/MultiPlatformInput.js`。
+### 阶段四：全平台输入子系统统一（建议下一阶段执行）
+- 目标：解耦键鼠控制器 `SC`、手柄控制器 `XC`、移动端触控摇杆 `ib` 以及按键绑定配置持久化 `BC` / `io` / `Rf`，整合至 `src/input/MultiPlatformInput.js`。
+- 收益：将混杂在主引擎中的事件监听器和按键映射矩阵解耦为声明式配置，彻底解决全平台操作控制器的跨设备一致性。
 
 ### 阶段五：弹窗与比赛状态机模块化
 - 目标：抽取 `SettingsSheet` (`BM`)、`GarageDialog` (`UM`/`HM`)、`MatchDialog` (`$M`) 与 `MatchStateMachine` (`VM`)。
