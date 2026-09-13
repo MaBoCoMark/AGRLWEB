@@ -620,12 +620,25 @@ export async function loadGameCarAsset(resolveContextFn = resolveContext) {
  * Includes realistic anodized pearl clearcoat shader and arcade toon material.
  */
 export function createCarPaintMaterial(teamColor, options = OCTANE_DEFAULT_COLORS, resolveContextFn = resolveContext) {
+  let realResolveContext = (typeof resolveContextFn === "function") ? resolveContextFn : resolveContext;
   let opts = options;
-  if (typeof teamColor === "number" && (!options || options === OCTANE_DEFAULT_COLORS)) {
-    opts = { primary: teamColor, realisticPrimary: teamColor, pearl: teamColor };
-  } else if (typeof teamColor === "object" && teamColor !== null && (!options || options === OCTANE_DEFAULT_COLORS)) {
-    opts = teamColor;
+  let color = teamColor;
+
+  if (typeof options === "function") {
+    realResolveContext = options;
+    opts = OCTANE_DEFAULT_COLORS;
+  } else if (typeof teamColor === "function") {
+    realResolveContext = teamColor;
+    color = undefined;
+    opts = OCTANE_DEFAULT_COLORS;
   }
+
+  if (typeof color === "number" && (!opts || opts === OCTANE_DEFAULT_COLORS)) {
+    opts = { primary: color, realisticPrimary: color, pearl: color };
+  } else if (typeof color === "object" && color !== null && (!opts || opts === OCTANE_DEFAULT_COLORS)) {
+    opts = color;
+  }
+  if (!opts) opts = OCTANE_DEFAULT_COLORS;
 
   const primary = opts.primary;
   const realisticPrimary = opts.realisticPrimary ?? primary;
@@ -635,7 +648,7 @@ export function createCarPaintMaterial(teamColor, options = OCTANE_DEFAULT_COLOR
   const cached = carPaintCache.get(cacheKey);
   if (cached) return cached;
 
-  const ctx = resolveContextFn();
+  const ctx = realResolveContext();
   const {
     Color,
     MeshPhysicalMaterial,
@@ -914,12 +927,17 @@ export function createFlatCarModel(asset, teamColor, resolveContextFn = resolveC
  * Creates Dominus wheel group.
  */
 export function createFlatCarWheel(asset, wheelIndex, teamColor, resolveContextFn = resolveContext) {
-  const { Group } = resolveContextFn();
+  const realResolveContext = (typeof teamColor === "function")
+    ? teamColor
+    : (typeof resolveContextFn === "function" ? resolveContextFn : resolveContext);
+  const colorVal = (typeof teamColor === "number") ? teamColor : undefined;
+
+  const { Group } = realResolveContext();
   const wheelGroup = new Group();
   wheelGroup.name = FLAT_CAR_WHEEL_NAMES[wheelIndex];
   wheelGroup.scale.setScalar?.(100);
 
-  const wheelMesh = cloneVehicleMeshWithPaint(asset.wheels[wheelIndex], teamColor, FLAT_CAR_DEFAULT_COLORS, resolveContextFn);
+  const wheelMesh = cloneVehicleMeshWithPaint(asset.wheels[wheelIndex], colorVal, FLAT_CAR_DEFAULT_COLORS, realResolveContext);
   wheelMesh.position?.set(0, 0, 0);
   wheelGroup.add(wheelMesh);
   return wheelGroup;

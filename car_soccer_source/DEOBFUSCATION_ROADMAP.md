@@ -315,5 +315,43 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
       4. **长效防护与自动化测试**：新增专用防线测试套件 `tests/module_integrity.test.js`，静态解析所有 Barrel 文件的 star-export 冲突，验证主引擎关键变量声明顺序与 TDZ 安全性，并在 `package.json` 中配置统一的 `npm test` 运行命令。
       5. 全量 12 大测试套件 52 项单元测试 100% 验收通过。
 
+12. **缺陷修复：车轮硬件上下文与阵营颜色参数位置偏移防线 (Bugfix: TypeError: resolveContextFn is not a function)**：
+    - **现场还原与调用栈分析**：
+      ```
+      [Error] TypeError: resolveContextFn is not a function. (In 'resolveContextFn()', 'resolveContextFn' is 3111891)
+      createCarPaintMaterial — VehicleAssembly.js:638
+      createGameCarWheelHardware — VehicleAssembly.js:861
+      addCar — ArenaWorld.js:1387
+      dB — CarSoccerEngine.js:21559:84
+      ```
+    - **根本原因**：
+      在 `ArenaWorld.js` 调用 `createGameCarWheelHardware(asset, wheelIndex, teamColor)` 时传递了第 3 参数 `teamColor = 3111891`（整型色值），而 `VehicleAssembly.js` 函数原始签名设计为 `(asset, wheelIndex, resolveContextFn = resolveContext)`。这使得第三实参 `3111891` 被绑定为参数 `resolveContextFn`，随后内部调用 `createCarPaintMaterial(teamColor, resolveContextFn)` 并执行 `resolveContextFn()`，导致试图将数字作为函数调用，触发运行时崩溃。
+    - **防御性修复措施**：
+      1. 全面重构 `VehicleAssembly.js` 中 `createGameCarWheel`, `createGameCarWheelHardware`, `createFlatCarWheel`, `createCarPaintMaterial` 的参数嗅探逻辑。无论实参是以 `(asset, index, color)`, `(asset, index, resolveContextFn)`, 还是 `(asset, index, color, resolveContextFn)` 形式传入，均动态检测参数类型：
+         ```javascript
+         const realResolveContext = (typeof teamColor === "function") ? teamColor : (typeof resolveContextFn === "function" ? resolveContextFn : resolveContext);
+         const colorVal = (typeof teamColor === "number") ? teamColor : undefined;
+         ```
+         彻底杜绝因实参偏移导致的 `TypeError`。
+      2. 补齐单元测试：在 `tests/vehicle_assembly.test.js` 增加 Subtest 10，覆盖上述 4 个装配函数的所有 4 种参数排列组合，断言永不抛出。
+      3. 补齐集成测试：在 `tests/arena_world.test.js` 增加 Subtest 10，真实模拟含有真实网格数据的 `gameCarAsset` / `flatCarAsset` 调用 `ArenaWorld.addCar(teamColor)` 跑通完整车轮创建与硬件装配。
+
+13. **车辆喷气与尾焰粒子子系统模块化抽取至 `src/entities/VehicleBoostEmitter.js`（✅ Phase 7.5 已落地）**：
+    - `src/entities/VehicleBoostEmitter.js`（原 `CarSoccerEngine.js` 第 20455~21225 行混淆代码）：
+      - 街机/真实双主题尾焰着色器：
+        - 街机风喷气火焰（`createArcadeBoostFlameConeGeometry` / `W1`, `createArcadeBoostFlameConeMaterial` / `X1`）：正弦浪涌摆动、几何圆弧收尖、核心高光描边。
+        - 拟真金喷尾焰（`createRealisticBoostConeGeometry` / `D1`, `createRealisticBoostConeMaterial` / `N1`）：双层水流噪声扰动纹理合成、动态焦散条纹与菲涅尔边缘渐变。
+      - 粒子发射引擎：
+        - 街机实例化粒子网格（`ArcadeBoostParticleMesh` / `Sp`）：72 尾迹粒子（Trail Puffs）与 16 怠速喷烟（Drive Puffs），基于速度与时间膨胀的云团边缘淡入淡出。
+        - 拟真粒子网格（`RealisticBoostParticleMesh` / `jp`）：160 尾迹粒子与 32 喷烟粒子，结合 `evalCurveLut` / `Dn` 针对 8 组 Float32Array 曲线 LUT（大小、透明度、颜色增益、三维速度动力学）进行精确多项式采样插值。
+      - 点光源、镜头炫光与喷嘴闪光（`createNozzleFlash` / `J1`, `createBoostFlare` / `G1`）：与尾焰透明度（`coneOpacity`）严格联动的动态点光源（`PointLight` 脉冲频闪）及看板 Sprite 几何体。
+      - 统一实体控制器 `VehicleBoostEmitter`（原 `K1`）与拟真发射器 `RealisticBoostEmitter`（原 `O1`）：封装生命周期管理、`bloomActive` 辉光通道判定、`update` 距离插值粒子播撒、`resetVisual` 清空缓冲区与 `preload` 资源预热。
+    - 三维上下文无缝接入与主引擎瘦身：
+      - 引入 `setVehicleBoostEmitterThreeContext` 与纯 JS 几何/材质兜底，在无 WebGL/浏览器环境下仍可 100% 离线测试。
+      - 从 `CarSoccerEngine.js` 彻底移除 765 行高密度混淆着色器与粒子类，精简为主引擎顶层依赖注入。
+    - 单元测试验收 `tests/vehicle_boost_emitter.test.js`：
+      - 7 项测试用例全部通过，覆盖 LUT 插值数学准确性、几何体生成、实例化网格属性缓冲、生命周期步进、Bloom 激活标记、向后兼容别名校验。
+      - 全量 13 大测试套件 61 项单元测试 100% 验收通过（`npm test` 全部通过）。
+
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

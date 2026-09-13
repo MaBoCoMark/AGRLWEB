@@ -842,6 +842,7 @@ export class BoostAudio {
   }
 
   async preload() {
+    if (typeof window === 'undefined') return;
     const bufs = await this.load();
     if (bufs.length !== 3) throw new Error('Golden Boost audio is unavailable');
   }

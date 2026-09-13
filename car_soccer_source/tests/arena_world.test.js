@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ArenaWorld,
+  resolveContext,
   ow,
   ARENA_WIDTH,
   ARENA_LENGTH,
@@ -271,4 +272,52 @@ test('9. Stadium architecture and visibility toggle (Bug E)', () => {
   // Backward compatibility alias checks
   assert.equal(WS, loadStadiumContinuousBoundary);
   assert.equal(JS, loadStadiumArchitecture);
+});
+
+test('10. ArenaWorld.addCar builds game-car and flat-car wheels with teamColor without TypeError', () => {
+  const { Group, Mesh, BufferGeometry, BufferAttribute, MeshStandardMaterial } = resolveContext();
+
+  const mockGeom = new BufferGeometry();
+  mockGeom.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 1, 1, 2, 2, 2]), 3));
+  const mockMat = new MeshStandardMaterial({ name: 'lower-detail' });
+  const mockBodyMesh = new Mesh(mockGeom, mockMat);
+  mockBodyMesh.name = 'game-car-body';
+
+  const mockWheels = [0, 1, 2, 3].map(i => {
+    const w = new Mesh(mockGeom, mockMat);
+    w.name = `wheel_${i}`;
+    return w;
+  });
+
+  const mockAsset = {
+    body: mockBodyMesh,
+    wheels: mockWheels,
+    wheelHardware: mockWheels.map(w => w.clone ? w.clone() : w)
+  };
+
+  // 1. Test game-car with populated gameCarAsset
+  const world = new ArenaWorld(91.25, 'game-car');
+  world.gameCarAsset = mockAsset;
+  // This executes ArenaWorld.js:1387 -> createGameCarWheel and createGameCarWheelHardware with teamColor (3111891)
+  world.addCar(0);
+  assert.equal(world.cars.length, 1);
+  assert.equal(world.carWheels.length, 1);
+  assert.equal(world.carWheels[0].length, 4, 'Game car must have 4 steerable and spinning wheels');
+  for (let i = 0; i < 4; i++) {
+    const w = world.carWheels[0][i];
+    assert.ok(w.steer, 'Wheel steer group must exist');
+    assert.ok(w.spin, 'Wheel spin group must exist');
+    assert.ok(w.steer.children.length >= 2, 'Steer group should contain spin group and hardware');
+  }
+
+  // 2. Test flat-car with populated flatCarAsset
+  const worldFlat = new ArenaWorld(91.25, 'flat-car');
+  worldFlat.flatCarAsset = {
+    body: mockBodyMesh,
+    wheels: mockWheels
+  };
+  worldFlat.addCar(1);
+  assert.equal(worldFlat.cars.length, 1);
+  assert.equal(worldFlat.carWheels.length, 1);
+  assert.equal(worldFlat.carWheels[0].length, 4, 'Flat car must have 4 wheels');
 });

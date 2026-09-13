@@ -299,3 +299,77 @@ test('9. Full backward-compatibility aliases check', () => {
   assert.equal(Ir, OCTANE_SCALE);
   assert.equal(Ni, 0);
 });
+
+test('10. Wheel assembly and paint material parameter robustness (regression for TypeError: resolveContextFn is not a function)', () => {
+  const { Group, Mesh, BufferGeometry, BufferAttribute, MeshStandardMaterial } = resolveContext();
+
+  const mockGeom = new BufferGeometry();
+  mockGeom.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0, 1, 1, 1, 2, 2, 2]), 3));
+  const mockMat = new MeshStandardMaterial({ name: 'lower-detail' });
+  const mockBodyMesh = new Mesh(mockGeom, mockMat);
+  mockBodyMesh.name = 'game-car-body';
+
+  const mockWheels = [0, 1, 2, 3].map(i => {
+    const w = new Mesh(mockGeom, mockMat);
+    w.name = OCTANE_WHEEL_NAMES[i];
+    return w;
+  });
+
+  const mockAsset = {
+    body: mockBodyMesh,
+    wheels: mockWheels,
+    wheelHardware: mockWheels.map(w => w.clone ? w.clone() : w)
+  };
+
+  // 1. Test createGameCarWheel with all argument permutations:
+  // (asset, index)
+  const w1 = createGameCarWheel(mockAsset, 0);
+  assert.ok(w1);
+  // (asset, index, teamColor) -> passing integer color
+  const w2 = createGameCarWheel(mockAsset, 1, 3111891);
+  assert.ok(w2);
+  // (asset, index, resolveContextFn) -> passing function as 3rd arg
+  const w3 = createGameCarWheel(mockAsset, 2, resolveContext);
+  assert.ok(w3);
+  // (asset, index, teamColor, resolveContextFn)
+  const w4 = createGameCarWheel(mockAsset, 3, 13857839, resolveContext);
+  assert.ok(w4);
+
+  // 2. Test createGameCarWheelHardware with all argument permutations (Root cause regression):
+  // (asset, index)
+  const hw1 = createGameCarWheelHardware(mockAsset, 0);
+  assert.ok(hw1);
+  // (asset, index, teamColor) -> CRITICAL: This was the crash site where resolveContextFn was 3111891
+  const hw2 = createGameCarWheelHardware(mockAsset, 1, 3111891);
+  assert.ok(hw2);
+  // (asset, index, resolveContextFn)
+  const hw3 = createGameCarWheelHardware(mockAsset, 2, resolveContext);
+  assert.ok(hw3);
+  // (asset, index, teamColor, resolveContextFn)
+  const hw4 = createGameCarWheelHardware(mockAsset, 3, 13857839, resolveContext);
+  assert.ok(hw4);
+
+  // 3. Test createFlatCarWheel with all argument permutations:
+  const flatMockAsset = {
+    body: mockBodyMesh,
+    wheels: mockWheels
+  };
+  const fw1 = createFlatCarWheel(flatMockAsset, 0);
+  assert.ok(fw1);
+  const fw2 = createFlatCarWheel(flatMockAsset, 1, 3111891);
+  assert.ok(fw2);
+  const fw3 = createFlatCarWheel(flatMockAsset, 2, resolveContext);
+  assert.ok(fw3);
+  const fw4 = createFlatCarWheel(flatMockAsset, 3, 13857839, resolveContext);
+  assert.ok(fw4);
+
+  // 4. Test createCarPaintMaterial with all permutations without throwing:
+  const p1 = createCarPaintMaterial(3111891);
+  assert.ok(p1);
+  const p2 = createCarPaintMaterial(3111891, resolveContext);
+  assert.ok(p2);
+  const p3 = createCarPaintMaterial(resolveContext);
+  assert.ok(p3);
+  const p4 = createCarPaintMaterial(undefined, undefined, 3111891); // safely falls back, never throws 3111891()
+  assert.ok(p4);
+});
