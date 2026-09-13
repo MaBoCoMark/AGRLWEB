@@ -179,6 +179,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 集成实时比分板 HUD、动态开球/进球/加时播报横幅以及全平台键鼠/手柄（PlayStation/Xbox）焦点无缝导航。
 4. 创建单元测试套件 `tests/match_and_rlbot.test.js`：涵盖比赛全生命周期、开球与倒计时判定、加时赛流转、控制量编解码、Nexto 开球序列、三种 Bot 适配器张量结构、Worker 离线启发式保底与全套兼容别名，4 大测试集 100% 通过。
 5. 重构 `src/game/CarSoccerEngine.js`：精简移除 835 行内联混淆实现，以干净别名桥接，消除 TDZ 风险。
+6. **缺陷修复与别名补齐 (Bugfix)**：修复启动实例化比赛面板 `pe = new $M(an, ...)` 时因 `CarSoccerEngine.js` 导入遗漏 `$M` 别名导致的 `ReferenceError: Can't find variable: $M` 运行时白屏崩溃问题；在 `CarSoccerEngine.js` 头部补齐 `$M` 导入并在 `tests/match_and_rlbot.test.js` 中扩充别名防漏与实例化校验。
 
 ### 阶段六：车库与全局设置面板抽离
 - 目标：解耦 `SettingsSheet` (`BM`)、`GarageTurntable` (`HM`) 与 `GarageDialog` (`UM`)。

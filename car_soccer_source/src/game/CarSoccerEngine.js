@@ -181,7 +181,7 @@ import {
 } from "../ai/RLBotAgent.js";
 import {
   MatchDialog,
-  
+  $M
 } from "../ui/MatchDialog.js";
 
 var xg = Object.defineProperty;
@@ -25058,7 +25058,7 @@ stopPadNav(){
 // The following subsystems have been extracted into clean, modular ES components:
 // - src/game/MatchStateMachine.js (Match rules, 120Hz clock, overtime, kickoff countdown, aliases VM, qM, sm, Is, am, om, zM)
 // - src/ai/RLBotAgent.js (ONNX worker inference, Nexto/Necto/Seer adapters, kickoff logic, aliases QM, JM, KM, ZM, Dc, pl, JA, wA, Eg, ed, Am, WM, XM, lm, dm)
-// - src/ui/MatchDialog.js (Match modal dialog, bot selector, scoreboard HUD, alias )
+// - src/ui/MatchDialog.js (Match modal dialog, bot selector, scoreboard HUD, alias $M)
 
 // Boost Gauge HUD & Performance Overlay HUD (Phase 2 Deobfuscation & Modularization)
 const nB = BoostGaugeHUD;

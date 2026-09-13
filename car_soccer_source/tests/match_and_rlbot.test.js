@@ -1,3 +1,4 @@
+import fs from "node:fs";
 /**
  * tests/match_and_rlbot.test.js
  * Comprehensive unit test suite for Phase 5:
@@ -312,6 +313,52 @@ console.log("#   ✓ Adapters & Agent passed.");
 // --- Suite 4: MatchDialog Aliases & Structure ---
 console.log("#   Testing MatchDialog ($M)...");
 assert.strictEqual($M, MatchDialog);
+
+// Verify CarSoccerEngine.js properly imports $M
+const engineSource = fs.readFileSync(new URL("../src/game/CarSoccerEngine.js", import.meta.url), "utf-8");
+assert.ok(
+  engineSource.includes("$M") && new RegExp(`import\\s*\\{[^}]*\\$M[^}]*\\}\\s*from\\s*["\']\\.\\./ui/MatchDialog\\.js["\']`).test(engineSource),
+  "CarSoccerEngine.js must explicitly import $M alias from MatchDialog.js to prevent ReferenceError"
+);
+
+// Verify MatchDialog instantiation in headless DOM
+const mockEl = () => ({
+  children: [],
+  dataset: {},
+  classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+  style: {},
+  setAttribute: () => {},
+  getAttribute: () => null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  querySelector: () => mockEl(),
+  querySelectorAll: () => [mockEl()],
+  contains: () => true,
+  focus: () => {},
+  scrollIntoView: () => {},
+  insertAdjacentHTML: () => {},
+  hidden: false,
+  disabled: false,
+  offsetParent: {}
+});
+
+const mockContainer = mockEl();
+if (!globalThis.document.querySelector) {
+  globalThis.document.querySelector = () => mockEl();
+  globalThis.document.querySelectorAll = () => [mockEl()];
+  globalThis.document.activeElement = mockEl();
+}
+
+const dialog = new $M(mockContainer, {
+  playerTeam: 0,
+  botId: "nexto",
+  onSelectBot: () => {},
+  onOpenChange: () => {},
+  onResume: () => {},
+  onStart: async () => {},
+  onLeave: () => {}
+});
+assert.strictEqual(dialog.isOpen, false);
 console.log("#   ✓ MatchDialog ($M) passed.");
 
 console.log("# [Test] All Phase 5 Match & RLBot Subsystem tests successfully passed!");
