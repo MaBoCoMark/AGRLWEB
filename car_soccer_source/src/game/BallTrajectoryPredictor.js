@@ -54,8 +54,12 @@ export class BallTrajectoryPredictor {
       uniforms: {
         uColor: { value: new THREE.Color(this.settings.color) },
       },
+      vertexColors: true,
       vertexShader: `
         attribute float aAlpha;
+        #if !defined(USE_COLOR) && !defined(USE_COLOR_ALPHA)
+        attribute vec3 color;
+        #endif
         varying float vAlpha;
         varying vec3 vColor;
         void main() {
@@ -140,11 +144,24 @@ export class BallTrajectoryPredictor {
    * Deterministically calculates trajectory points and marks visible/hidden time slices.
    */
   simulate(startPos, startVel) {
+    if (!startPos || !startVel) return;
+
+    const speedSq = startVel.x * startVel.x + startVel.y * startVel.y + startVel.z * startVel.z;
+    // When resting motionless on the arena floor, do not draw an unnecessary static clump
+    if (speedSq < 25 && startPos.y <= this.BALL_RADIUS + 2) {
+      this.simulatedPoints = [];
+      this.currentBallIndex = 0;
+      this.geometry.setDrawRange(0, 0);
+      this.geometryDirty = false;
+      return;
+    }
+
     const dt = 1 / 120;
     const tickDtMs = 1000 / 120;
-    const totalTicks = Math.min(this.maxTicks, Math.max(1, Math.round(this.settings.duration * 120)));
+    const totalTicks = Math.min(this.maxTicks, Math.max(2, Math.round(this.settings.duration * 120)));
     const cycleMs = this.settings.existTime + this.settings.hiddenTime;
     const existMs = this.settings.existTime;
+    const nowMs = performance.now();
 
     let x = startPos.x;
     let y = startPos.y;
@@ -158,8 +175,9 @@ export class BallTrajectoryPredictor {
 
     for (let k = 0; k < totalTicks; k++) {
       const tMs = k * tickDtMs;
-      // Time-sliced dash pattern:
-      const isVisible = cycleMs > 0 ? ((tMs % cycleMs) < existMs) : true;
+      const arrivalTimeMs = nowMs + tMs;
+      // World-space fixed dash pattern:
+      const isVisible = cycleMs > 0 ? ((arrivalTimeMs % cycleMs) < existMs) : true;
 
       points.push({ x, y, z, isVisible, tMs, tickIndex: k });
 
@@ -240,10 +258,12 @@ export class BallTrajectoryPredictor {
    * Recalculates trajectory immediately from current ball physics.
    */
   recalculate(ballPos, ballVelocity) {
-    if (!this.settings.enabled || !this.isActive) {
+    if (!this.settings.enabled) {
       this.clear();
       return;
     }
+    this.lastBallPos = ballPos;
+    this.lastBallVel = ballVelocity;
     this.simulate(ballPos, ballVelocity);
   }
 
@@ -267,46 +287,24 @@ export class BallTrajectoryPredictor {
 
     this.mesh.visible = true;
 
-    // Check collision / hit / kickoff recalculation triggers
+    // Cache latest physics state for instant UI re-simulation
+    this.lastBallPos = ballPosition;
+    this.lastBallVel = ballVelocity;
+
     const hitChanged = ballHitSerial !== this.lastHitSerial && ballHitSerial !== undefined;
     if (hitChanged) {
       this.lastHitSerial = ballHitSerial;
     }
 
-    if (hitChanged || kickoffReset || this.simulatedPoints.length === 0) {
-      this.simulate(ballPosition, ballVelocity);
+    const speedSq = ballVelocity ? (ballVelocity.x * ballVelocity.x + ballVelocity.y * ballVelocity.y + ballVelocity.z * ballVelocity.z) : 0;
+    const isAtRest = speedSq < 25 && ballPosition.y <= this.BALL_RADIUS + 2;
+
+    if (isAtRest) {
+      this.clear();
       return;
     }
 
-    // World-space fixed pattern:
-    // Find the closest point along the fixed trajectory to current real ball position
-    const pts = this.simulatedPoints;
-    let bestIdx = this.currentBallIndex;
-    let bestDistSq = Infinity;
-    const searchLimit = Math.min(pts.length, this.currentBallIndex + 40);
-
-    for (let i = this.currentBallIndex; i < searchLimit; i++) {
-      const p = pts[i];
-      const dx = p.x - ballPosition.x;
-      const dy = p.y - ballPosition.y;
-      const dz = p.z - ballPosition.z;
-      const dSq = dx * dx + dy * dy + dz * dz;
-      if (dSq < bestDistSq) {
-        bestDistSq = dSq;
-        bestIdx = i;
-      }
-    }
-
-    // If ball has drifted too far (external impulse without serial update), recalculate
-    if (bestDistSq > 40000 && ballVelocity.lengthSq() > 100) {
-      this.simulate(ballPosition, ballVelocity);
-      return;
-    }
-
-    if (bestIdx !== this.currentBallIndex) {
-      this.currentBallIndex = bestIdx;
-      this.geometryDirty = true;
-    }
+    this.simulate(ballPosition, ballVelocity);
   }
 
   /**
@@ -384,11 +382,11 @@ export class BallTrajectoryPredictor {
       const progressToEnd = (i - startIdx) / Math.max(1, totalPts - 1 - startIdx);
       const alpha = progressToEnd > 0.85 ? (1.0 - progressToEnd) / 0.15 : 1.0;
 
+      if (vertCount + 2 > this.maxVertices) break;
+
       // Add 2 ribbon vertices (left, right)
       const vLeft = vertCount++;
       const vRight = vertCount++;
-
-      if (vRight >= this.maxVertices) break;
 
       const baseIdxL = vLeft * 3;
       this.positions[baseIdxL] = p.x - this.side.x;
@@ -672,6 +670,14 @@ export class BallTrajectoryPredictor {
           <input type="range" id="traj-hidden" class="trajectory-slider" min="0" max="100" step="1" value="${this.settings.hiddenTime}" />
           <span class="trajectory-hint">Hidden gap duration per cycle (0 – 100 ms)</span>
         </div>
+
+        <div class="trajectory-row">
+          <div class="trajectory-row__header">
+            <label class="trajectory-label" for="traj-color">Line Color</label>
+            <input type="color" id="traj-color" value="${this.settings.color || "#00f0ff"}" style="background:none;border:none;width:36px;height:24px;cursor:pointer;" />
+          </div>
+          <span class="trajectory-hint">Neon glow ribbon color</span>
+        </div>
       </div>
     `;
 
@@ -693,8 +699,16 @@ export class BallTrajectoryPredictor {
     enabledInput.addEventListener('change', (e) => {
       this.settings.enabled = e.target.checked;
       this.saveSettings();
-      if (!this.settings.enabled) this.clear();
-      else this.geometryDirty = true;
+      if (!this.settings.enabled) {
+        this.mesh.visible = false;
+        this.clear();
+      } else {
+        this.mesh.visible = true;
+        this.geometryDirty = true;
+        if (this.lastBallPos && this.lastBallVel) {
+          this.simulate(this.lastBallPos, this.lastBallVel);
+        }
+      }
     });
 
     durationInput.addEventListener('input', (e) => {
@@ -703,6 +717,9 @@ export class BallTrajectoryPredictor {
       durationVal.textContent = `${val.toFixed(1)}s`;
       this.saveSettings();
       this.geometryDirty = true;
+      if (this.lastBallPos && this.lastBallVel) {
+        this.simulate(this.lastBallPos, this.lastBallVel);
+      }
     });
 
     thicknessInput.addEventListener('input', (e) => {
@@ -719,6 +736,9 @@ export class BallTrajectoryPredictor {
       existVal.textContent = `${val} ms`;
       this.saveSettings();
       this.geometryDirty = true;
+      if (this.lastBallPos && this.lastBallVel) {
+        this.simulate(this.lastBallPos, this.lastBallVel);
+      }
     });
 
     hiddenInput.addEventListener('input', (e) => {
@@ -727,7 +747,22 @@ export class BallTrajectoryPredictor {
       hiddenVal.textContent = `${val} ms`;
       this.saveSettings();
       this.geometryDirty = true;
+      if (this.lastBallPos && this.lastBallVel) {
+        this.simulate(this.lastBallPos, this.lastBallVel);
+      }
     });
+
+    const colorInput = panel.querySelector('#traj-color');
+    if (colorInput) {
+      colorInput.addEventListener('input', (e) => {
+        this.settings.color = e.target.value;
+        if (this.material && this.material.uniforms && this.material.uniforms.uColor) {
+          this.material.uniforms.uColor.value.set(this.settings.color);
+        }
+        this.saveSettings();
+        this.geometryDirty = true;
+      });
+    }
 
     closeBtn.addEventListener('click', () => {
       this.togglePanel(false);
@@ -735,6 +770,31 @@ export class BallTrajectoryPredictor {
 
     // Create HUD trigger button in .hud-tools
     this.createHudButton();
+  }
+
+  syncUI() {
+    if (!this.panel) return;
+    const enabledInput = this.panel.querySelector('#traj-enabled');
+    const durationInput = this.panel.querySelector('#traj-duration');
+    const durationVal = this.panel.querySelector('#traj-duration-val');
+    const thicknessInput = this.panel.querySelector('#traj-thickness');
+    const thicknessVal = this.panel.querySelector('#traj-thickness-val');
+    const existInput = this.panel.querySelector('#traj-exist');
+    const existVal = this.panel.querySelector('#traj-exist-val');
+    const hiddenInput = this.panel.querySelector('#traj-hidden');
+    const hiddenVal = this.panel.querySelector('#traj-hidden-val');
+    const colorInput = this.panel.querySelector('#traj-color');
+
+    if (enabledInput) enabledInput.checked = !!this.settings.enabled;
+    if (durationInput) durationInput.value = this.settings.duration;
+    if (durationVal) durationVal.textContent = `${Number(this.settings.duration).toFixed(1)}s`;
+    if (thicknessInput) thicknessInput.value = this.settings.lineThickness;
+    if (thicknessVal) thicknessVal.textContent = Number(this.settings.lineThickness).toFixed(1);
+    if (existInput) existInput.value = this.settings.existTime;
+    if (existVal) existVal.textContent = `${this.settings.existTime} ms`;
+    if (hiddenInput) hiddenInput.value = this.settings.hiddenTime;
+    if (hiddenVal) hiddenVal.textContent = `${this.settings.hiddenTime} ms`;
+    if (colorInput && this.settings.color) colorInput.value = this.settings.color;
   }
 
   createHudButton() {
@@ -767,6 +827,9 @@ export class BallTrajectoryPredictor {
     if (!this.panel) return;
     const shouldOpen = forceState !== undefined ? forceState : this.panel.hidden;
     this.panel.hidden = !shouldOpen;
+    if (shouldOpen) {
+      this.syncUI();
+    }
     if (this.hudButton) {
       this.hudButton.classList.toggle('is-active', shouldOpen);
     }

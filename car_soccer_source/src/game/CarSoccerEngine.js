@@ -26080,6 +26080,8 @@ moveDrag(e){
 function getDefaultRenderScale() {
   return 50;
 }
+let activeSettingsOverlay = null;
+let activeGraphicsSettings = null;
 const _g = [{
   key:"fps",label:"FPS Counter",note:"Current frames per second and screen refresh rate."
 }
@@ -27042,6 +27044,7 @@ setStatus(e){
   t && (t.textContent = e)
 }
 attachGraphics(e){
+  activeGraphicsSettings = this.graphics;
   return this.onGraphicsChange = e,this.syncGraphicsControls(),e(this.graphics),this.graphics
 }
 updateGraphicsSetting(e){
@@ -27051,6 +27054,7 @@ updateGraphicsSetting(e){
   else if(t === "maxFps")this.graphics.maxFps = Math.round(Math.max(Ma,Math.min(SA,e.valueAsNumber)));
   else if(t === "renderScale")this.graphics.renderScale = Math.round(Math.max(25,Math.min(100,e.valueAsNumber))*10)/10;
   else return;
+  activeGraphicsSettings = this.graphics;
   uA.save(this.graphics),(n = this.onGraphicsChange) == null || n.call(this,this.graphics),this.syncGraphicsControls()
 }
 syncGraphicsControls(){
@@ -28915,7 +28919,14 @@ draw(){
   const e = this.profiler.snapshot(ya / 2,xa);
   if(e.count === 0)return;
   const t = this.settings;
-  const currentScale = Math.round((typeof Xe !== "undefined" && Xe?.graphics?.renderScale) ?? (typeof We !== "undefined" && We?.renderScale) ?? 50);
+  const currentScale = Math.round(
+    (activeGraphicsSettings?.renderScale) ??
+    (activeSettingsOverlay?.graphics?.renderScale) ??
+    (typeof We !== "undefined" && We ? We.renderScale : undefined) ??
+    (typeof Xe !== "undefined" && Xe ? Xe.graphics?.renderScale : undefined) ??
+    (uA.load()?.renderScale) ??
+    50
+  );
   if(t.fps){
     this.set("statFpsSimple",e.frame.fps.toFixed(0));
     this.set("statHzSimple",String(Math.round(e.refreshHz || 60)));
@@ -29151,7 +29162,10 @@ async function dB(){
   x.capturing = W,R.capturing = W
 }
 );
+activeSettingsOverlay = Xe;
+activeGraphicsSettings = Xe.graphics;
 We = Xe.attachGraphics(W=>{
+  activeGraphicsSettings = W;
   N.setStadiumVisible(W.showStadium),gt == null || gt.setFpsLimit(W.limitFps?W.maxFps:null),typeof qeRenderViewport == "function" && qeRenderViewport(W)
 }
 );
