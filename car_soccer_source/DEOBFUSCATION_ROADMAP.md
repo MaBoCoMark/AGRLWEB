@@ -296,5 +296,24 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
      3. 在 `tests/arena_world.test.js` 中扩充第 5 项别名断言及新增第 6 项声明完整性回归测试，杜绝 TDZ 与未定义变量崩溃。
      4. 全量 10 大测试套件 36 项测试 100% 验收通过。
 
+10. **车辆装配子系统模块化抽取至 `src/entities/VehicleAssembly.js`（✅ Phase 7.4 已落地）**：
+    - `src/entities/VehicleAssembly.js`：
+      - 车辆物理规格与模型矩阵：`OCTANE_SCALE`, `OCTANE_SCALE_X`, `OCTANE_OFFSET_X`, `OCTANE_OFFSET_Y`, `OCTANE_WHEEL_COORDS`, `FLAT_CAR_WHEEL_COORDS`, `REALISTIC_WHEEL_COORDS`。
+      - 程序化赛车模型：Octane (Game Car), Dominus (Flat Car), Realistic Spaceframe Buggy (管状车架与三轴万向节座舱)。
+      - 材质与车漆着色器：`createCarPaintMaterial` (双色阵营调色盘, 原 `ul`), `applyVehicleMaterials` (原 `fl`), `cloneVehicleMeshWithPaint` (原 `$0`)。
+      - 3D 车库展台组装器：`loadRealisticCarShowcase` (原 `NM`), `loadGameCarShowcase` (原 `GM`), `loadFlatCarShowcase` (原 `OM`)。
+    - 单元测试验收 `tests/vehicle_assembly.test.js`：9 项测试 100% 验收通过。
+11. **缺陷修复：彻底消除 Vite/esbuild 歧义导出冲突与 `ReferenceError: Can't find variable: xn` (Bugfix)**：
+    - **根本原因**：
+      1. 在 Phase 7.4 拆分 `VehicleAssembly.js` 时，子模块中重复导出了 `DEFAULT_TEAM_COLORS`, `createSuspensionUnit`, `createOffroadWheelMesh`, `createSuspensionKnuckle`, `setupCarReactionJets` 等符号，且 `StadiumArena.js` 也重复导出了 `WS`, `JS` 与边界常量。
+      2. `src/entities/index.js` 采用通配导出 `export * from '...'`，根据 ECMAScript 规范，多个子模块同名导出在 Barrel 文件中被判定为 Ambiguous（歧义），Bundler（Vite/esbuild）抛出 `Ambiguous import ... has multiple matching exports` 扫描错误。
+      3. 随后修改中，开发者直接从 `CarSoccerEngine.js` 导入列表中移除了 `createSuspensionUnit`, `createOffroadWheelMesh`, `createSuspensionKnuckle`, `setupCarReactionJets`, `DEFAULT_TEAM_COLORS`, `DEFAULT_TEAM_COLORS as xn`，导致运行时第 21345 行 `teamColors: xn` 以及车库配置 `xn[Ni]` 无法解析标识符，抛出 `ReferenceError: Can't find variable: xn` 导致白屏。
+    - **修复措施**：
+      1. **模块职责去重**：将 `VehicleAssembly.js` 和 `StadiumArena.js` 中的内部冗余导出收敛为模块私有，保留 `ArenaWorld.js` 作为规范向后兼容导出点。
+      2. **Barrel 文件显式消歧**：在 `src/entities/index.js` 中对跨模块共享常量（`OCTANE_BOOST_OUTLETS`, `FLAT_CAR_BOOST_OUTLETS`）和架构加载器（`loadStadiumContinuousBoundary`, `loadStadiumArchitecture`）提供显式定向导出（`export { ... } from './...'`），依据 ESM 规范明确胜过通配星号导出，杜绝 Vite/esbuild 歧义解析。
+      3. **主引擎完整性恢复**：在 `CarSoccerEngine.js` 中完整恢复 `DEFAULT_TEAM_COLORS as xn`, `DEFAULT_TEAM_COLORS`, `createSuspensionUnit`, `createOffroadWheelMesh`, `createSuspensionKnuckle`, `setupCarReactionJets` 的导入，确保 `xn`、`mg`、`gg`、`vg`、`jg` 顶层全部就绪。
+      4. **长效防护与自动化测试**：新增专用防线测试套件 `tests/module_integrity.test.js`，静态解析所有 Barrel 文件的 star-export 冲突，验证主引擎关键变量声明顺序与 TDZ 安全性，并在 `package.json` 中配置统一的 `npm test` 运行命令。
+      5. 全量 12 大测试套件 52 项单元测试 100% 验收通过。
+
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

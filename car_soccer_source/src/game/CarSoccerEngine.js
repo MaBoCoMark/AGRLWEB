@@ -343,6 +343,12 @@ import {
   createCarHitboxWireframe,
   createCompetitionTurfMesh,
   updateTurfPadDecals,
+  createSuspensionUnit,
+  createOffroadWheelMesh,
+  createSuspensionKnuckle,
+  setupCarReactionJets,
+  DEFAULT_TEAM_COLORS,
+  DEFAULT_TEAM_COLORS as xn,
   // Vehicle Assembly Subsystem (Phase 7.4)
   loadGameCarAsset,
   loadFlatCarAsset,

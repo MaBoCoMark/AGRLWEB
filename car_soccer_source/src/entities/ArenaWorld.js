@@ -588,7 +588,7 @@ export function updateSuspensionArm(armMesh, rootMesh, knucklePos) {
 /**
  * Updates suspension coil spring scale and damper rod height.
  */
-export function updateSuspensionUnitSpring(susUnit, knucklePos) {
+function updateSuspensionUnitSpring(susUnit, knucklePos) {
   if (!susUnit || !susUnit.group || !knucklePos) return;
   const { Vector3 } = resolveContext();
   const dir = new Vector3(knucklePos.x - susUnit.top.x, knucklePos.y - susUnit.top.y, knucklePos.z - susUnit.top.z);

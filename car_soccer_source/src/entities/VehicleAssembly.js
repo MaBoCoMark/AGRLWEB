@@ -35,7 +35,7 @@
  * - OM -> loadFlatCarShowcase
  */
 
-export const DEFAULT_TEAM_COLORS = [3111891, 13857839]; // xn
+const DEFAULT_TEAM_COLORS = [3111891, 13857839]; // xn
 
 // --- Octane (Game Car) Constants ---
 export const OCTANE_SCALE = 105; // Ir
@@ -160,7 +160,7 @@ export function setVehicleAssemblyThreeContext(context) {
   Object.defineProperties(vehicleAssemblyThreeContext, descriptors);
 }
 
-export function resolveContext() {
+function resolveContext() {
   const G = vehicleAssemblyThreeContext;
   return {
     Group: G.Group || (typeof THREE !== 'undefined' ? THREE.Group : class {
@@ -833,15 +833,21 @@ export function createGameCarModel(asset, teamColor, colorOptions, resolveContex
 /**
  * Creates Octane wheel group.
  */
-export function createGameCarWheel(asset, wheelIndex, resolveContextFn = resolveContext) {
-  const { Group } = resolveContextFn();
+export function createGameCarWheel(asset, wheelIndex, teamColor, resolveContextFn = resolveContext) {
+  // 容错处理：以防万一别人只传了 3 个参数，且第 3 个参数传的是 resolveContext 函数
+  const realResolveContext = (typeof teamColor === 'function') ? teamColor : (typeof resolveContextFn === 'function' ? resolveContextFn : resolveContext);
+  const colorVal = (typeof teamColor === 'number') ? teamColor : undefined;
+
+  const { Group } = realResolveContext();
   const wheelGroup = new Group();
   wheelGroup.name = OCTANE_WHEEL_NAMES[wheelIndex];
   wheelGroup.scale.setScalar?.(OCTANE_SCALE);
 
   const wheelClone = asset.wheels[wheelIndex].clone ? asset.wheels[wheelIndex].clone(true) : asset.wheels[wheelIndex];
   wheelClone.position?.set(0, 0, 0);
-  applyVehicleMaterials(wheelClone, createCarPaintMaterial(undefined, undefined, resolveContextFn), resolveContextFn);
+  
+  // 这里可以把 teamColor 顺便塞给车漆材质，完美支持车轮配色
+  applyVehicleMaterials(wheelClone, createCarPaintMaterial(colorVal, undefined, realResolveContext), realResolveContext);
   wheelGroup.add(wheelClone);
   return wheelGroup;
 }
@@ -849,10 +855,23 @@ export function createGameCarWheel(asset, wheelIndex, resolveContextFn = resolve
 /**
  * Creates Octane wheel suspension hardware.
  */
-export function createGameCarWheelHardware(asset, wheelIndex, resolveContextFn = resolveContext) {
+export function createGameCarWheelHardware(asset, wheelIndex, teamColor, resolveContextFn = resolveContext) {
+  // 容错处理：区分 teamColor 和 resolveContextFn
+  const realResolveContext = (typeof teamColor === "function") 
+    ? teamColor 
+    : (typeof resolveContextFn === "function" ? resolveContextFn : resolveContext);
+    
+  const colorVal = (typeof teamColor === "number") ? teamColor : undefined;
+
   const hw = asset.wheelHardware[wheelIndex];
   const hwClone = hw.clone ? hw.clone(true) : hw;
-  applyVehicleMaterials(hwClone, createCarPaintMaterial(undefined, undefined, resolveContextFn), resolveContextFn);
+  
+  // 传参时把 teamColor/colorVal 传给 createCarPaintMaterial 的第 1 个参数
+  applyVehicleMaterials(
+    hwClone, 
+    createCarPaintMaterial(colorVal, undefined, realResolveContext), 
+    realResolveContext
+  );
   return hwClone;
 }
 
@@ -1631,7 +1650,7 @@ export function updateSuspensionUnitSpring(susUnit, knuckleY, resolveContextFn =
 /**
  * Creates vehicle offroad wheel procedural mesh with rims and tire tread.
  */
-export function createOffroadWheelMesh(radius, width, mats, resolveContextFn = resolveContext) {
+function createOffroadWheelMesh(radius, width, mats, resolveContextFn = resolveContext) {
   const { Group, LatheGeometry, CylinderGeometry, Vector2, Mesh } = resolveContextFn();
   const wheelGroup = new Group();
   wheelGroup.name = "offroad-wheel";
@@ -1661,7 +1680,7 @@ export function createOffroadWheelMesh(radius, width, mats, resolveContextFn = r
 /**
  * Creates vehicle suspension unit (spring coil, shock shaft, and damper body).
  */
-export function createSuspensionUnit(length, matSpring, matShaft, matBody, resolveContextFn = resolveContext) {
+function createSuspensionUnit(length, matSpring, matShaft, matBody, resolveContextFn = resolveContext) {
   const { Group, CylinderGeometry, Mesh } = resolveContextFn();
   const group = new Group();
   const spring = new Mesh(new CylinderGeometry(2.5, 2.5, length, 12), matSpring);
@@ -1680,7 +1699,7 @@ export function createSuspensionUnit(length, matSpring, matShaft, matBody, resol
 /**
  * Creates suspension knuckle hub.
  */
-export function createSuspensionKnuckle(innerZ, mat, resolveContextFn = resolveContext) {
+function createSuspensionKnuckle(innerZ, mat, resolveContextFn = resolveContext) {
   const { Group, CylinderGeometry, SphereGeometry, Mesh } = resolveContextFn();
   const group = new Group();
   group.name = "suspension-knuckle";
@@ -1698,7 +1717,7 @@ export function createSuspensionKnuckle(innerZ, mat, resolveContextFn = resolveC
 /**
  * Creates reaction control thruster jet nozzle and animated flame cone.
  */
-export function createReactionControlJet(pos, dirX, dirY, dirZ, resolveContextFn = resolveContext) {
+function createReactionControlJet(pos, dirX, dirY, dirZ, resolveContextFn = resolveContext) {
   const { Group } = resolveContextFn();
   const jetGroup = new Group();
   jetGroup.position.copy(pos);
@@ -1712,7 +1731,7 @@ export function createReactionControlJet(pos, dirX, dirY, dirZ, resolveContextFn
 /**
  * Connects vehicle reaction jets to vehicle gimbal state.
  */
-export function setupCarReactionJets(vehicleGimbals, resolveContextFn = resolveContext) {
+function setupCarReactionJets(vehicleGimbals, resolveContextFn = resolveContext) {
   if (!vehicleGimbals || !vehicleGimbals.jets) return null;
   const jets = vehicleGimbals.jets;
   const makeJet = (pos, dx, dy, dz) => {

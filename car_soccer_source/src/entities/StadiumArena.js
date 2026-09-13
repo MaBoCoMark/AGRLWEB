@@ -20,10 +20,10 @@
 
 import { resolveContext } from './ArenaWorld.js';
 
-export const ARENA_GOAL_DEPTH = 5120;
-export const ARENA_BOUNDARY_SPLIT_Y = 280;
-export const TEAM_BLUE_HEX = 2844350;
-export const TEAM_ORANGE_HEX = 16750126;
+const ARENA_GOAL_DEPTH = 5120;
+const ARENA_BOUNDARY_SPLIT_Y = 280;
+const TEAM_BLUE_HEX = 2844350;
+const TEAM_ORANGE_HEX = 16750126;
 
 const STADIUM_PALETTE = {
   Basalt: 2436921,
@@ -542,7 +542,3 @@ export async function loadStadiumContinuousBoundary(resolveContextFn = resolveCo
   return boundaryGroup;
 }
 
-export {
-  loadStadiumContinuousBoundary as WS,
-  loadStadiumArchitecture as JS
-};
