@@ -322,7 +322,21 @@ import {
   nS,
   tS,
   BoostPadSystem,
-  setBoostPadThreeContext
+  setBoostPadThreeContext,
+  SpeedTrail,
+  setSpeedTrailThreeContext,
+  pS,
+  fS,
+  createGeodesicSoccerBallGeometry,
+  createClassicSoccerBall,
+  loadRealisticBallModel,
+  loadBallAsset,
+  setBallVisualThreeContext,
+  rS,
+  iS,
+  sS,
+  aS,
+  wp
 } from "../entities/index.js";
 
 var xg = Object.defineProperty;
@@ -18298,6 +18312,38 @@ setBoostPadThreeContext({
   MeshBasicMaterial: cn,
   MeshStandardMaterial: lt
 });
+setSpeedTrailThreeContext({
+  Group: dt,
+  BufferGeometry: Ct,
+  BufferAttribute: zt,
+  ShaderMaterial: Lt,
+  Mesh: Ee,
+  Sprite: Pm,
+  SpriteMaterial: yd,
+  CanvasTexture: bd,
+  Vector3: F,
+  Color: Ne,
+  MathUtils: Gt,
+  DynamicDrawUsage: qa,
+  AdditiveBlending: li,
+  DoubleSide: Ut,
+  NormalBlending: Gr,
+  SRGBColorSpace: Ht
+});
+setBallVisualThreeContext({
+  Group: dt,
+  Mesh: Ee,
+  BufferGeometry: Ct,
+  BufferAttribute: Ke,
+  IcosahedronGeometry: Td,
+  MeshStandardMaterial: lt,
+  Vector2: Ae,
+  Vector3: F,
+  Color: Ne,
+  GLTFLoader: ho,
+  TextureLoader: Ao,
+  SRGBColorSpace: Ht
+});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -21670,254 +21716,8 @@ class K1{
 
 }
 // --- Phase 7 Part 3 Deobfuscation: DemolitionEffect (nS) extracted to src/entities/DemolitionEffect.js ---
-const wp = 95;
-function rS(patternColor = null){
-  const i = new Td(1,0),e = i.getAttribute("position"),t = [],n = new Map,r = [];
-  for(let m = 0;m < e.count;m+=3){
-    const y = [];
-    for(let C = 0;C < 3;C++){
-      const E = new F().fromBufferAttribute(e,m + C),w = E.toArray().map(S=>S.toFixed(6)).join(",");
-      n.has(w) || (n.set(w,t.length),t.push(E)),y.push(n.get(w))
-    }
-    r.push(y)
-  }
-  i.dispose();
-  const s = (m,y)=>t[m].clone().lerp(t[y],1 / 3).normalize(),a = t.map(()=>new Set),o = [];
-  for(const[m,y,C]of r)a[m].add(y).add(C),a[y].add(m).add(C),a[C].add(m).add(y),o.push({
-    corners:[s(m,y),s(y,m),s(y,C),s(C,y),s(C,m),s(m,C)],black:!1
-  }
-  );
-  for(let m = 0;m < t.length;m++){
-    const y = t[m].clone().normalize(),E = (Math.abs(y.y) < .9?new F(0,1,0):new F(1,0,0)).cross(y).normalize(),w = y.clone().cross(E),S = [...a[m]].map(k=>s(m,k));
-    S.sort((k,x)=>Math.atan2(k.dot(w),k.dot(E)) - Math.atan2(x.dot(w),x.dot(E))),o.push({
-      corners:S,black:!0
-    }
-    )
-  }
-  const A = [],l = [],c = [],h = [],d = new Ne(16052713),u = patternColor != null ? new Ne(patternColor) : new Ne(1054498),p = new Ne(3423560),v = (m,y,C)=>{
-    const E = A.length / 3;
-    return A.push(m.x * y,m.y * y,m.z * y),l.push(m.x,m.y,m.z),c.push(C.r,C.g,C.b),E
-  }
-  ;
-  for(const{
-    corners:m,black:y
-  }
-  of o){
-    const C = m.reduce((x,T)=>x.add(T),new F).normalize(),E = y?u:d,w = v(C,wp,E),S = [];
-    for(let x = 0;x < m.length;x++)for(let T = 0;T < 3;T++)S.push(m[x].clone().lerp(m[(x + 1) % m.length],T / 3).normalize());
-    let k = null;
-    for(const x of[.3,.6,.85,.975,1]){
-      const T = x === 1,R = S.map(D=>v(C.clone().lerp(D,x).normalize(),wp - (T?.7:0),T?p:E));
-      for(let D = 0;D < R.length;D++){
-        const N = (D + 1) % R.length;
-        k?h.push(k[D],R[D],R[N],k[D],R[N],k[N]):h.push(w,R[D],R[N])
-      }
-      k = R
-    }
-
-  }
-  const g = new Ct;
-  return g.name = "Classic soccer ball / rounded panels",g.setAttribute("position",new Ke(A,3)),g.setAttribute("normal",new Ke(l,3)),g.setAttribute("color",new Ke(c,3)),g.setIndex(h),g.computeBoundingSphere(),g.computeBoundingBox(),g.userData.panels = {
-    pentagons:o.filter(m=>m.corners.length === 5).length,hexagons:o.filter(m=>m.corners.length === 6).length
-  }
-  ,g
-}
-function iS(patternColor = null){
-  const i = new Ee(rS(patternColor),Nr({
-    name:"Classic soccer ball / matte leather",vertexColors:!0
-  }
-  ));
-  i.name = "Classic soccer ball",i.castShadow = !0,i.receiveShadow = !0;
-  const e = new dt;
-  return e.name = "ball",e.add(i),e
-}
-let va = null;
-function sS(){
-  if(va)return va;
-  const i = new Ao;
-  return va = Promise.all([new ho().loadAsync("/assets/ball/ball.gltf"),i.loadAsync("/assets/ball/albedo.png"),i.loadAsync("/assets/ball/normal.png"),i.loadAsync("/assets/ball/material-mask.png")]).then(([e,t,n,r])=>{
-    for(const o of[t,n,r])o.flipY = !1,o.anisotropy = 8;t.colorSpace = Ht;const s = new lt({
-      name:"Realistic ball / metal panels and inset lamps",map:t,normalMap:n,normalScale:new Ae(1, - 1),roughness:.62,roughnessMap:r,metalness:.55,metalnessMap:r,emissive:6473671,emissiveIntensity:.78
-    }
-    );s.onBeforeCompile = o=>{
-      o.uniforms.ballMaterialMask = {
-        value:r
-      }
-      ,o.fragmentShader = o.fragmentShader.replace("uniform vec3 diffuse;",`uniform vec3 diffuse;
-uniform sampler2D ballMaterialMask;`).replace("#include <emissivemap_fragment>","totalEmissiveRadiance *= texture2D(ballMaterialMask, vMapUv).rrr;")
-    }
-    ,s.customProgramCacheKey = ()=>"car-soccer-ball";const a = new dt;return a.name = "Realistic ball",a.add(e.scene),a.scale.setScalar(100),a.traverse(o=>{
-      o instanceof Ee && (o.material = s,o.castShadow = !0,o.receiveShadow = !0)
-    }
-    ),a
-  }
-  ).catch(e=>{
-    throw va = null,e
-  }
-  ),va
-}
-async function aS(){
-  const i = iS();
-  i.add((await sS()).clone(!0));
-  const e = new WeakRef(i);
-  return uo(t=>{
-    const n = e.deref();n && (n.children[0].visible = t === "arcade",n.children[1].visible = t === "realistic")
-  }
-  ),i
-}
-const Mp = 2e3,oS = 3,AS = 4,lS = 15,Bp = 1,cS = 64,hS = .2,zh = 60,Es = zh + 1,dS = 1024,Cc = .25,uS = 256;
-function fS(){
-  const i = document.createElement("canvas");
-  i.width = i.height = 64;
-  const e = i.getContext("2d"),t = e.createRadialGradient(32,32,0,32,32,32);
-  t.addColorStop(0,"rgba(255,255,255,1)"),t.addColorStop(.28,"rgba(220,239,255,0.82)"),t.addColorStop(.7,"rgba(139,190,255,0.18)"),t.addColorStop(1,"rgba(100,160,255,0)"),e.fillStyle = t,e.fillRect(0,0,64,64);
-  const n = new bd(i);
-  return n.colorSpace = Ht,n
-}
-class pS{
-  constructor(){
-    _(this,"object",new dt);
-    _(this,"geometry",new Ct);
-    _(this,"material");
-    _(this,"ribbon");
-    _(this,"activationGlow");
-    _(this,"points",[]);
-    _(this,"pointPool",Array.from({
-      length:zh
-    }
-    ,()=>({
-      position:new F,age:0
-    }
-    )));
-    _(this,"positions",new Float32Array(Es * 2 * 3));
-    _(this,"across",new Float32Array(Es * 2));
-    _(this,"lifeAlpha",new Float32Array(Es * 2));
-    _(this,"indices",new Uint16Array((Es - 1) * 6));
-    _(this,"positionAttribute",new zt(this.positions,3));
-    _(this,"lifeAlphaAttribute",new zt(this.lifeAlpha,1));
-    _(this,"sourcePosition",new F);
-    _(this,"previousSourcePosition",new F);
-    _(this,"cameraPosition",new F);
-    _(this,"tangent",new F);
-    _(this,"viewDirection",new F);
-    _(this,"side",new F);
-    _(this,"fallbackAxis",new F(0,1,0));
-    _(this,"hasSourcePosition",!1);
-    _(this,"emissionClock",0);
-    _(this,"opacity",0);
-    _(this,"hasSpawnedStartupGlow",!1);
-    _(this,"activationGlowAge",Cc);
-    _(this,"timeDilation",1);
-    _(this,"geometryDirty",!0);
-    this.object.name = "ball-speed-trail",this.material = new Lt({
-      transparent:!0,depthWrite:!1,side:Ut,blending:Gr,uniforms:{
-        uOpacity:{
-          value:0
-        }
-        ,uColor:{
-          value:new Ne(15398399)
-        }
-
-      }
-      ,vertexShader:`
-        attribute float aAcross;
-        attribute float aLifeAlpha;
-        varying float vAcross;
-        varying float vLifeAlpha;
-        void main() {
-          vAcross = aAcross;
-          vLifeAlpha = aLifeAlpha;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,fragmentShader:`
-        uniform float uOpacity;
-        uniform vec3 uColor;
-        varying float vAcross;
-        varying float vLifeAlpha;
-        void main() {
-          // The recovered 64uu Size.X is the ribbon envelope, not a 64uu
-          // opaque band. Preserve that geometry while matching the material's
-          // much narrower cross-ribbon luminous profile.
-          float crossSection = 1.0 - smoothstep(0.0, 0.32, abs(vAcross));
-          float alpha = uOpacity * vLifeAlpha * crossSection;
-          if (alpha < 0.003) discard;
-          gl_FragColor = vec4(uColor, alpha);
-        }
-      `
-    }
-    ),this.material.toneMapped = !0;
-    for(let t = 0;t < Es;t+=1)this.across[t * 2] = - 1,this.across[t * 2 + 1] = 1;
-    for(let t = 0;t < Es - 1;t+=1){
-      const n = t * 6,r = t * 2;
-      this.indices[n] = r,this.indices[n + 1] = r + 2,this.indices[n + 2] = r + 1,this.indices[n + 3] = r + 1,this.indices[n + 4] = r + 2,this.indices[n + 5] = r + 3
-    }
-    this.positionAttribute.setUsage(qa),this.lifeAlphaAttribute.setUsage(qa),this.geometry.setAttribute("position",this.positionAttribute),this.geometry.setAttribute("aAcross",new zt(this.across,1)),this.geometry.setAttribute("aLifeAlpha",this.lifeAlphaAttribute),this.geometry.setIndex(new zt(this.indices,1)),this.geometry.setDrawRange(0,0),this.ribbon = new Ee(this.geometry,this.material),this.ribbon.name = "SpeedTrail_PS-ribbon",this.ribbon.frustumCulled = !1,this.ribbon.renderOrder = 1;
-    const e = new yd({
-      map:fS(),color:15332863,transparent:!0,opacity:0,blending:li,depthWrite:!1,toneMapped:!0
-    }
-    );
-    this.activationGlow = new Pm(e),this.activationGlow.name = "SpeedTrail_PS-activation-glow",this.activationGlow.scale.setScalar(uS),this.activationGlow.visible = !1,this.activationGlow.renderOrder = 2,this.object.add(this.ribbon,this.activationGlow)
-  }
-  reset(){
-    for(;this.points.length;)this.pointPool.push(this.points.pop());
-    this.emissionClock = 0,this.hasSourcePosition = !1,this.opacity = 0,this.geometry.setDrawRange(0,0),this.geometryDirty = !0
-  }
-  update(e,t,n){
-    const r = Math.max(0,Math.min(n,.1)),s = t.length(),a = s >= Mp;
-    this.timeDilation = Gt.clamp(s / Mp,1,AS);
-    const o = a?1:0;
-    if(this.opacity+=(o - this.opacity) * Math.min(1,r * oS),Math.abs(this.opacity - o) < 5e-4 && (this.opacity = o),this.material.uniforms.uOpacity.value = this.opacity * hS,this.hasSourcePosition || (this.sourcePosition.copy(e),this.previousSourcePosition.copy(e),this.hasSourcePosition = !0),e.distanceTo(this.previousSourcePosition) > dS){
-      for(;this.points.length > 0;)this.pointPool.push(this.points.pop());
-      this.emissionClock = 0,this.previousSourcePosition.copy(e)
-    }
-    const l = r * this.timeDilation;
-    for(let c = 0;c < this.points.length;c+=1)this.points[c].age+=l;
-    for(;this.points.length && this.points[this.points.length - 1].age >= Bp;)this.pointPool.push(this.points.pop());
-    if(a){
-      this.emissionClock+=l;
-      const c = 1 / lS;
-      for(;this.emissionClock >= c;){
-        this.emissionClock-=c;
-        const h = this.emissionClock / this.timeDilation,d = r > 0?Gt.clamp(1 - h / r,0,1):1,u = this.points.length >= zh?this.points.pop():this.pointPool.pop();
-        u.position.lerpVectors(this.previousSourcePosition,e,d),u.age = this.emissionClock,this.points.unshift(u)
-      }
-
-    }
-    if(this.sourcePosition.copy(e),this.previousSourcePosition.copy(e),this.hasSpawnedStartupGlow || (this.hasSpawnedStartupGlow = !0,this.activationGlowAge = 0,this.activationGlow.position.copy(e),this.activationGlow.visible = !0),this.activationGlowAge < Cc){
-      this.activationGlowAge+=l;
-      const c = Gt.clamp(this.activationGlowAge / Cc,0,1);
-      this.activationGlow.material.opacity = (1 - c) * (1 - c),this.activationGlow.visible = c < 1
-    }
-    else this.activationGlow.visible = !1;
-    this.ribbon.visible = this.opacity > .002 && this.points.length > 0,this.geometryDirty = !0
-  }
-  prepare(e){
-    this.rebuildGeometry(e)
-  }
-  rebuildGeometry(e){
-    if(!this.geometryDirty || !this.ribbon.visible)return;
-    this.geometryDirty = !1;
-    const t = this.points.length + 1;
-    if(t < 2){
-      this.geometry.setDrawRange(0,0);
-      return
-    }
-    e.getWorldPosition(this.cameraPosition);
-    const n = cS * .5;
-    for(let r = 0;r < t;r+=1){
-      const s = r === 0?null:this.points[r - 1],a = (s == null?void 0:s.position) ?? this.sourcePosition,o = Math.max(0,r - 1),A = Math.min(t - 1,r + 1),l = o === 0?this.sourcePosition:this.points[o - 1].position,c = A === 0?this.sourcePosition:this.points[A - 1].position;
-      this.tangent.subVectors(c,l).normalize(),this.viewDirection.subVectors(this.cameraPosition,a).normalize(),this.side.crossVectors(this.tangent,this.viewDirection),this.side.lengthSq() < 1e-6 && (this.side.crossVectors(this.tangent,this.fallbackAxis),this.side.lengthSq() < 1e-6 && this.side.set(1,0,0)),this.side.normalize().multiplyScalar(n);
-      const h = Math.pow(1 - Gt.clamp(((s == null?void 0:s.age) ?? 0) / Bp,0,1),1.35);
-      for(let d = 0;d < 2;d+=1){
-        const u = r * 2 + d,p = d === 0? - 1:1;
-        this.positions[u * 3] = a.x + this.side.x * p,this.positions[u * 3 + 1] = a.y + this.side.y * p,this.positions[u * 3 + 2] = a.z + this.side.z * p,this.lifeAlpha[u] = h
-      }
-
-    }
-    this.positionAttribute.needsUpdate = !0,this.lifeAlphaAttribute.needsUpdate = !0,this.geometry.setDrawRange(0,(t - 1) * 6)
-  }
-
-}
+// --- Phase 7 Part 3 Deobfuscation: BallVisual (rS, iS, sS, aS) extracted to src/entities/BallVisual.js ---
+// --- Phase 7 Part 3 Deobfuscation: SpeedTrail (pS, fS) extracted to src/entities/SpeedTrail.js ---
 // --- Phase 7 Part 3 Deobfuscation: BallLocatorArrow (bS) extracted to src/entities/BallLocatorArrow.js ---
 const SS = 120.507,wS = 86.6994,MS = 38.6591,BS = 13.8757,kS = 20.755,TS = {
   length:SS,width:wS,height:MS,forward:BS,up:kS
@@ -22488,6 +22288,7 @@ class ow{
     _(this,"cars",[]);
     _(this,"carVisuals",[]);
     _(this,"pads",[]);
+    _(this,"boostPadSystem",new BoostPadSystem);
     _(this,"carHitboxes",[]);
     _(this,"carHitboxesVisible",!1);
     _(this,"padTemplates",null);
@@ -22739,32 +22540,9 @@ class ow{
     this.ballSpeedTrail.prepare(e)
   }
   addPads(e){
-    OS(this.turf,e);
-    for(const t of e){
-      let n,r;
-      if(this.padTemplates)n = (t.isBig?this.padTemplates.bigFull:this.padTemplates.smallFull).clone(),r = (t.isBig?this.padTemplates.bigBase:this.padTemplates.smallBase).clone();
-      else{
-        const a = t.isBig?30:15;
-        n = new Ee(new Xt(t.isBig?80:40,t.isBig?80:40,a,12),vn(Nr({
-          color:16750126,emissive:5579776
-        }
-        ),new lt({
-          color:16750126,emissive:5579776,roughness:.55,metalness:.25
-        }
-        ))),n.position.y = a / 2,r = new Ee(new Xt(t.isBig?80:40,t.isBig?80:40,4,12),vn(Nr({
-          color:2111056
-        }
-        ),new lt({
-          color:2111056,roughness:.5,metalness:.5
-        }
-        ))),r.position.y = 2
-      }
-      const s = new dt;
-      s.position.set(t.pos[0],0,t.pos[1]),s.add(n,r),Ji(s),r.visible = !1,this.pads.push({
-        full:n,base:r
-      }
-      ),this.scene.add(s)
-    }
+    OS(this.turf, e);
+    this.boostPadSystem.addPads(e, this.padTemplates, this.scene, s => { Ji(s); });
+    this.pads = this.boostPadSystem.pads;
     this.markRenderTreeChanged()
   }
   update(e,t,n,r = 0,s = 0,a,o,A = !0){
@@ -22823,10 +22601,7 @@ class ow{
 
     }
     this.opponentSun && (this.opponentSun.visible = t[ht.NUM_CARS] > 1,this.carSun.intensity = this.ballSun.intensity = this.opponentSun.visible?2 / 3:1,this.opponentSun.intensity = 2 / 3),this.updateSubjectShadows();
-    for(let u = 0;u < this.pads.length;u++){
-      const p = t[ro + u * 2] === 1;
-      this.pads[u].full.visible = p,this.pads[u].base.visible = !p
-    }
+    this.boostPadSystem.update(t, ro);
     this.updateBoostVisuals(t,s,r,(o == null?void 0:o.throttle) ?? 0,A)
   }
   setJet(e,t,n = 1){

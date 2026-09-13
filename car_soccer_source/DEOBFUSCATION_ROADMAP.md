@@ -94,7 +94,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ✅ **已完成** *(阶段六 Part 1)* | 键位映射、手柄配置、图像与音效配置弹窗 |
 | **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ✅ **已完成** *(阶段七 Part 1)* | 32位 RocketSim 视图内核同步、跟随相机、Ball Cam 球心锁定、动态 FOV、多平台 Swivel 视角偏移 |
 | **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `class Yw` | `src/effects/index.js`<br>`src/effects/BoostBloom.js`<br>`src/effects/FlipResetVisual.js`<br>`src/effects/SupersonicSpeedLinesPass.js` | ✅ **已完成** *(阶段七 Part 2)* | BoostBloom 渐进辉光、FlipResetVisual 翻滚重置环/粒子、SupersonicSpeedLinesPass 超音速全屏流线 |
-| **16** | **三维球场与视觉实体**| `class ow`, `class bS`, `class nS`, `BoostPadSystem` | `src/entities/BallLocatorArrow.js`<br>`src/entities/DemolitionEffect.js`<br>`src/entities/BoostPadSystem.js` | 🔄 **进行中 (Step 1 落地)** | 球心指示箭头、车辆自毁粒子烟雾、34 颗喷气补给垫系统与状态轮询 |
+| **16** | **三维球场与视觉实体**| `class ow`, `class bS`, `class nS`, `class pS`, `BallVisual`, `BoostPadSystem` | `src/entities/BallLocatorArrow.js`<br>`src/entities/DemolitionEffect.js`<br>`src/entities/BoostPadSystem.js`<br>`src/entities/SpeedTrail.js`<br>`src/entities/BallVisual.js` | 🔄 **进行中 (Step 1 & 2 落地)** | 3D箭头、自毁烟雾、34颗补给垫、超速动态拖尾带、经典二十面体/拟真双模足球 |
 | **17** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
@@ -256,9 +256,17 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 3. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
    - 引入三维上下文注入接口（`setBallLocatorThreeContext`, `setDemolitionThreeContext`, `setBoostPadThreeContext`）。
    - 移除内联约 300 行混淆类与着色器，`node --check` 语法校验通过。
-4. 下一步拆分计划（⏳ Step 2）：
-   - 拆分 `SpeedTrail`（原 `pS`，足球超速拖尾粒子带）。
-   - 拆分 `ArenaWorld`（原 `ow`，球场主场景与赛车悬挂动画）。
+2. 模块化抽取超速拖尾带与足球实体至 `src/entities/`（✅ Step 2 已落地）：
+   - `src/entities/SpeedTrail.js`（原 `pS` 与 `fS`）：超高速（>= 2000 uu/s）运动时的发光粒子带，动态实时计算面向相机的三角带几何体（Billboard 侧向量解算）、速度时间膨胀（`timeDilation`）、生命周期透明度衰减与启动发光光晕（`activationGlow`）。
+   - `src/entities/BallVisual.js`（原 `rS`, `iS`, `sS`, `aS`）：经典二十面体截角足球（12 个正五边形 + 20 个正六边形圆角缝线面板、逐顶点着色）与拟真 GLTF PBR 贴图金属球体，通过 `ThemeManager` 无缝双向切换。
+   - `src/entities/index.js`：收敛全部实体导出与兼容符号。
+3. 单元测试验收 `tests/entities_subsystem.test.js`：
+   - 测试套件扩充至 6 项测试用例，覆盖箭头、烟雾、补给垫、超速光带几何体重构、几何截角足球 12/20 面板拓扑检验，100% 验收通过（全量 9 大测试套件共 29 项测试全部通过）。
+4. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
+   - 引入三维上下文注入接口（`setSpeedTrailThreeContext`, `setBallVisualThreeContext`）。
+   - 移除内联混淆类与着色器约 280 余行代码，`node --check` 语法校验通过。
+5. 下一步拆分计划（⏳ Step 3）：
+   - 拆分 `ArenaWorld`（原 `ow`，球场主场景、球门边界、环境光照与赛车底盘悬挂动画）。
 
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

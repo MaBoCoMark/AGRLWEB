@@ -29,6 +29,23 @@ import {
   BOOST_PAD_BIG_RADIUS,
   BOOST_PAD_SMALL_RADIUS
 } from '../src/entities/BoostPadSystem.js';
+import {
+  SpeedTrail,
+  pS,
+  createSpeedTrailGlowTexture,
+  SPEED_TRAIL_THRESHOLD_SPEED,
+  SPEED_TRAIL_MAX_OPACITY,
+  SPEED_TRAIL_MAX_POINTS,
+  SPEED_TRAIL_RIBBON_WIDTH
+} from '../src/entities/SpeedTrail.js';
+import {
+  createGeodesicSoccerBallGeometry,
+  createClassicSoccerBall,
+  loadBallAsset,
+  rS,
+  iS,
+  CLASSIC_BALL_RADIUS
+} from '../src/entities/BallVisual.js';
 
 test('1. BallLocatorArrow constants, aliases, and geometry creation', () => {
   assert.equal(BALL_LOCATOR_MIN_DISTANCE, 100);
@@ -164,4 +181,76 @@ test('4. BoostPadSystem fallback meshes, template cloning, and state polling', (
 
   assert.equal(padSystem.pads[2].full.visible, true);
   assert.equal(padSystem.pads[2].base.visible, false);
+});
+
+test('5. SpeedTrail ribbon dynamics, supersonic emission, and camera orientation rebuild', () => {
+  assert.equal(SPEED_TRAIL_THRESHOLD_SPEED, 2000);
+  assert.equal(SPEED_TRAIL_MAX_OPACITY, 0.2);
+  assert.equal(SPEED_TRAIL_MAX_POINTS, 60);
+  assert.equal(SPEED_TRAIL_RIBBON_WIDTH, 64);
+  assert.equal(pS, SpeedTrail);
+
+  const trail = new SpeedTrail();
+  assert.equal(trail.object.name, 'ball-speed-trail');
+  assert.equal(trail.ribbon.visible, false);
+
+  const sourcePos = {
+    x: 0, y: 100, z: 0,
+    copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; },
+    distanceTo(v) { return Math.hypot(this.x - v.x, this.y - v.y, this.z - v.z); }
+  };
+  const lowVelocity = { length: () => 500 };
+  const supersonicVelocity = { length: () => 2300 };
+
+  // Subsonic update: should not emit trail points
+  trail.update(sourcePos, lowVelocity, 0.016);
+  assert.equal(trail.points.length, 0);
+  assert.equal(trail.ribbon.visible, false);
+
+  // Supersonic updates: should emit trail points
+  for (let i = 0; i < 10; i++) {
+    sourcePos.x += 40;
+    trail.update(sourcePos, supersonicVelocity, 0.02);
+  }
+  assert.ok(trail.points.length > 0, 'Should have emitted trail points');
+  assert.equal(trail.ribbon.visible, true);
+
+  // Prepare camera facing geometry
+  const mockCamera = {
+    getWorldPosition(target) {
+      target.x = 0; target.y = 200; target.z = 500;
+    }
+  };
+  trail.prepare(mockCamera);
+  assert.ok(trail.geometry.drawRange.count > 0, 'Draw range should be non-zero after rebuild');
+
+  // Reset clears all active points
+  trail.reset();
+  assert.equal(trail.points.length, 0);
+  assert.equal(trail.geometry.drawRange.count, 0);
+});
+
+test('6. BallVisual classic procedural ball and composite asset creation', async () => {
+  assert.equal(CLASSIC_BALL_RADIUS, 95);
+  assert.equal(rS, createGeodesicSoccerBallGeometry);
+  assert.equal(iS, createClassicSoccerBall);
+
+  const geo = createGeodesicSoccerBallGeometry();
+  assert.equal(geo.name, 'Classic soccer ball / rounded panels');
+  assert.ok(geo.attributes.position);
+  assert.ok(geo.attributes.normal);
+  assert.ok(geo.attributes.color);
+  assert.ok(geo.userData.panels);
+  assert.equal(geo.userData.panels.pentagons, 12, 'Geodesic soccer ball has 12 pentagons');
+  assert.equal(geo.userData.panels.hexagons, 20, 'Geodesic soccer ball has 20 hexagons');
+
+  const ballMeshGroup = createClassicSoccerBall();
+  assert.equal(ballMeshGroup.name, 'ball');
+  assert.equal(ballMeshGroup.children.length, 1);
+  assert.equal(ballMeshGroup.children[0].name, 'Classic soccer ball');
+
+  // Test composite ball asset loader
+  const compositeBall = await loadBallAsset();
+  assert.ok(compositeBall);
+  assert.equal(compositeBall.children[0].name, 'Classic soccer ball');
 });
