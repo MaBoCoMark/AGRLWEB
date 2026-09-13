@@ -22473,53 +22473,86 @@ function setEngineVolume(i){
 function setBoostVolume(i){
   Number.isFinite(i) && (En.settings.boostVolume = Math.min(1,Math.max(0,i)),bA.save(En.settings),window.dispatchEvent(new Event(Xd)))
 }
-class BoostCollectAudioPlayer {
+class GameAudioManager {
   constructor() {
-    this.buffer = null;
-    this.loaded = false;
-    this.warned = false;
+    this.buffers = new Map();
+    this.soundDefs = {
+      boost_collect: "/custom/assets/audio/boost_collect.wav",
+      match_30_seconds_left: "/custom/assets/audio/match_30_seconds_left.wav",
+      match_countdown_321: "/custom/assets/audio/match_countdown_321.wav",
+      match_entering_overtime: "/custom/assets/audio/match_entering_overtime.wav",
+      match_start_go: "/custom/assets/audio/match_start_go.wav",
+      sfx_ball_hit: "/custom/assets/audio/sfx_ball_hit.wav",
+      sfx_car_collision: "/custom/assets/audio/sfx_car_collision.wav",
+      sfx_error_no_boost: "/custom/assets/audio/sfx_error_no_boost.wav",
+      sfx_goal_poof: "/custom/assets/audio/sfx_goal_poof.wav",
+      sfx_state_supersonic: "/custom/assets/audio/sfx_state_supersonic.wav"
+    };
+    this.lastPlayTime = new Map();
   }
-  async load() {
-    if (this.loaded || this.warned) return;
+
+  async loadAll() {
+    for (const [key, url] of Object.entries(this.soundDefs)) {
+      this.loadSound(key, url);
+    }
+  }
+
+  async loadSound(key, url) {
     try {
-      let res = await fetch("/custom/assets/audio/boost_collect.wav");
-      if (!res.ok) {
-        res = await fetch("/custom/assets/audio/boost_collect.ogg");
-      }
-      if (!res.ok) {
-        this.warned = true;
-        console.warn("[Boost Audio] Asset does not exist: boost_collect audio. Continuing without collect audio.");
-        return;
-      }
+      const res = await fetch(url);
+      if (!res.ok) return;
       const ctx = qr();
       const data = await res.arrayBuffer();
-      this.buffer = await ctx.decodeAudioData(data);
-      this.loaded = true;
+      const buf = await ctx.decodeAudioData(data);
+      this.buffers.set(key, buf);
     } catch (e) {
-      this.warned = true;
-      console.warn("[Boost Audio] Asset decode failed: boost_collect audio. Continuing without collect audio.", (e && e.message) || e);
+      console.warn("[GameAudio] Failed to load " + key + ":", (e && e.message) || e);
     }
   }
-  play() {
-    if (!this.loaded || !this.buffer) {
-      if (!this.warned) this.load();
+
+  play(key, volMult = 1.0, minInterval = 0) {
+    const now = performance.now();
+    if (minInterval > 0) {
+      const last = this.lastPlayTime.get(key) || 0;
+      if (now - last < minInterval) return;
+    }
+    this.lastPlayTime.set(key, now);
+
+    const buf = this.buffers.get(key);
+    if (!buf) {
+      if (this.soundDefs[key] && !this.buffers.has(key)) {
+        this.loadSound(key, this.soundDefs[key]);
+      }
       return;
     }
+
     try {
       const ctx = qr();
+      if (!ctx || ctx.state === "suspended") return;
       const src = ctx.createBufferSource();
-      src.buffer = this.buffer;
+      src.buffer = buf;
       const gain = ctx.createGain();
-      const vol = (En.settings.boostVolume ?? 0.8) * (En.settings.masterVolume ?? 1.0);
-      gain.gain.setValueAtTime(Math.max(0, Math.min(1, vol)), ctx.currentTime);
+      const master = (En.settings.masterVolume ?? 1.0);
+      const fxVol = (En.settings.boostVolume ?? 0.8);
+      const finalVol = Math.max(0, Math.min(1, volMult * master * fxVol));
+      gain.gain.setValueAtTime(finalVol, ctx.currentTime);
       src.connect(gain);
       gain.connect($r());
       src.start();
     } catch (e) {}
   }
 }
-const boostCollectAudio = new BoostCollectAudioPlayer();
-boostCollectAudio.load();
+const gameAudio = new GameAudioManager();
+gameAudio.loadAll();
+const boostCollectAudio = {
+  play: () => gameAudio.play("boost_collect", 1.0, 100),
+  load: () => gameAudio.loadAll()
+};
+let __audioLastPhase = "playing";
+let __audioLastOvertime = false;
+let __audioLastRemainingSec = 300;
+let __audioLastSupersonic = false;
+let __audioLastNoBoostPlay = 0;
 const fp = 250,g1 = 4500,v1 = .4;
 function j1(i){
   if(!Number.isFinite(i))return 0;
@@ -24587,8 +24620,8 @@ class ow{
     const e = await aS();
     Dp(e,this.ballSun.shadow.camera),this.ball.add(e),this.markRenderTreeChanged()
   }
-  updateBallLocatorArrow(e,t = 0,targetBall = this.ball){
-    this.ballLocatorArrow.update(this.cars[t],targetBall || this.ball,e)
+  updateBallLocatorArrow(e,t = 0,targetBall = this.ball,targetCar = null){
+    this.ballLocatorArrow.update(targetCar || this.cars[t] || this.cars[0],targetBall || this.ball,e)
   }
   async loadCarAndPadAssets(){
     [this.gameCarAsset,this.flatCarAsset] = await Promise.all([Uh(),Y0()]);this.realisticCarAsset = null;
@@ -29260,10 +29293,14 @@ const parallelManager = new ParallelTrainingManager({
     s.currState.set(targetCurr);
     s.sync();
     N.applyPhys(N.ball, s.prevState, s.currState, ht.BALL, 0);
-    N.applyPhys(N.cars[r], s.prevState, s.currState, ht.CARS, 0);
-    H.update(N.cars[r], N.ball, 0, be);
+    const isParallelActive = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive);
+    const activeCar = isParallelActive ? parallelManager.getActiveArenaCarIndex() : r;
+    const activeCarMesh = (isParallelActive && parallelManager.getActiveCarMesh) ? parallelManager.getActiveCarMesh() : N.cars[r];
+    if (activeCarMesh) {
+      H.update(activeCarMesh, N.ball, 0, be);
+    }
     if (typeof Y !== "undefined" && Y) {
-      Y.previousResetSerial = targetCurr[ht.CARS + ye.FLIP_RESET_SERIAL];
+      Y.previousResetSerial = targetCurr[ht.CARS + activeCar * ln + ye.FLIP_RESET_SERIAL];
       Y.stopVisual();
     }
     if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
@@ -29580,7 +29617,9 @@ function wt(W){
   ), pe.update(a.state), an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode, D.setMatchActive(a.state.mode === "match"), pBtn && (pBtn.style.display = a.state.mode === "match" ? "none" : "")), He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
-  const activeCar = r;
+  const isParallelActive = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive);
+  const activeCar = isParallelActive ? parallelManager.getActiveArenaCarIndex() : r;
+  const activeCarMesh = (isParallelActive && parallelManager.getActiveCarMesh) ? parallelManager.getActiveCarMesh() : N.cars[r];
   const Nt = ht.CARS + activeCar * ln;
   Y.update(fe,s.currState[Nt + ye.FLIP_RESET_SERIAL],s.currState[Nt + ye.DEMOED] !== 1),g.update({
     jumpSerial:s.currState[Nt + ye.JUMP_SERIAL],dodgeSerial:s.currState[Nt + ye.DODGE_SERIAL],doubleJumpSerial:s.currState[Nt + ye.DOUBLE_JUMP_SERIAL],wheelImpactSerial:s.currState[Nt + ye.WHEEL_IMPACT_SERIAL],wheelImpactSpeed:s.currState[Nt + ye.WHEEL_IMPACT_SPEED],audible:s.currState[Nt + ye.DEMOED] !== 1
@@ -29593,13 +29632,13 @@ function wt(W){
   ),y[0] = Rn,y[1] = zn,He.mark();
   const on = ht.CARS + activeCar * ln,Mt = s.currState;
   be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]);
-  H.update(N.cars[r], N.ball, fe, be);
-  N.updateBallLocatorArrow(H.ballCam, r, N.ball);
+  H.update(activeCarMesh, N.ball, fe, be);
+  N.updateBallLocatorArrow(H.ballCam, activeCar, N.ball, activeCarMesh);
   He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
   for(let bn = 0;bn < E.length;bn++){
     const B = ht.CARS + bn * ln,pi = bn === activeCar?ke:l,In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
     E[bn].update({
-      forwardSpeed:Ys,throttle:pi.throttle,handbrake:pi.handbrake,boosting:In && Mt[B + ye.IS_BOOSTING] === 1,onGround:In && Mt[B + ye.ON_GROUND] === 1,alive:In && Mt[B + ye.DEMOED] !== 1,audible:x.enabled && Ft,controllerActive:R.active() || D.active(),position:(ar = N.cars[bn]) == null?void 0:ar.position
+      forwardSpeed:Ys,throttle:pi.throttle,handbrake:pi.handbrake,boosting:In && Mt[B + ye.IS_BOOSTING] === 1,onGround:In && Mt[B + ye.ON_GROUND] === 1,alive:In && Mt[B + ye.DEMOED] !== 1,audible:x.enabled && Ft,controllerActive:R.active() || D.active(),position:(bn === activeCar && activeCarMesh ? activeCarMesh.position : ((ar = N.cars[bn]) == null?void 0:ar.position))
     }
     ,fe)
   }
@@ -29610,7 +29649,11 @@ function wt(W){
     const activeCarObjects = [];
     for (let ci = 0; ci < numActiveCars; ci++) {
       allCarHitSerials.push(Mt[ht.CARS + ci * ln + ye.BALL_HIT_SERIAL]);
-      if (N.cars[ci]) activeCarObjects.push(N.cars[ci]);
+      if (ci === activeCar && activeCarMesh) {
+        activeCarObjects.push(activeCarMesh);
+      } else if (N.cars[ci]) {
+        activeCarObjects.push(N.cars[ci]);
+      }
     }
     trajectoryPredictor.update({
       active: a.state.mode === "freeplay" || a.state.mode === "match",
@@ -29627,7 +29670,7 @@ function wt(W){
   }
   const nn = ht.CARS + activeCar * ln,ir = s.currState[nn + ye.SUPERSONIC] === 1 && s.currState[nn + ye.DEMOED] !== 1;
   Te.set(s.currState[nn + ye.VEL],s.currState[nn + ye.VEL + 2],s.currState[nn + ye.VEL + 1]),S.update(fe,ir && x.enabled && Ft,Te,H.camera),C.update(ir,R.active(),x.enabled && Ft);
-  const activeCarPos = ht.CARS + r * ln;
+  const activeCarPos = ht.CARS + activeCar * ln;
   Te.set(s.currState[activeCarPos + ye.VEL],s.currState[activeCarPos + ye.VEL + 2],s.currState[activeCarPos + ye.VEL + 1]);
   if (typeof speedometerHUD !== "undefined" && speedometerHUD) {
     speedometerHUD.update(Te.length());
@@ -29640,7 +29683,85 @@ function wt(W){
     }
   }
   window.__lastBoostAmount = curBoost;
-  Be.update(curBoost,s.currState[activeCarPos + ye.IS_BOOSTING] === 1,a.state.mode === "freeplay" && V.boostOption === "unlimited"),He.mark();
+  Be.update(curBoost,s.currState[activeCarPos + ye.IS_BOOSTING] === 1,a.state.mode === "freeplay" && V.boostOption === "unlimited");
+
+  // --- Game Audio Triggers ---
+  if (typeof gameAudio !== "undefined" && gameAudio) {
+    // 1. Goal scored poof SFX
+    if (goalScored) {
+      gameAudio.play("sfx_goal_poof", 1.0, 1000);
+    }
+    // 2. Match 30 seconds left SFX
+    if (a.state.mode === "match" && !a.state.overtime && a.state.phase === "playing") {
+      if (__audioLastRemainingSec > 30 && a.state.remainingSeconds <= 30 && a.state.remainingSeconds > 0) {
+        gameAudio.play("match_30_seconds_left", 1.0, 10000);
+      }
+    }
+    __audioLastRemainingSec = a.state.remainingSeconds;
+
+    // 3. Match entering overtime SFX
+    if (a.state.mode === "match" && a.state.overtime && !__audioLastOvertime) {
+      gameAudio.play("match_entering_overtime", 1.0, 10000);
+    }
+    __audioLastOvertime = a.state.overtime;
+
+    // 4. Kickoff countdown 321 SFX
+    if (a.state.mode === "match" && a.state.phase === "kickoff" && __audioLastPhase !== "kickoff") {
+      gameAudio.play("match_countdown_321", 1.0, 3000);
+    }
+
+    // 5. Match start / kickoff Go! SFX
+    if (a.state.mode === "match" && __audioLastPhase === "kickoff" && a.state.phase === "playing") {
+      gameAudio.play("match_start_go", 1.0, 2000);
+    }
+    __audioLastPhase = a.state.phase;
+
+    // 6. Supersonic enter SFX
+    if (ir && !__audioLastSupersonic) {
+      gameAudio.play("sfx_state_supersonic", 0.9, 1000);
+    }
+    __audioLastSupersonic = ir;
+
+    // 7. Ball hit SFX
+    if (Rn !== y[0] && Rn > 0) {
+      const hitVol = Math.min(1.0, Math.max(0.35, Sr / 1500));
+      gameAudio.play("sfx_ball_hit", hitVol, 60);
+    }
+
+    // 8. No boost SFX
+    if (ke && ke.boost && curBoost <= 0) {
+      const now = performance.now();
+      if (now - __audioLastNoBoostPlay > 600) {
+        __audioLastNoBoostPlay = now;
+        gameAudio.play("sfx_error_no_boost", 0.85);
+      }
+    }
+
+    // 9. Car-to-car collision SFX
+    if (Mt[ht.NUM_CARS] > 1) {
+      const numCars = Mt[ht.NUM_CARS];
+      for (let ci = 0; ci < numCars; ci++) {
+        for (let cj = ci + 1; cj < numCars; cj++) {
+          const offI = ht.CARS + ci * ln;
+          const offJ = ht.CARS + cj * ln;
+          const dx = Mt[offI + ye.POS] - Mt[offJ + ye.POS];
+          const dy = Mt[offI + ye.POS + 1] - Mt[offJ + ye.POS + 1];
+          const dz = Mt[offI + ye.POS + 2] - Mt[offJ + ye.POS + 2];
+          if (dx * dx + dy * dy + dz * dz < 230 * 230) {
+            const rvx = Mt[offI + ye.VEL] - Mt[offJ + ye.VEL];
+            const rvy = Mt[offI + ye.VEL + 1] - Mt[offJ + ye.VEL + 1];
+            const rvz = Mt[offI + ye.VEL + 2] - Mt[offJ + ye.VEL + 2];
+            const relSpeed = Math.hypot(rvx, rvy, rvz);
+            if (relSpeed > 180) {
+              gameAudio.play("sfx_car_collision", Math.min(1.0, Math.max(0.35, relSpeed / 1500)), 300);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  He.mark();
   const fi = N.boostBloomActive || Y.bloomActive;
   if(fi){
     H.camera.layers.set(0),ce();

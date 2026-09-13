@@ -434,10 +434,9 @@ export class ParallelTrainingManager {
       }
 
       // 7. Mount focus to activePlayerIndex (default 0)
+      this.isActive = true;
       this.activePlayerIndex = 0;
       this.setActivePlayer(0, true);
-
-      this.isActive = true;
 
       // Update UI button and render cards
       if (this.menuButton) this.menuButton.style.display = 'flex';
@@ -542,9 +541,9 @@ export class ParallelTrainingManager {
           if (child.isMesh && child.material) {
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             mats.forEach(m => {
-              m.transparent = true;
-              m.opacity = 0.92;
-              m.depthWrite = false;
+              m.transparent = false;
+              m.opacity = 1.0;
+              m.depthWrite = true;
             });
           }
         });
@@ -676,16 +675,8 @@ export class ParallelTrainingManager {
     }
 
     // 情况 2：世界中有 1~6 名玩家
-    // 若此世界为当前用户所操控的活动世界，当前活动驾驶员（activePlayerIndex）必须排在 Car 0
-    let orderedPlayerIds;
-    if (worldId === activeWorldId && world.presentPlayerIds.has(this.activePlayerIndex)) {
-      orderedPlayerIds = [
-        this.activePlayerIndex,
-        ...presentIds.filter(id => id !== this.activePlayerIndex).sort((a, b) => a - b)
-      ];
-    } else {
-      orderedPlayerIds = [...presentIds].sort((a, b) => a - b);
-    }
+    // 稳定保持自然排序，严禁为了凑 Car 0 而对活动玩家进行特殊重排
+    const orderedPlayerIds = [...presentIds].sort((a, b) => a - b);
 
     // 保存该世界原本已在场的车辆和球的物理状态
     let savedBallState = null;
@@ -706,7 +697,7 @@ export class ParallelTrainingManager {
 
     // 重新创建物理 Arena（重置为 0 辆车和 1 个球）
     if (arena.module._physics_createArena() !== 1) {
-      console.error(`Failed to recreate arena for world ${worldId}`);
+      console.error();
       return;
     }
     arena.statePtr = arena.module._physics_getStatePtr();
@@ -714,6 +705,9 @@ export class ParallelTrainingManager {
     arena.controlsPtr = arena.module._physics_getControlsPtr();
     arena.stateView = null;
     arena.controlsView = null;
+    if (typeof arena.setCarControls !== 'function') {
+      arena.setCarControls = (cIdx, ctrl) => arena.setControls(cIdx, ctrl);
+    }
 
     // 为该世界的所有玩家添加物理车辆（RocketSim 原生支持每个 arena 多辆车）
     for (let i = 0; i < orderedPlayerIds.length; i++) {
@@ -738,17 +732,40 @@ export class ParallelTrainingManager {
       this.showWorldBall(worldId);
     }
 
-    // 恢复原有车辆或为新迁入车辆安全生成
+    // 恢复原有车辆（防多车重叠）或为新迁入车辆严格按 index 安全生成
     for (let i = 0; i < orderedPlayerIds.length; i++) {
       const pid = orderedPlayerIds[i];
       const pl = this.players[pid];
       const offset = ht.CARS + i * ln;
+      let restored = false;
+
       if (savedCarStates.has(pid)) {
-        arena.state.set(savedCarStates.get(pid), offset);
-        if (typeof arena.module._physics_setCarState === 'function') {
-          try { arena.module._physics_setCarState(i, arena.statePtr + offset * 4); } catch (e) {}
+        const state = savedCarStates.get(pid);
+        const posX = state[ye.POS];
+        const posY = state[ye.POS + 1];
+        const posZ = state[ye.POS + 2];
+        let overlaps = false;
+        for (let j = 0; j < i; j++) {
+          const prevOff = ht.CARS + j * ln;
+          const dx = posX - arena.state[prevOff + ye.POS];
+          const dy = posY - arena.state[prevOff + ye.POS + 1];
+          const dz = posZ - arena.state[prevOff + ye.POS + 2];
+          if (dx * dx + dy * dy + dz * dz < 250 * 250) {
+            overlaps = true;
+            break;
+          }
         }
-      } else {
+        if (!overlaps) {
+          arena.state.set(state, offset);
+          if (typeof arena.module._physics_setCarState === 'function') {
+            try { arena.module._physics_setCarState(i, arena.statePtr + offset * 4); } catch (e) {}
+          }
+          pl.pos = { x: posX, y: posY, z: posZ };
+          restored = true;
+        }
+      }
+
+      if (!restored) {
         this.spawnPlayer(pl, worldId);
       }
     }
@@ -853,36 +870,48 @@ export class ParallelTrainingManager {
   spawnPlayer(player, worldId) {
     const world = this.worlds[worldId];
     if (!world) return;
+    const arena = this.arenas[worldId];
+    if (!arena) return;
 
-    // 1. Get positions of current cars in world (excluding player) and ball
+    const { ht, ln, ye } = this.constants;
+    const cIdx = (player.arenaCarIndex !== undefined) ? player.arenaCarIndex : 0;
+    const offset = ht.CARS + cIdx * ln;
+
+    // 1. 获取该世界当前其他车辆的真实物理坐标（防重叠）
     const otherCarPositions = [];
     for (const pid of world.presentPlayerIds) {
       if (pid !== player.id) {
         const other = this.players[pid];
-        if (other && other.pos) {
-          otherCarPositions.push({ x: other.pos.x, y: other.pos.y, z: other.pos.z });
+        if (other && other.arenaCarIndex !== undefined && other.currentWorldId === worldId) {
+          const otherOff = ht.CARS + other.arenaCarIndex * ln;
+          if (arena.state && otherOff + 3 <= arena.state.length) {
+            otherCarPositions.push({
+              x: arena.state[otherOff + ye.POS],
+              y: arena.state[otherOff + ye.POS + 1],
+              z: arena.state[otherOff + ye.POS + 2]
+            });
+          } else if (other.pos) {
+            otherCarPositions.push({ x: other.pos.x, y: other.pos.y, z: other.pos.z });
+          }
         }
       }
     }
 
-    const ballPos = world.ballVisible ? { ...world.pos } : null;
+    const ballPos = world.ballVisible && arena.state && arena.state.length > ht.BALL + 3
+      ? { x: arena.state[ht.BALL], y: arena.state[ht.BALL + 1], z: arena.state[ht.BALL + 2] }
+      : null;
 
-    // 2. Preset spawn points: S0..S9
-    const candidates = [...SPAWN_PRESETS];
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
-
-    const R_safe = 250; // 2.5 meters in RocketSim units
+    // 2. 严格根据 arenaCarIndex 确定初始开球点，严禁出现多车坐标重叠
+    const R_safe = 350;
     const R_safe_sq = R_safe * R_safe;
 
     let selected = null;
     let maxMinDistSq = -1;
-    let fallbackCandidate = candidates[0];
+    let fallbackCandidate = SPAWN_PRESETS[cIdx % SPAWN_PRESETS.length];
 
-    // 3. Check collision & overlap
-    for (const cand of candidates) {
+    for (let step = 0; step < SPAWN_PRESETS.length; step++) {
+      const candIdx = (cIdx + step) % SPAWN_PRESETS.length;
+      const cand = SPAWN_PRESETS[candIdx];
       let isSafe = true;
       let minDistSq = Infinity;
 
@@ -921,16 +950,20 @@ export class ParallelTrainingManager {
     }
 
     if (!selected) {
-      selected = fallbackCandidate;
+      selected = {
+        x: fallbackCandidate.x + (cIdx * 280),
+        y: fallbackCandidate.y,
+        z: fallbackCandidate.z
+      };
     }
 
-    // 4. Reset linear & angular velocities to 0, boost to 100
+    // 3. 重置物理参数与速度
     player.pos = { x: selected.x, y: selected.y, z: selected.z };
     player.vel = { x: 0, y: 0, z: 0 };
     player.angVel = { x: 0, y: 0, z: 0 };
     player.boost = 100;
 
-    // 5. Turn car facing towards midfield (0, 0, 0)
+    // 4. 朝向中场 (0, 0, 0)
     const yaw = Math.atan2(-selected.y, -selected.x);
     const fx = Math.cos(yaw);
     const fy = Math.sin(yaw);
@@ -938,38 +971,36 @@ export class ParallelTrainingManager {
     player.up = { x: 0, y: 0, z: 1 };
     player.right = { x: fy, y: -fx, z: 0 };
 
-    // Update physical arena state for this player's car
-    const arena = this.arenas[worldId];
-    if (arena) {
-      const cIdx = (player.arenaCarIndex !== undefined) ? player.arenaCarIndex : 0;
-      const offset = this.constants.ht.CARS + cIdx * this.constants.ln;
-      if (arena.state && arena.state.length > offset + 20) {
-        arena.state[offset + this.constants.ye.POS] = selected.x;
-        arena.state[offset + this.constants.ye.POS + 1] = selected.y;
-        arena.state[offset + this.constants.ye.POS + 2] = selected.z;
-        arena.state[offset + this.constants.ye.VEL] = 0;
-        arena.state[offset + this.constants.ye.VEL + 1] = 0;
-        arena.state[offset + this.constants.ye.VEL + 2] = 0;
-        arena.state[offset + this.constants.ye.ANG_VEL] = 0;
-        arena.state[offset + this.constants.ye.ANG_VEL + 1] = 0;
-        arena.state[offset + this.constants.ye.ANG_VEL + 2] = 0;
-        arena.state[offset + this.constants.ye.FWD] = fx;
-        arena.state[offset + this.constants.ye.FWD + 1] = fy;
-        arena.state[offset + this.constants.ye.FWD + 2] = 0;
-        arena.state[offset + this.constants.ye.UP] = 0;
-        arena.state[offset + this.constants.ye.UP + 1] = 0;
-        arena.state[offset + this.constants.ye.UP + 2] = 1;
-        arena.state[offset + this.constants.ye.RIGHT] = fy;
-        arena.state[offset + this.constants.ye.RIGHT + 1] = -fx;
-        arena.state[offset + this.constants.ye.RIGHT + 2] = 0;
-        arena.state[offset + this.constants.ye.BOOST] = 100;
-        if (typeof arena.module._physics_setCarState === 'function') {
-          try { arena.module._physics_setCarState(cIdx, arena.statePtr + offset * 4); } catch (e) {}
-        }
+    // 写入 arena 物理状态
+    if (arena.state && arena.state.length >= offset + ln) {
+      arena.state[offset + ye.POS] = selected.x;
+      arena.state[offset + ye.POS + 1] = selected.y;
+      arena.state[offset + ye.POS + 2] = selected.z;
+      arena.state[offset + ye.VEL] = 0;
+      arena.state[offset + ye.VEL + 1] = 0;
+      arena.state[offset + ye.VEL + 2] = 0;
+      arena.state[offset + ye.ANG_VEL] = 0;
+      arena.state[offset + ye.ANG_VEL + 1] = 0;
+      arena.state[offset + ye.ANG_VEL + 2] = 0;
+      arena.state[offset + ye.FWD] = fx;
+      arena.state[offset + ye.FWD + 1] = fy;
+      arena.state[offset + ye.FWD + 2] = 0;
+      arena.state[offset + ye.UP] = 0;
+      arena.state[offset + ye.UP + 1] = 0;
+      arena.state[offset + ye.UP + 2] = 1;
+      arena.state[offset + ye.RIGHT] = fy;
+      arena.state[offset + ye.RIGHT + 1] = -fx;
+      arena.state[offset + ye.RIGHT + 2] = 0;
+      arena.state[offset + ye.BOOST] = 100;
+      arena.state[offset + ye.DEMOED] = 0;
+      arena.state[offset + ye.ON_GROUND] = 1;
+
+      if (typeof arena.module._physics_setCarState === 'function') {
+        try { arena.module._physics_setCarState(cIdx, arena.statePtr + offset * 4); } catch (e) {}
       }
-      if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
-      if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
     }
+    if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
+    if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
   }
 
   /**
@@ -982,63 +1013,15 @@ export class ParallelTrainingManager {
 
     const targetPlayer = this.players[targetPlayerIndex];
     const targetWorldId = targetPlayer.currentWorldId;
-    const { ht, ln } = this.constants;
 
-    // 确保目标玩家在目标世界的物理 Arena 中处于 Car 0
-    const arena = this.arenas[targetWorldId];
-    if (arena && targetPlayer.arenaCarIndex !== 0 && targetPlayer.arenaCarIndex !== undefined) {
-      const k = targetPlayer.arenaCarIndex;
-      const off0 = ht.CARS;
-      const offK = ht.CARS + k * ln;
-
-      // 寻找当前在该世界处于 Car 0 的玩家
-      const world = this.worlds[targetWorldId];
-      let car0Player = null;
-      if (world) {
-        for (const pid of world.presentPlayerIds) {
-          if (this.players[pid] && this.players[pid].arenaCarIndex === 0) {
-            car0Player = this.players[pid];
-            break;
-          }
-        }
-      }
-
-      // 交换 Car 0 与 Car k 的物理状态与缓存
-      if (arena.state && offK + ln <= arena.state.length) {
-        const tmp0 = arena.state.slice(off0, off0 + ln);
-        const tmpK = arena.state.slice(offK, offK + ln);
-        arena.state.set(tmpK, off0);
-        arena.state.set(tmp0, offK);
-        if (typeof arena.module._physics_setCarState === 'function') {
-          try {
-            arena.module._physics_setCarState(0, arena.statePtr + off0 * 4);
-            arena.module._physics_setCarState(k, arena.statePtr + offK * 4);
-          } catch (e) {}
-        }
-      }
-      if (this.prevStates[targetWorldId] && offK + ln <= this.prevStates[targetWorldId].length) {
-        const tmp0 = this.prevStates[targetWorldId].slice(off0, off0 + ln);
-        const tmpK = this.prevStates[targetWorldId].slice(offK, offK + ln);
-        this.prevStates[targetWorldId].set(tmpK, off0);
-        this.prevStates[targetWorldId].set(tmp0, offK);
-      }
-      if (this.currStates[targetWorldId] && offK + ln <= this.currStates[targetWorldId].length) {
-        const tmp0 = this.currStates[targetWorldId].slice(off0, off0 + ln);
-        const tmpK = this.currStates[targetWorldId].slice(offK, offK + ln);
-        this.currStates[targetWorldId].set(tmpK, off0);
-        this.currStates[targetWorldId].set(tmp0, offK);
-      }
-
-      if (car0Player) car0Player.arenaCarIndex = k;
-      targetPlayer.arenaCarIndex = 0;
-    }
-
+    // 核心重构：废除“物理状态交换（State Swap）”逻辑
+    // 严禁交换或覆写车辆物理位置与速度，每辆车在物理世界中的坐标必须绝对独立且持续累加
     this.activePlayerIndex = targetPlayerIndex;
 
-    // 1. Update visual dye on active car and ball
+    // 1. 更新视觉标识
     this._applySlotVisuals(targetPlayerIndex);
 
-    // 2. Call switch callback to rebind primary physics reference `s.sim`
+    // 2. 调用切换回调将主物理引用 s.sim 切换到目标世界
     if (typeof this.onSwitchCallback === 'function' && this.arenas[targetWorldId]) {
       this.onSwitchCallback(
         this.arenas[targetWorldId],
@@ -1047,15 +1030,15 @@ export class ParallelTrainingManager {
       );
     }
 
-    // 3. Hard-cut camera view: resetView() clears camera lag
+    // 3. 镜头硬切：清除平滑插值镜头延迟，直接对齐目标车
     if (this.cameraManager && this.cameraManager.kernel) {
       this.cameraManager.kernel.resetView();
     }
 
-    // 4. Audio isolation: reset engine synth
+    // 4. 音效隔离：重置引擎合成器
     this.resetEngineAudio();
 
-    // 5. Update HUD and UI
+    // 5. 更新 HUD 与卡片面板
     this._updateVisualVisibility();
     this._updateBottomLeftHud();
     this._renderCards();
@@ -1164,20 +1147,28 @@ export class ParallelTrainingManager {
 
     const { ht, ln, ye } = this.constants;
     const world = this.worlds[worldId];
+    const activeCarIdx = (p.arenaCarIndex !== undefined) ? p.arenaCarIndex : 0;
 
-    // Controls for active driver (always car 0 in active world)
-    arena.setControls(0, controls);
+    // 控制路由：根据当前主控玩家的 arenaCarIndex 精准发送控制输入，严禁只发给 Car 0
+    arena.setControls(activeCarIdx, controls);
 
-    // Apply zero controls to other idle cars and unlimited boost refill
+    // 若主控玩家处于无限气状态，自动补充
+    if (p.unlimitedBoost && arena.state) {
+      const off = ht.CARS + activeCarIdx * ln;
+      if (off + ye.BOOST < arena.state.length) {
+        arena.state[off + ye.BOOST] = 100;
+      }
+    }
+
+    // 其他空闲车辆置零控制并按需补充无限喷气
     if (world) {
       for (const pid of world.presentPlayerIds) {
+        if (pid === this.activePlayerIndex) continue;
         const pl = this.players[pid];
         if (!pl || pl.arenaCarIndex === undefined) continue;
         const cIdx = pl.arenaCarIndex;
 
-        if (cIdx !== 0) {
-          arena.setControls(cIdx, ZERO_CONTROLS);
-        }
+        arena.setControls(cIdx, ZERO_CONTROLS);
 
         if (pl.unlimitedBoost && arena.state) {
           const off = ht.CARS + cIdx * ln;
@@ -1187,6 +1178,15 @@ export class ParallelTrainingManager {
         }
       }
     }
+  }
+
+  getActiveArenaCarIndex() {
+    const p = this.players[this.activePlayerIndex];
+    return (p && p.arenaCarIndex !== undefined) ? p.arenaCarIndex : 0;
+  }
+
+  getActiveCarMesh() {
+    return this.carMeshes[this.activePlayerIndex] || (this.arenaWorld && this.arenaWorld.cars ? this.arenaWorld.cars[0] : null);
   }
 
   getActiveArena() {
@@ -1303,7 +1303,12 @@ export class ParallelTrainingManager {
     const { ht, ln, ye } = this.constants;
     const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
 
-    // 1. Update Cars
+    // 隐藏单人原生 Car 0，由 carMeshes 全权负责同世界多车精准渲染
+    if (this.arenaWorld && this.arenaWorld.cars && this.arenaWorld.cars[0]) {
+      this.arenaWorld.cars[0].visible = false;
+    }
+
+    // 1. 更新所有在场玩家的车辆视觉
     for (let pIdx = 0; pIdx < 6; pIdx++) {
       const p = this.players[pIdx];
       const carMesh = this.carMeshes[pIdx];
@@ -1312,37 +1317,26 @@ export class ParallelTrainingManager {
       const worldId = p.currentWorldId;
       const prev = this.prevStates[worldId];
       const curr = this.currStates[worldId];
+      const world = this.worlds[worldId];
+      const isPresent = world && world.presentPlayerIds.has(pIdx);
+      const cIdx = (p.arenaCarIndex !== undefined) ? p.arenaCarIndex : 0;
+      const offset = ht.CARS + cIdx * ln;
 
-      if (pIdx === this.activePlayerIndex) {
-        // Active driver is rendered directly from active arena via N.cars[0]
-        carMesh.visible = false;
-        if (this.arenaWorld && this.arenaWorld.cars && this.arenaWorld.cars[0]) {
-          p.pos.x = this.arenaWorld.cars[0].position.x;
-          p.pos.y = this.arenaWorld.cars[0].position.z;
-          p.pos.z = this.arenaWorld.cars[0].position.y;
+      if (isPresent && prev && curr && (offset + ln <= curr.length)) {
+        const isDemoed = (curr[offset + ye.DEMOED] === 1);
+        carMesh.visible = !isDemoed;
+        if (!isDemoed) {
+          this._applyPhysTransform(carMesh, prev, curr, offset, alpha);
+          p.pos.x = carMesh.position.x;
+          p.pos.y = carMesh.position.z; // Three.js Z is RocketSim Y
+          p.pos.z = carMesh.position.y; // Three.js Y is RocketSim Z
         }
       } else {
-        const world = this.worlds[worldId];
-        const isPresent = world && world.presentPlayerIds.has(pIdx);
-        const cIdx = (p.arenaCarIndex !== undefined) ? p.arenaCarIndex : 0;
-        const offset = ht.CARS + cIdx * ln;
-
-        if (isPresent && prev && curr && (offset + ln <= curr.length)) {
-          const isDemoed = (curr[offset + ye.DEMOED] === 1);
-          carMesh.visible = !isDemoed;
-          if (!isDemoed) {
-            this._applyPhysTransform(carMesh, prev, curr, offset, alpha);
-            p.pos.x = carMesh.position.x;
-            p.pos.y = carMesh.position.z; // Three.js Z is RocketSim Y
-            p.pos.z = carMesh.position.y; // Three.js Y is RocketSim Z
-          }
-        } else {
-          carMesh.visible = false;
-        }
+        carMesh.visible = false;
       }
     }
 
-    // 2. Update Balls
+    // 2. 更新球的视觉
     for (let w = 0; w < 6; w++) {
       const world = this.worlds[w];
       const ballMesh = this.ballMeshes[w];
@@ -1357,7 +1351,7 @@ export class ParallelTrainingManager {
       }
 
       if (w === activeWorldId) {
-        ballMesh.visible = false; // Primary game renders N.ball
+        ballMesh.visible = false; // 活动世界由主引擎渲染 N.ball
       } else {
         ballMesh.visible = true;
         if (prev && curr) {
@@ -1376,7 +1370,7 @@ export class ParallelTrainingManager {
       if (carMesh && p) {
         const world = this.worlds[p.currentWorldId];
         const isPresent = world && world.presentPlayerIds.has(pIdx);
-        carMesh.visible = (pIdx !== this.activePlayerIndex && isPresent);
+        carMesh.visible = Boolean(isPresent);
       }
     }
 
@@ -1390,14 +1384,12 @@ export class ParallelTrainingManager {
   }
 
   _applySlotVisuals(slotIndex) {
-    const slot = PARALLEL_SLOTS[slotIndex];
-
-    // 1. Recolor active car (N.cars[0])
-    if (this.arenaWorld && this.arenaWorld.cars && this.arenaWorld.cars[0] && this.recolorCar) {
-      this.recolorCar(this.arenaWorld.cars[0], slot.colorInt);
+    // 隐藏单人 Car 0
+    if (this.arenaWorld && this.arenaWorld.cars && this.arenaWorld.cars[0]) {
+      this.arenaWorld.cars[0].visible = false;
     }
 
-    // 2. Swap active ball visual inside N.ball
+    // 切换活动球的视觉挂载到 N.ball
     const activeWorldId = this.players[slotIndex].currentWorldId;
     if (this.arenaWorld && this.arenaWorld.ball && this.activeBallMeshes[activeWorldId]) {
       const activeBallGroup = this.arenaWorld.ball;
@@ -1415,8 +1407,11 @@ export class ParallelTrainingManager {
 
   _restoreActiveCarAndBall() {
     if (this.arenaWorld) {
-      if (this.arenaWorld.cars && this.arenaWorld.cars[0] && this.recolorCar) {
-        this.recolorCar(this.arenaWorld.cars[0], 0x2F7BD3);
+      if (this.arenaWorld.cars && this.arenaWorld.cars[0]) {
+        this.arenaWorld.cars[0].visible = true;
+        if (this.recolorCar) {
+          this.recolorCar(this.arenaWorld.cars[0], 0x2F7BD3);
+        }
       }
       if (this.arenaWorld.ball && this.savedBallChild) {
         while (this.arenaWorld.ball.children.length > 0) {
@@ -2062,6 +2057,10 @@ export class ParallelTrainingManager {
         rightCol.appendChild(worldBtn);
       }
 
+      rowEl.style.cursor = 'pointer';
+      rowEl.addEventListener('click', () => {
+        this.setActivePlayer(r);
+      });
       rowEl.appendChild(leftCol);
       rowEl.appendChild(rightCol);
       this.cardsContainer.appendChild(rowEl);
