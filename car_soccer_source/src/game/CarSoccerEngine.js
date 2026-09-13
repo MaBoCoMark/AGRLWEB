@@ -343,12 +343,71 @@ import {
   createCarHitboxWireframe,
   createCompetitionTurfMesh,
   updateTurfPadDecals,
-  createSuspensionUnit,
-  createOffroadWheelMesh,
-  createSuspensionKnuckle,
-  setupCarReactionJets,
-  DEFAULT_TEAM_COLORS,
-  DEFAULT_TEAM_COLORS as xn
+  // Vehicle Assembly Subsystem (Phase 7.4)
+  loadGameCarAsset,
+  loadFlatCarAsset,
+  loadRealisticCarAsset,
+  createRealisticCarModel,
+  createRealisticCarGimbals,
+  assembleRealisticCar,
+  createGameCarModel,
+  createFlatCarModel,
+  createGameCarWheel,
+  createGameCarWheelHardware,
+  createFlatCarWheel,
+  updateRealisticCockpitGimbal,
+  getCarVisualTheme,
+  loadRealisticCarShowcase,
+  loadGameCarShowcase,
+  loadFlatCarShowcase,
+  setVehicleAssemblyThreeContext,
+  Uh,
+  Y0,
+  og,
+  z0,
+  Z0,
+  V0,
+  W0,
+  Q0,
+  Yb,
+  Jb,
+  Kb,
+  np,
+  ul,
+  ip,
+  fl,
+  $0,
+  r1,
+  sg,
+  rg,
+  Ag,
+  h1,
+  dp,
+  FM,
+  DM,
+  NM,
+  GM,
+  OM,
+  q0,
+  X0,
+  J0,
+  VA,
+  zA,
+  Wb,
+  Qb,
+  t1,
+  Ir,
+  G0,
+  O0,
+  H0,
+  U0,
+  Vb,
+  K0,
+  Zb,
+  $d,
+  n1,
+  ag,
+  Ni
 } from "../entities/index.js";
 
 var xg = Object.defineProperty;
@@ -20377,574 +20436,11 @@ function N0(i){
   }
   ),Ji(i)
 }
-const Ir = 105,G0 = .951984748575128,O0 = 3.3438630034881425,H0 = - 15,U0 = ["wheel-front-right","wheel-front-left","wheel-rear-right","wheel-rear-left"],Vb = ["wheel-front-left","wheel-front-right","wheel-rear-left","wheel-rear-right"],q0 = [[48.8139,26.9291,12.5],[48.8139, - 26.9291,12.5],[- 36.5145,28.6221,15],[- 36.5145, - 28.622,15]],Wb = [new F(- 57,10.25,20.4278),new F(- 57,10.25, - 20.4278)];
-let rA = null;
-const iA = new F,Xb = new F;
-function np(i,e){
-  const t = i.getObjectByName(e);
-  if(!t)throw new Error(`Game car asset is missing "${e}"`);
-return t
-}
-function Jb(){
-  const i = new mt().compose(new F(O0 / Ir,H0 / Ir,0),new jn,new F(G0,1,1));
-  return new mt().makeScale(Ir,Ir,Ir).multiply(i)
-}
-function Kb(i,e){
-  let t = null;
-  if(i.traverse(n=>{
-    if(t || !(n instanceof Ee))return;(Array.isArray(n.material)?n.material:[n.material]).some(s=>s.name === e) && (t = n)
-  }
-  ),!t)throw new Error(`Game car asset is missing material "${e}"`);
-return t
-}
-function Yb(i,e){
-  const t = Kb(i,"lower-detail"),n = t.geometry,r = n.getAttribute("position"),s = n.getAttribute("normal"),a = n.index;
-  if(!a)throw new Error("Game car lower detail must be indexed");
-  const o = new Int32Array(r.count);
-  for(let y = 0;y < o.length;y+=1)o[y] = y;
-  const A = y=>{
-    let C = y;
-    for(;o[C] !== C;)C = o[C];
-    for(;o[y] !== y;){
-      const E = o[y];
-      o[y] = C,y = E
-    }
-    return C
-  }
-  ,l = (y,C)=>{
-    const E = A(y),w = A(C);
-    E !== w && (o[w] = E)
-  }
-  ;
-  for(let y = 0;y < a.count;y+=3){
-    const C = a.getX(y),E = a.getX(y + 1),w = a.getX(y + 2);
-    l(C,E),l(E,w)
-  }
-  const c = Jb();
-  i.updateWorldMatrix(!0,!0);
-  const h = c.clone().multiply(t.matrixWorld),d = new jt().getNormalMatrix(h),u = e.map(y=>y.getWorldPosition(new F).applyMatrix4(c)),p = new Map;
-  for(let y = 0;y < a.count;y+=3){
-    const C = a.getX(y),E = A(C);
-    let w = p.get(E);
-    w || (w = {
-      indices:[],min:new F(1 / 0,1 / 0,1 / 0),max:new F(- 1 / 0, - 1 / 0, - 1 / 0)
-    }
-    ,p.set(E,w));
-    for(let S = 0;S < 3;S+=1){
-      const k = a.getX(y + S);
-      w.indices.push(k),iA.fromBufferAttribute(r,k).applyMatrix4(h),w.min.min(iA),w.max.max(iA)
-    }
+// --- Phase 7.4 Deobfuscation & Modularization: Vehicle Assembly Subsystem ---
+// Extracted to src/entities/VehicleAssembly.js:
+// Octane (Uh, z0, V0, W0, Yb, Jb, Kb, np, ul, ip, fl, /tmp/code_8f436d6f.sh), Dominus (Y0, Z0, Q0, r1),
+// Realistic Buggy (og, sg, rg, Ag, h1, dp), dimensional specs (Ir, G0, O0, H0, U0, Vb, q0, Wb, Qb, X0, J0, t1, VA, zA, Wd, ag).
 
-  }
-  const v = u.map(()=>[]),g = [];
-  for(const y of p.values()){
-    const C = y.min.clone().add(y.max).multiplyScalar(.5),E = y.max.clone().sub(y.min),w = u.findIndex(S=>Math.abs(C.x - S.x) < 9 && Math.sign(C.z) === Math.sign(S.z) && Math.abs(C.z - S.z) < 14 && y.max.y < S.y + 9.5 && y.min.y > S.y - 9 && E.x < 16 && E.z < 18);
-    (w >= 0?v[w]:g).push(...y.indices)
-  }
-  const m = n.clone();
-  return m.setIndex(g),t.geometry = m,v.map((y,C)=>{
-    if(y.length === 0)throw new Error(`Game car wheel ${C} has no detachable hardware`);const E = new Float32Array(y.length * 3),w = new Float32Array(y.length * 3),S = u[C];for(let T = 0;T < y.length;T+=1){
-    const R = y[T];iA.fromBufferAttribute(r,R).applyMatrix4(h).sub(S).toArray(E,T * 3),s && Xb.fromBufferAttribute(s,R).applyNormalMatrix(d).normalize().toArray(w,T * 3)
-  }
-  const k = new Ct;k.setAttribute("position",new zt(E,3)),s?k.setAttribute("normal",new zt(w,3)):k.computeVertexNormals(),k.computeBoundingBox(),k.computeBoundingSphere();const x = new Ee(k,t.material);return x.name =`${U0[C]}-hardware`,x
-}
-)
-}
-function Uh(){
-  return rA || (rA = new ho().loadAsync("/assets/game-car/model.gltf").then(i=>{
-    i.scene.updateMatrixWorld(!0);const e = np(i.scene,"game-car-body"),t = Vb.map(r=>np(i.scene,r)),n = Yb(e,t);return{
-      body:e,wheels:t,wheelHardware:n
-    }
-
-  }
-  ),rA)
-}
-const Zb = {
-  primary:16743716,realisticPrimary:16555020,pearl:16724660
-}
-,rp = new Map;
-function ul(i,e = Zb){
-  if(typeof i === "number" && (!e || e === Zb)){
-    e = { primary: i, realisticPrimary: i, pearl: i };
-  } else if(typeof i === "object" && i !== null && (!e || e === Zb)){
-    e = i;
-  }
-  const t =`${e.primary}/${e.realisticPrimary ?? e.primary}/${e.pearl ?? e.primary}`,n = rp.get(t);
-if(n)return n;
-const r = new Ne(e.pearl ?? e.primary),s = new Cn({
-  name:"Realistic / anodized pearl paint",color:e.realisticPrimary ?? e.primary,roughness:.17,metalness:.76,clearcoat:1,clearcoatRoughness:.11,sheen:.7,sheenColor:r,sheenRoughness:.24,envMapIntensity:1.4
-}
-);
-s.onBeforeCompile = A=>{
-  A.uniforms.pearlColor = {
-    value:r
-  }
-  ,A.fragmentShader = A.fragmentShader.replace("#include <normal_fragment_maps>",`#include <normal_fragment_maps>
-        float pearlFresnel = pow(
-          1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 1.35
-        );
-        float pearlBlend = 0.82 * smoothstep(0.12, 0.72, pearlFresnel);
-        diffuseColor.rgb = mix(diffuseColor.rgb, pearlColor, pearlBlend);`).replace("uniform vec3 diffuse;",`uniform vec3 diffuse;
-uniform vec3 pearlColor;`)
-}
-,s.customProgramCacheKey = ()=>"game-car-anodized-pearl";
-const a = vn(Nr({
-  name:"Arcade / body paint",color:e.primary
-}
-),s),o = {
-  wheelMetal:vn(Nr({
-    color:3754339
-  }
-  ),new Cn({
-    color:2435633,roughness:.24,metalness:.94,clearcoat:.32,clearcoatRoughness:.18
-  }
-  )),tire:vn(Nr({
-    color:1119e3
-  }
-  ),new lt({
-    color:1119e3,roughness:.92,metalness:.02
-  }
-  )),lowerDetail:vn(Nr({
-    color:1514274
-  }
-  ),new lt({
-    color:1514274,roughness:.4,metalness:.78
-  }
-  )),lamps:new cn({
-    color:14153727,toneMapped:!1
-  }
-  ),tailLamps:new cn({
-    color:13970226,toneMapped:!1
-  }
-  ),body:a
-}
-;
-return rp.set(t,o),o
-}
-function ip(i,e,mesh){
-  const name = (mesh && mesh.userData && mesh.userData.originalMaterialName) || (i && i.name) || "";
-  switch(name){
-    case"wheel-metal":
-    case"Arcade / wheel metal":
-    case"Realistic / wheel metal":
-      return e.wheelMetal;
-    case"tire":
-    case"Arcade / tire":
-    case"Realistic / tire":
-      return e.tire;
-    case"lower-detail":
-    case"Arcade / lower detail":
-    case"Realistic / lower detail":
-    case"glass":
-      return e.lowerDetail;
-    case"lamps":
-      return e.lamps;
-    case"tail-lamps":
-      return e.tailLamps;
-    case"body-shell":
-    case"body-fill":
-    case"paint":
-    case"Arcade / body paint":
-    case"Realistic / anodized pearl paint":
-      return e.body;
-    default:
-      if(mesh && mesh.name && (mesh.name.includes("body") || mesh.name.includes("shell") || mesh.name.includes("paint"))) return e.body;
-      if(name.startsWith("Arcade / reset") || name.startsWith("Realistic / reset") || (i && i.uniforms)) return i;
-      return e.lowerDetail;
-  }
-}
-function fl(i,e){
-  i.traverse(t=>{
-    let p = t;
-    while(p){
-      if(p.name === "flip-reset-indicator" || p.name === "realistic-reset-pulse" || p.name === "car-hitbox") return;
-      p = p.parent;
-    }
-    if(t instanceof Ee){
-      if(!t.userData.originalMaterialName && t.material){
-        t.userData.originalMaterialName = Array.isArray(t.material) ? (t.material[0]?.name || "") : (t.material.name || "");
-      }
-      t.material = Array.isArray(t.material)?t.material.map(n=>ip(n,e,t)):ip(t.material,e,t);
-      t.castShadow = !0;
-      t.receiveShadow = !0;
-    }
-  });
-  Ji(i);
-}
-function $0(i,e,t){
-  const n = i.clone(!0);
-  return fl(n,ul(e,t)),n
-}
-function z0(i,e,t){
-  const n = new dt;
-  n.name = "game-car",n.scale.setScalar(Ir);
-  const r = new dt;
-  r.name = "game-car-shell",r.scale.x = G0,r.position.set(O0 / Ir,H0 / Ir,0);
-  const s = i.body.clone(!0),a = ul(e,t);
-  return fl(s,a),r.add(s),n.add(r),n
-}
-function V0(i,e,t){
-  const n = new dt;
-  n.name = U0[e],n.scale.setScalar(Ir);
-  const r = i.wheels[e].clone(!0);
-  return r.position.set(0,0,0),fl(r,ul()),n.add(r),n
-}
-function W0(i,e,t){
-  const n = i.wheelHardware[e].clone(!0);
-  return fl(n,ul()),n
-}
-const $d = {
-  primary:821500,pearl:9306290
-}
-,Qb = {
-  length:130.427,width:85.7799,height:33.8,forward:9,up:15.75
-}
-,e1 = 15.75,X0 = [[50.3,31.1,12],[50.3, - 31.1,12],[- 34.75,33,13.5],[- 34.75, - 33,13.5]],J0 = [- 6.2, - 6.2, - 6.1, - 6.1],t1 = [new F(- 57.16878128051758,9.5,5.489756107330322),new F(- 57.16878128051758,9.5, - 5.489756107330322)],K0 = ["wheel-front-right","wheel-front-left","wheel-rear-right","wheel-rear-left"];
-let pa = null;
-function Y0(){
-  return pa || (pa = new ho().loadAsync("/assets/flat-car/model.glb").then(({
-    scene:i
-  }
-  )=>{
-    const e = t=>{
-      const n = i.getObjectByName(t);if(!n)throw new Error(`Flat Car asset is missing ${t}`);return n
-  }
-  ;return{
-    body:e("flat-car-body"),wheels:K0.map(e)
-  }
-
-}
-).catch(i=>{
-  throw pa = null,i
-}
-),pa)
-}
-function Z0(i,e){
-  const t = new dt;
-  return t.name = "flat-car",t.scale.setScalar(100),t.add($0(i.body,e,$d)),t
-}
-function Q0(i,e,t){
-  const n = new dt;
-  n.name = K0[e],n.scale.setScalar(100);
-  const r = $0(i.wheels[e],t,$d);
-  return r.position.set(0,0,0),n.add(r),n
-}
-const n1 = {
-  primary:16743716,realisticPrimary:13857839,pearl:16760939
-}
-;
-function r1(i){
-  return i === "flat-car"?n1:$d
-}
-function Rs(i,e,t,n){
-  return i.set(e,n,t)
-}
-const sp = new F,ap = new F,op = new F,Ap = new mt;
-function lp(i,e,t){
-  return Rs(sp,e[t],e[t + 1],e[t + 2]),Rs(ap,e[t + 3],e[t + 4],e[t + 5]),Rs(op,e[t + 6],e[t + 7],e[t + 8]),Ap.makeBasis(sp,op,ap),i.setFromRotationMatrix(Ap)
-}
-const eg = 120.507,tg = 86.6994,ng = 38.6591,zd = 13.8757,Vd = 20.755,fc = 22,i1 = 20,xA = zd - 5,CA = Vd - 5,s1 = 100,a1 = 5.5;
-function o1(i,e,t,n){
-  const r = new Ee(new Tn(i,e,t),n);
-  return r.castShadow = !0,r
-}
-function rg(){
-  const i = new dt,e = new dt;
-  e.name = "gimbal-cockpit",i.add(e);
-  const t = new lt({
-    color:6055024,roughness:.24,metalness:.95
-  }
-  ),n = new lt({
-    color:14870252,roughness:.12,metalness:1
-  }
-  ),r = new lt({
-    color:987670,roughness:.6,metalness:.15
-  }
-  ),s = new lt({
-    color:2501428,roughness:.8
-  }
-  ),a = new Wa(new Nm(new Tn(eg,ng,tg)),new Gi({
-    color:16777215,transparent:!0,opacity:.9,depthTest:!0,depthWrite:!1
-  }
-  ));
-  a.position.set(zd,Vd,0),a.renderOrder = 100,a.visible = !1,i.add(a);
-  const o = new Ee(new zi(fc,1.15,12,72),t);
-  o.castShadow = !0,o.position.set(xA,CA,0),e.add(o);
-  for(const R of[- 1,1]){
-    const D = new Ee(new Xt(1.4,1.4,3,12),t);
-    D.rotation.z = Math.PI / 2,D.position.set(xA + R * fc,CA,0),e.add(D)
-  }
-  const A = new dt;
-  A.position.set(xA,CA,0);
-  const l = new Ee(new zi(i1,.95,12,64),t);
-  l.rotation.x = Math.PI / 2,l.castShadow = !0,A.add(l);
-  for(const R of[- 1,1]){
-    const D = new Ee(new Xt(.85,.85,6,12),n);
-    D.rotation.z = Math.PI / 2,D.position.set(R * (fc - 3),0,0),A.add(D)
-  }
-  e.add(A);
-  const c = new dt;
-  c.name = "gimbal-pitch-cradle";
-  const h = (R,D,N)=>new F(R,D,N),d = (R,D,N,X,Y,H = !1)=>{
-    const V = new Bd(R,H,"centripetal"),J = new Ee(new Hs(V,R.length * 7,D,8,H),N);
-    return J.name = X,J.castShadow = !0,Y.add(J),J.userData.path = R.map(ne=>ne.toArray()),J
-  }
-  ;
-  for(const R of[- 1,1]){
-    const D = new Ee(new Xt(.85,.85,5.5,16),n);
-    D.rotation.x = Math.PI / 2,D.position.set(0,0,R * 17.75),D.name = "pitch-bearing-axle",c.add(D);
-    for(const N of[- 1,1])d([h(0,0,R * 15.75),h(N * 2.1, - 3.5,R * 14.1),h(N * 3.2, - 10.1,R * 12.5),h(N * 3.2, - 13.8,R * 11.8),h(N * 3.2, - 14.2,R * 11.4),h(N * 3.8, - 15.7,R * 7)],.42,t,"continuous-cradle-fork",c)
-  }
-  for(const R of[- 1,1])d([h(R * 3.8, - 15.7, - 7),h(R * 3.8, - 15.7,0),h(R * 3.8, - 15.7,7)],.45,t,"cradle-lower-crossmember",c),d([h(R * 3.8, - 15.7,0),h(0, - 15.7,0)],.52,t,"swivel-support",c);
-  const u = new Ee(new Xt(1.1,1.25,5.7,20),n);
-  u.position.set(0, - 11.65,0),u.name = "seat-swivel-spindle",u.castShadow = !0,c.add(u),A.add(c);
-  const p = new dt;
-  p.name = "gimbal-seat-swivel";
-  const v = [[3.8, - 8.5,5.1],[0, - 9,5.55],[- 4.8, - 8.95,5.7],[- 6.6, - 6.4,5.35],[- 7, - .5,5],[- 7.3,4.2,4.25],[- 7.4,7,3]],g = [- 1, - .8,0,.8,1],m = [],y = [];
-  for(let R = 0;R < 2;R++)v.forEach(([D,N,X],Y)=>{
-    g.forEach(H=>{
-      const V = Math.pow(Math.abs(H),4);m.push(D + (Y > 2?V * 1.1:0) - R * .22,N + (Y <= 2?V * .85:0) - R * .16,H * X)
-    }
-    )
-  }
-  );
-  const C = v.length * g.length;
-  for(let R = 0;R < 2;R++)for(let D = 0;D < v.length - 1;D++)for(let N = 0;N < g.length - 1;N++){
-    const X = R * C + D * g.length + N,Y = X + 1,H = Y + g.length,V = X + g.length;
-    y.push(...R?[X,H,Y,X,V,H]:[X,Y,H,X,H,V])
-  }
-  const E = [0,1,2,3,4,9,14,19,24,29,34,33,32,31,30,25,20,15,10,5];
-  for(let R = 0;R < E.length;R++){
-    const D = E[R],N = E[(R + 1) % E.length];
-    y.push(D,N,N + C,D,N + C,D + C)
-  }
-  const w = new Ct;
-  w.setAttribute("position",new Ke(m,3)),w.setIndex(y),w.computeVertexNormals();
-  const S = new lt({
-    color:1318180,roughness:.36,metalness:.32,side:Ut
-  }
-  ),k = new Ee(w,S);
-  k.name = "thin-racing-bucket-shell",k.castShadow = !0,p.add(k);
-  for(const R of[- 1,1])d(v.map(([D,N,X],Y)=>h(D + (Y > 2?1.1:0),N + (Y <= 2?.85:0),R * X)),.19,r,"bucket-edge-bead",p);
-  const x = (R,D,N,X,Y,H)=>{
-    const V = new Ee(new Ur(1,20,12),s);
-    V.position.set(D,N,0),V.scale.set(X,Y,H),V.name = R,V.castShadow = !0,p.add(V)
-  }
-  ;
-  x("seat-pan-padding", - 1.2, - 8.62,4.8,.42,4.5),x("seat-back-padding", - 6.55, - 1.8,.4,5.8,3.75),x("seat-head-padding", - 6.98,5.3,.34,1.5,2.55),d([h(0, - 8.75,0),h(.75, - 6.3,0),h(1.5, - 4,0)],.35,t,"control-column",p),d([h(1.5, - 4.95, - 3.65),h(1.5, - 4.5, - 4.1),h(1.5, - 2.95, - 3.5),h(1.5, - 2.75,0),h(1.5, - 2.95,3.5),h(1.5, - 4.5,4.1),h(1.5, - 4.95,3.65),h(1.5, - 5.1,0)],.31,r,"race-control-yoke",p,!0);
-  const T = o1(.7,1.3,2.4,r);
-  return T.position.set(1.5, - 4,0),T.name = "yoke-hub",p.add(T),c.add(p),{
-    root:i,visual:e,hitbox:a,rollRing:A,cradle:c,seat:p,rollAngle:0,cradleAngle:0,seatHeading:NaN
-  }
-
-}
-function ig(i){
-  return i = i % (2 * Math.PI),i > Math.PI?i-=2 * Math.PI:i < - Math.PI && (i+=2 * Math.PI),i
-}
-function A1(i,e,t){
-  let n = ig(e - i);
-  return n > t?n = t:n < - t && (n = - t),i + n
-}
-const cp = new jn,sA = new F,pc = new F,hp = .01,l1 = .4,c1 = 8;
-function h1(i,e,t,n,r){
-  cp.copy(i).invert(),sA.set(0,1,0).applyQuaternion(cp);
-  const s = sA.x,a = sA.y,o = sA.z;
-  let A = r.rollAngle,l = r.cradleAngle;
-  for(let m = 0;m < 4;m++){
-    const y = Math.cos(A),C = Math.sin(A),E = Math.cos(l),S = - Math.sin(l),k = E * y,x = E * C,T = s - S,R = a - k,D = o - x,N = - x,X = k,Y = - C * x - y * k,H = y * S,V = C * S,J = N * N + X * X,ne = J + hp + l1 * (1 - J),le = Y * Y + H * H + V * V + hp,je = N * H + X * V,de = N * R + X * D,pe = Y * T + H * R + V * D,Se = ne * le - je * je || 1e-9;
-    A+=(le * de - je * pe) / Se,l+=(ne * pe - je * de) / Se
-  }
-  const c = c1 * n,h = Math.max(- c,Math.min(c,A - r.rollAngle));
-  r.rollAngle+=h,r.cradleAngle = l,r.rollRing.rotation.x = r.rollAngle,r.cradle.rotation.z = l;
-  const d = Math.cos(r.cradleAngle),u = Math.sin(r.cradleAngle);
-  pc.set(d,Math.cos(r.rollAngle) * u,Math.sin(r.rollAngle) * u).applyQuaternion(i);
-  const p = Math.atan2(pc.z,pc.x);
-  Number.isNaN(r.seatHeading) && (r.seatHeading = p);
-  const g = Math.hypot(e,t) > s1?Math.atan2(t,e):r.seatHeading;
-  r.seatHeading = A1(r.seatHeading,g,a1 * n),r.seat.rotation.y = ig(p - r.seatHeading)
-}
-const zA = 17,VA = [[63.88,34,13],[63.88, - 34,13],[- 36.12,34,16],[- 36.12, - 34,16]],Wd = 16;
-function dp(i,e){
-  if(e <= i[0].x)return i[0].clone();
-  for(let t = 1;t < i.length;t++)if(e <= i[t].x)return i[t - 1].clone().lerp(i[t],(e - i[t - 1].x) / (i[t].x - i[t - 1].x));
-  return i[i.length - 1].clone()
-}
-function sg(i,e = {
-
-}
-){
-  const t = {
-    length:eg,width:tg,height:ng,centerForward:zd,centerUp:Vd,gimbalCenter:new F(xA,CA,0),wheels:VA,tireWidth:Wd,roofWidth:.82,roofLength:.43,...e
-  }
-  ,{
-    length:n,width:r,height:s,centerForward:a,centerUp:o
-  }
-   = t,A = t.gimbalCenter.x,l = t.gimbalCenter.y,c = o - s / 2,h = o + s / 2,d = Math.min(r,s) * .029,u = new dt;
-  u.name = "procedural-buggy-frame";
-  const p = new lt({
-    color:7634824,roughness:.36,metalness:.82
-  }
-  ),v = new Cn({
-    color:i,roughness:.31,metalness:.55,clearcoat:.7
-  }
-  ),g = new lt({
-    color:1121060,roughness:.46,metalness:.5,side:Ut
-  }
-  ),m = new lt({
-    color:11648453,roughness:.28,metalness:.9
-  }
-  ),y = new lt({
-    color:9789486,roughness:.4,metalness:.7
-  }
-  ),C = new lt({
-    color:13625075,emissive:14282239,emissiveIntensity:2.3,roughness:.22
-  }
-  ),E = new F(0,1,0),w = (te,G,Ge)=>new F(te,G,Ge),S = (te,G,Ge = p,$e = d,I = "chassis-tube")=>{
-    const b = G.clone().sub(te),q = b.length();
-    if(q < 1e-5)return;
-    const K = new Ee(new Xt($e,$e,q,12),Ge);
-    K.name = I,K.position.copy(te).add(G).multiplyScalar(.5),K.quaternion.setFromUnitVectors(E,b.normalize()),K.castShadow = !0,u.add(K),K.userData.endpoints = [te.toArray(),G.toArray()]
-  }
-  ,k = (te,G,Ge)=>{
-    const $e = new Ct().setFromPoints(G),I = [];
-    for(let q = 1;q < G.length - 1;q++)I.push(0,q,q + 1);
-    $e.setIndex(I),$e.computeVertexNormals();
-    const b = new Ee($e,Ge);
-    b.name = te,b.castShadow = !0,b.receiveShadow = !0,u.add(b)
-  }
-  ,x = (te,G)=>{
-    const Ge = new Ee(new Xt(d * .32,d * .32,d * .4,6),m);
-    Ge.name = "chassis-fastener",Ge.position.copy(te),Ge.quaternion.setFromUnitVectors(E,G),u.add(Ge)
-  }
-  ,T = a + n * .5,R = a - n * .608,D = A + n * .27,N = A - n * .3,X = A - n * .27,Y = X + n * t.roofLength,H = Math.max(r * .274,22 + d * 1.4),V = r * .5 * t.roofWidth,J = V * .94,ne = Math.max(...t.wheels.map(te=>te[0])),le = Math.min(...t.wheels.map(te=>te[0])),je = te=>Math.min(...t.wheels.filter(G=>Math.abs(G[0] - te) < .001).map(G=>Math.abs(G[1]))) - t.tireWidth * .99,de = h - s * .025,pe = c + s * .5,Se = r * .16,gt = te=>Gt.lerp(de,pe,(te - Y) / (T - Y)),ct = te=>Gt.lerp(J,Se,(te - Y) / (T - Y)),oe = (te,G)=>w(R,c + s * .54,te * r * .29).lerp(w(X,h,te * V),(G - R) / (X - R)),xe = new Map,ge = (te,G,Ge = v,$e = d)=>{
-    for(let I = 1;I < te.length;I++)S(te[I - 1],te[I],Ge,$e,G);
-    for(const I of te.slice(1, - 1)){
-      const b = new Ee(new Ur($e,12,8),Ge);
-      b.position.copy(I),b.name = G + "-bend",b.castShadow = !0,u.add(b)
-    }
-
-  }
-  ;
-  for(const te of[- 1,1]){
-    const G = [w(R,c + s * .06,te * r * .18),w(le,c,te * je(le)),w(N,c,te * H),w(D,c,te * H),w(ne,c,te * je(ne)),w(T,c + s * .12,te * Se)],Ge = [oe(te,R),oe(te,le),w(X,h,te * V),w(Y,de,te * J),w(D,gt(D),te * ct(D)),w(ne,gt(ne),te * ct(ne)),w(T,pe,te * Se)];
-    xe.set(te,{
-      bottom:G,top:Ge
-    }
-    ),ge(G,"lower-longeron"),ge(Ge,"swept-upper-longeron");
-    const $e = w(N,c + s * .7,te * H);
-    ge([G[2],$e,Ge[2]],"rear-cage-pillar",p,d * .92),S(G[3],Ge[4],p,d * .92,"front-cage-pillar"),S(G[0],Ge[0],p,d * .92,"tail-upright"),S(G[5],Ge[6],p,d * .92,"nose-upright"),S(G[2],Ge[4],p,d * .72,"door-diagonal"),S(G[0],$e,p,d * .75,"rear-bay-diagonal"),S(G[3],Ge[6],p,d * .75,"front-bay-diagonal");
-    const I = G.map(b=>b.clone().add(w(0,d * 1.5, - te * d * .65)));
-    for(let b = 1;b < I.length;b++)S(I[b - 1],I[b],y,d * .19,"frame-pressure-line")
-  }
-  const qe = xe.get(- 1),Xe = xe.get(1),We = (te,G)=>dp(xe.get(Math.sign(te)).bottom,G),ft = (te,G)=>dp(xe.get(Math.sign(te)).top,G);
-  for(let te = 0;te < qe.bottom.length;te++)S(qe.bottom[te],Xe.bottom[te]);
-  for(const te of[0,1,2,3,5,6])S(qe.top[te],Xe.top[te],te === 2 || te === 3?v:p,d,te === 1 || te === 5?"shock-tower-crossmember":"cage-crossmember");
-  const st = t.wheels.map(([te,G])=>{
-    const Ge = Math.sign(G),$e = ft(Ge,te),I = w(te,$e.y,Ge * Math.min(je(te),Math.abs($e.z) - d * 1.2)),b = Math.min(n * .075,(ne - le) * .11),q = We(Ge,te + b),K = We(Ge,te - b);S(q,I,p,d * .9,"shock-tower-forward-leg"),S(K,I,p,d * .9,"shock-tower-rear-leg"),k("shock-tower-gusset",[I.clone().add(w(0, - d,0)),I.clone().lerp(q,.2),I.clone().lerp(K,.2)],g);const ie = new Ee(new zi(d * 1.2,d * .38,8,20),m);return ie.name = "shock-mount-eye",ie.position.copy(I),u.add(ie),x(I,w(0,0,Ge)),{
-      top:I,foreRoot:q,aftRoot:K,innerZ:Ge * (Math.abs(G) - t.tireWidth * .8)
-    }
-
-  }
-  ),ue = A + n * .21,_e = A - n * .21,ve = Math.min(Y, - X) - d * 1.6,Me = (te,G)=>{
-    const Ge = w(G,h,te * V);
-    return S(ft(te,G),Ge,p,d * .65,"upper-jet-standoff"),Ge
-  }
-  ,Be = {
-    roll:{
-      fP:Me(1,ve),fN:Me(- 1,ve),bP:Me(1, - ve),bN:Me(- 1, - ve)
-    }
-    ,yaw:{
-      fP:We(1,ue),fN:We(- 1,ue),bP:We(1,_e),bN:We(- 1,_e)
-    }
-    ,pitchFront:[qe.top[6].clone(),Xe.top[6].clone()],pitchBack:[qe.top[0].clone(),Xe.top[0].clone()],jump:w(A,l - 22,0)
-  }
-  ;
-  for(const te of[...Object.values(Be.roll),...Object.values(Be.yaw)]){
-    const G = Math.sign(te.z);
-    S(te.clone().add(w(0,0, - G * d)),te,g,d * 1.15,"rcs-mount-pad"),x(te.clone().add(w(0,0, - G * d * 1.2)),w(0,0,G))
-  }
-  const Ze = te=>{
-    const G = te - A,Ge = c - l,$e = G * G + Ge * Ge,I = 22,b = I * I / $e,q = I * Math.sqrt(Math.max(0,$e - I * I)) / $e,K = w(A + b * G - q * Ge,l + b * Ge + q * G,0),ie = w(A + b * G + q * Ge,l + b * Ge - q * G,0);
-    return K.y < ie.y?K:ie
-  }
-  ;
-  S(w(D,c,0),Ze(D)),S(w(N,c,0),Ze(N));
-  for(const te of[- 1,1]){
-    const G = ft(te,T),Ge = new Ee(new Tn(n * .024,s * .12,r * .052),g);
-    Ge.position.copy(G).add(w(- d, - d, - te * d)),Ge.name = "nose-light-pod",u.add(Ge);
-    for(const $e of[- .9,.9])for(const I of[- 1,1]){
-      const b = new Ee(new Tn(.7,1.35,1.4),C);
-      b.position.copy(Ge.position).add(w(n * .013,$e,I)),u.add(b)
-    }
-
-  }
-  const He = w(R + n * .145,c + s * .35,0),At = w(R - 11,He.y,0);
-  return d1(u,R,i,He.y),{
-    group:u,railBottom:We,railTop:ft,suspension:st,jets:Be,powertrainMount:He,boostOutlet:At,stations:{
-      nose:T,front:D,rear:N,tail:R
-    }
-    ,bellyMount:Be.jump
-  }
-
-}
-function d1(i,e,t,n){
-  const r = new lt({
-    color:2567220,roughness:.28,metalness:.95
-  }
-  ),s = new lt({
-    color:3159615,roughness:.22,metalness:1,side:Ut
-  }
-  ),a = new lt({
-    color:t,roughness:.3,metalness:.7
-  }
-  ),o = new Ee(new Xt(1,1,26.6,12),r);
-  o.position.set(e,n - .3,0),o.castShadow = !0;
-  const A = new Ee(new Xt(3.4,3.9,8,18),r);
-  A.rotation.z = Math.PI / 2,A.position.set(e - 2,n,0),A.castShadow = !0;
-  const l = new Ee(new zi(3.7,.55,10,24),a);
-  l.rotation.y = Math.PI / 2,l.position.set(e - 5.8,n,0);
-  const c = new Ee(new Oi([new Ae(1.7,0),new Ae(2,.9),new Ae(2.9,2.7),new Ae(3.9,4.5),new Ae(4.7,5.6)],22),s);
-  c.rotation.z = Math.PI / 2,c.position.set(e - 6,n,0),c.castShadow = !0,i.add(o,A,l,c)
-}
-const ag = ["frame-details","fixed-details","roll-details","cradle-details","seat-details"];
-let ma = null;
-function og(){
-  return ma || (ma = new ho().loadAsync("/assets/realistic-car/details.glb").then(({
-    scene:i
-  }
-  )=>{
-    const e = {
-
-    }
-    ;for(const t of ag){
-      const n = i.getObjectByName(t);if(!n)throw new Error(`Realistic car asset is missing ${t}`);e[t] = n
-  }
-  return e
-}
-).catch(i=>{
-  throw ma = null,i
-}
-),ma)
-}
-function Ag(i,e,t,n){
-  const r = {
-    "frame-details":e.group,"fixed-details":t.visual,"roll-details":t.rollRing,"cradle-details":t.cradle,"seat-details":t.seat
-  }
-  ,s = new Map,a = o=>{
-    if(o.name !== "realistic-team")return o;
-    let A = s.get(o);
-    return A || (A = o.clone(),A.color.setHex(n),s.set(o,A)),A
-  }
-  ;
-  for(const o of ag){
-    const A = i[o].clone(!0);
-    o === "frame-details" && A.position.copy(e.powertrainMount),(o === "roll-details" || o === "cradle-details" || o === "seat-details") && A.position.set(0,0,0),A.traverse(l=>{
-      l instanceof Ee && (l.castShadow = !0,l.receiveShadow = !0,l.material = Array.isArray(l.material)?l.material.map(a):a(l.material))
-    }
-    ),r[o].add(A)
-  }
-
-}
 // --- Deobfuscated Phase 3: Audio Subsystem & Spatial Audio (Imported from src/audio/) ---
 let __audioLastPhase = "playing";
 let __audioLastOvertime = false;
@@ -21732,6 +21228,51 @@ setBallVisualThreeContext({
 });
 // --- Phase 7 Part 3 Deobfuscation: SpeedTrail (pS, fS) extracted to src/entities/SpeedTrail.js ---
 // --- Phase 7 Part 3 (Step 3) Deobfuscation: ArenaWorld (ow), Stadium Arena, & Suspension extracted to src/entities/ArenaWorld.js ---
+setVehicleAssemblyThreeContext({
+  Group: dt,
+  Mesh: Ee,
+  BoxGeometry: Tn,
+  EdgesGeometry: Nm,
+  LineSegments: Wa,
+  LineBasicMaterial: Gi,
+  CylinderGeometry: Xt,
+  SphereGeometry: Ur,
+  PlaneGeometry: ui,
+  BufferGeometry: Ct,
+  BufferAttribute: Ke,
+  TubeGeometry: Hs,
+  CatmullRomCurve3: Bd,
+  CurvePath: zm,
+  LineCurve3: Hm,
+  LatheGeometry: Oi,
+  TorusGeometry: zi,
+  RingGeometry: Ya,
+  CanvasTexture: bd,
+  MeshStandardMaterial: lt,
+  MeshPhysicalMaterial: Cn,
+  MeshBasicMaterial: cn,
+  ShaderMaterial: Lt,
+  Vector2: Ae,
+  Vector3: F,
+  Color: Ne,
+  Quaternion: jn,
+  Scene: el,
+  DoubleSide: Ut,
+  BackSide: $n,
+  FrontSide: pn,
+  get GLTFLoader() { return ho; },
+  TextureLoader: Ao,
+  OBJLoader: cb,
+  multiThemeMaterial: vn,
+  getThemeMaterial: Vi,
+  cloneMaterial: Nr,
+  markMatrixDirty: Ji,
+  setShadowFlags: N0,
+  Matrix4: mt,
+  Matrix3: jt,
+  MathUtils: Gt
+});
+
 setArenaWorldThreeContext({
   Group: dt,
   Mesh: Ee,
@@ -21829,88 +21370,9 @@ const _M = TouchLayoutEditor;
 // - src/ui/SettingsSheet.js (Settings dialog, camera/controls/audio/graphics/training tuning, pad nav, aliases BM, _g, Yh, uA, Ma, SA, EM, Ps, bM, Zh, SM, wM, nm, yM, xM, Kd, rm, CM, Na, MM, Pr, im)
 let activeSettingsOverlay = null;
 let activeGraphicsSettings = null;
-// Ni (default blue team color index) and direction normals used by suspension helpers FM and DM
-const Ni = 0, TM = new F(0, 1, 0), RM = new F(0, - 1, 0);
-function FM(i,e,t){
-  i.position.set((e.x + t.x) / 2,(e.y + t.y) / 2,(e.z + t.z) / 2);
-  const n = new F(t.x - e.x,t.y - e.y,t.z - e.z),r = n.length();
-  n.divideScalar(r || 1),i.quaternion.setFromUnitVectors(TM,n),i.scale.set(1,r,1)
-}
-function DM(i,e){
-  const t = new F(0,e - i.top.y,i.botZ - i.top.z),n = t.length();
-  t.divideScalar(n || 1),i.group.quaternion.setFromUnitVectors(RM,t),i.spring.scale.y = n / i.built;
-  const r = Math.max(1,n - i.bodyLen * .5);
-  i.shaft.scale.y = r,i.shaft.position.y = - r / 2,i.body.position.y = - (n - i.bodyLen / 2)
-}
-async function NM(){
-  const i = await og(),e = new dt,t = sg(xn[Ni]);
-  e.add(t.group);
-  const n = rg();
-  Ag(i,t,n,xn[Ni]),e.add(n.root);
-  const r = {
-    tire:new lt({
-      color:1447965,roughness:.96
-    }
-    ),lug:new lt({
-      color:987412,roughness:.98
-    }
-    ),rim:new lt({
-      color:1909033,roughness:.3,metalness:.9
-    }
-    ),accent:new lt({
-      color:xn[Ni],roughness:.3,metalness:.7
-    }
-    )
-  }
-  ,s = new lt({
-    color:xn[Ni],roughness:.28,metalness:.7
-  }
-  ),a = new lt({
-    color:15133423,roughness:.1,metalness:1
-  }
-  ),o = new lt({
-    color:1711652,roughness:.3,metalness:.9
-  }
-  ),A = new lt({
-    color:2830134,roughness:.45,metalness:.8
-  }
-  );
-  for(let l = 0;l < VA.length;l++){
-    const[c,h,d] = VA[l],u = d - zA,p = new dt;
-    p.position.set(c,u,h);
-    const v = new dt,g = gg(d,Wd,r);
-    g.rotation.x = Math.PI / 2,v.add(g),p.add(v,vg(t.suspension[l].innerZ - h)),e.add(p);
-    const{
-      top:m,innerZ:y,foreRoot:C,aftRoot:E
-    }
-     = t.suspension[l],w = Math.hypot(u - m.y,y - m.z),S = mg(w,s,a,o);
-    S.group.position.copy(m),e.add(S.group),DM({
-      ...S,top:m,botZ:y
-    }
-    ,u);
-    const k = new F(c,u,y);
-    for(const x of[C,E]){
-      const T = new Ee(new Xt(1.5,1.5,1,10),A);
-      FM(T,x,k),e.add(T)
-    }
+// --- Vehicle Showcase Loaders & Suspension Helpers (Extracted to src/entities/VehicleAssembly.js) ---
+// Functions FM, DM, NM, GM, OM, and Ni are now imported from src/entities/VehicleAssembly.js.
 
-  }
-  return N0(e),jg(t),e
-}
-async function GM(){
-  const i = new dt,e = await Uh();
-  return i.add(z0(e,xn[Ni])),q0.forEach(([t,n,r],s)=>{
-    const a = r - zA,o = new dt;o.position.set(t,a,n);const A = new dt;A.add(V0(e,s)),o.add(W0(e,s),A),i.add(o)
-  }
-  ),i
-}
-async function OM(){
-  const i = new dt,e = await Y0();
-  return i.add(Z0(e,xn[Ni])),X0.forEach(([t,n],r)=>{
-    const s = Q0(e,r,xn[Ni]);s.position.set(t,J0[r],n),i.add(s)
-  }
-  ),i
-}
 // --- Phase 6 Part 2 Deobfuscation & Modularization: Garage Turntable, Hitbox Presets, and GarageDialog ---
 // Vehicle showcase turntable (HM), Garage modal dialog (UM), Hitbox presets, and display settings store (Qh)
 // have been extracted to src/ui/GarageDialog.js.

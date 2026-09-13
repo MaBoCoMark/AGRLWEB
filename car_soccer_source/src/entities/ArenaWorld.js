@@ -20,6 +20,27 @@
  * - setupCarReactionJets -> jg
  */
 
+import {
+  loadGameCarAsset,
+  loadFlatCarAsset,
+  loadRealisticCarAsset,
+  createRealisticCarModel,
+  createRealisticCarGimbals,
+  assembleRealisticCar,
+  createGameCarModel,
+  createFlatCarModel,
+  createGameCarWheel,
+  createGameCarWheelHardware,
+  createFlatCarWheel,
+  updateRealisticCockpitGimbal,
+  getCarVisualTheme,
+  REALISTIC_WHEEL_COORDS,
+  FLAT_CAR_WHEEL_COORDS,
+  OCTANE_WHEEL_COORDS,
+  REALISTIC_SUSPENSION_Z,
+  FLAT_CAR_SUSPENSION_HEIGHTS,
+  FLAT_CAR_HITBOX_OFFSET
+} from './VehicleAssembly.js';
 import { BoostPadSystem } from './BoostPadSystem.js';
 import { loadStadiumContinuousBoundary, loadStadiumArchitecture } from './StadiumArena.js';
 import { BallLocatorArrow, bS } from './BallLocatorArrow.js';
@@ -111,6 +132,7 @@ let arenaWorldThreeContext = {
   RingGeometry: null,
   CanvasTexture: null,
   MeshStandardMaterial: null,
+  MeshPhysicalMaterial: null,
   MeshBasicMaterial: null,
   ShaderMaterial: null,
   Vector2: null,
@@ -143,22 +165,33 @@ let arenaWorldThreeContext = {
 };
 
 let arenaWorldCarLoaders = {
-  loadGameCarAsset: null,
-  loadFlatCarAsset: null,
-  loadRealisticCarAsset: null,
-  createRealisticCarModel: null,
-  createRealisticCarGimbals: null,
-  assembleRealisticCar: null,
-  createGameCarModel: null,
-  createFlatCarModel: null,
-  createGameCarWheel: null,
-  createGameCarWheelHardware: null,
-  createFlatCarWheel: null,
-  updateRealisticCockpitGimbal: null,
-  getCarVisualTheme: null,
-  wheelSpecs: null,
-  suspensionSpecs: null,
-  hitboxOffsets: null,
+  loadGameCarAsset,
+  loadFlatCarAsset,
+  loadRealisticCarAsset,
+  createRealisticCarModel,
+  createRealisticCarGimbals,
+  assembleRealisticCar,
+  createGameCarModel,
+  createFlatCarModel,
+  createGameCarWheel,
+  createGameCarWheelHardware,
+  createFlatCarWheel,
+  updateRealisticCockpitGimbal,
+  getCarVisualTheme,
+  wheelSpecs: {
+    realistic: REALISTIC_WHEEL_COORDS,
+    flat: FLAT_CAR_WHEEL_COORDS,
+    game: OCTANE_WHEEL_COORDS
+  },
+  suspensionSpecs: {
+    realisticZ: REALISTIC_SUSPENSION_Z,
+    flatY: FLAT_CAR_SUSPENSION_HEIGHTS
+  },
+  hitboxOffsets: {
+    realistic: OCTANE_BOOST_OUTLETS,
+    flat: FLAT_CAR_HITBOX_OFFSET,
+    flatJets: FLAT_CAR_BOOST_OUTLETS
+  },
   teamColors: DEFAULT_TEAM_COLORS
 };
 
@@ -289,6 +322,11 @@ export function resolveContext() {
       clone() { return new (resolveContext().MeshStandardMaterial)(this); }
       dispose() {}
     }),
+    MeshPhysicalMaterial: G.MeshPhysicalMaterial || (typeof THREE !== 'undefined' ? THREE.MeshPhysicalMaterial : class {
+      constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
+      clone() { return new (resolveContext().MeshPhysicalMaterial)(this); }
+      dispose() {}
+    }),
     MeshBasicMaterial: G.MeshBasicMaterial || (typeof THREE !== 'undefined' ? THREE.MeshBasicMaterial : class {
       constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
       clone() { return new (resolveContext().MeshBasicMaterial)(this); }
@@ -341,6 +379,7 @@ export function resolveContext() {
       distanceToSquared(v) { const dx = this.x - (v.x || 0), dy = this.y - (v.y || 0), dz = this.z - (v.z || 0); return dx*dx + dy*dy + dz*dz; }
       lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
       normalize() { const l = this.length(); return l > 0 ? this.divideScalar(l) : this; }
+      lerp(v, alpha) { this.x += (v.x - this.x) * alpha; this.y += (v.y - this.y) * alpha; this.z += (v.z - this.z) * alpha; return this; }
       lerpVectors(v1, v2, alpha) {
         this.x = v1.x + (v2.x - v1.x) * alpha;
         this.y = v1.y + (v2.y - v1.y) * alpha;

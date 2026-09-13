@@ -9,6 +9,8 @@ export * from './BoostPadSystem.js';
 export * from './SpeedTrail.js';
 export * from './BallVisual.js';
 export * from './ArenaWorld.js';
+export * from './StadiumArena.js';
+export * from './VehicleAssembly.js';
 export * from './ArenaEntity.js';
 export * from './BallEntity.js';
 export * from './CarEntity.js';
