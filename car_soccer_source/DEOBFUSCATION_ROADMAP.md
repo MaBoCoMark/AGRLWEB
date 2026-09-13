@@ -87,7 +87,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **06** | **性能监控与帧耗时** | `class aB`, `class iB` | `src/ui/PerformanceOverlayHUD.js` | ✅ **已完成** | 极简与详情 FPS / p95 耗时视图、SVG 折线图与环形缓冲 |
 | **07** | **全局 UI 矢量图标库**| `jM`, `Vt` | `src/ui/Icons.js` | ✅ **已完成** | 包含 20 个高精度 SVG 矢量图标库与格式化输出 |
 | **08** | **综合音效总线与空间音频**| `class Lw`, `Sw`, `kw`, `V1`, `jw`, `tm`, `u1`, `cg`, `GameAudioManager` | `src/audio/SpatialAudioSource.js`<br>`src/audio/GameAudioSubsystem.js` | ✅ **已完成** | Web Audio HRTF 空间化立体声、Smoothstep 距离衰减、多层撞球撞墙声、起跳翻滚与着陆悬挂声、超音速音爆与循环、黄金喷气火焰粒子声效、引擎音频桥接、比赛播报与设置持久化 |
-| **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M`, `BC` | `src/input/MultiPlatformInput.js` | ⏳ *阶段四* | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆、Bindings 存储与重映射 |
+| **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M`, `BC`, `Rh`, `Yo` | `src/input/MultiPlatformInput.js` | ✅ **已完成** | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆、Bindings 存储与重映射 |
 | **10** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段五* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
 | **11** | **比赛与模式状态机** | `class VM`, `class $M` | `src/game/MatchController.js` | ⏳ *阶段五* | Kickoff 开球、321 倒计时、进球判定、加时赛判定 |
 | **12** | **RL Bot 强化学习代理**| `class QM` | `src/ai/RLBotAgent.js` | ⏳ *阶段六* | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer) |
@@ -160,6 +160,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 保持 100% 向后兼容别名桥接（`SC`, `XC`, `ib`, `_M`, `io`, `BC`, `Rf`, `UC`, `qC`, `Li`, `Hi`, `TC`, `RC`, `Pf`, `PC`, `OA`, `Hd`, `$C`, `Ks` 等）。
 8. 创建测试套件 `tests/input_subsystem.test.js`：涵盖配置存取、按键映射、设备识别、控制器读取及触控布局数学，全部 7 组测试用例 100% 通过。
 9. 重构 `src/game/CarSoccerEngine.js`：移除 2,178 行内联高混淆输入与布局编辑代码，替换为现代 ES Module 导入。
+10. **缺陷修复与别名补齐 (Bugfix)**：修复启动实例化设置面板 `SettingsSheet` (`BM`) 时因缺失 `detectControllerType` (`Rh`) 与 `formatAxisName` (`Yo`) 别名导致的 `ReferenceError: Can't find variable: Rh` 运行时白屏崩溃问题；并在 `tests/input_subsystem.test.js` 中扩充了手柄品牌识别与轴名格式化验证。
 
 ### 阶段五：弹窗与比赛状态机模块化
 - 目标：抽取 `SettingsSheet` (`BM`)、`GarageDialog` (`UM`/`HM`)、`MatchDialog` (`$M`) 与 `MatchStateMachine` (`VM`)。

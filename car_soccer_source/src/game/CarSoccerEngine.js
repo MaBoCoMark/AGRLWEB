@@ -127,7 +127,9 @@ import {
   TOUCH_ACTION_IDS,
   EXTRA_ROLL_ACTIONS,
   JOYSTICK_DEADZONE,
-  virtualJoystickFactory
+  virtualJoystickFactory,
+  detectControllerType,
+  formatAxisName
 } from "../input/MultiPlatformInput.js";
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
@@ -17982,6 +17984,8 @@ const OA = getConnectedGamepads;
 const Hd = getSelectedController;
 const $C = setSelectedController;
 const Ks = getEffectiveGamepad;
+const Rh = detectControllerType;
+const Yo = formatAxisName;
 const io = INPUT_ACTIONS;
 const BC = STORAGE_KEY_INPUT_BINDINGS;
 const Rf = CAMERA_LOOK_ACTIONS;

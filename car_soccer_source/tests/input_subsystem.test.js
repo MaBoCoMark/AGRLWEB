@@ -72,6 +72,7 @@ import {
   formatKeyDisplayName,
   formatBindingDisplayName,
   detectControllerType,
+  formatAxisName,
   getActionLabel,
   loadInputBindings,
   saveInputBindings,
@@ -87,6 +88,7 @@ import {
   PC,
   LC,
   Rh,
+  Yo,
   Hi,
   HC,
   Li,
@@ -214,6 +216,13 @@ console.log('  Testing Input Bindings Defaults & Formatting...');
   assert.equal(detectControllerType('Sony Interactive Entertainment Wireless Controller'), 'playstation');
   assert.equal(detectControllerType('Xbox Wireless Controller (STANDARD GAMEPAD)'), 'xbox');
   assert.equal(Rh('054c:0ce6 DualSense Wireless Controller'), 'playstation');
+
+  // Axis names formatting
+  assert.equal(formatAxisName(0), 'L Stick X');
+  assert.equal(formatAxisName(1), 'L Stick Y');
+  assert.equal(Yo(2), 'R Stick X');
+  assert.equal(Yo(3), 'R Stick Y');
+  assert.equal(Yo(4), 'Axis 4');
 
   // Display binding format
   const keyBind = { kind: 'key', code: 'KeyW' };
