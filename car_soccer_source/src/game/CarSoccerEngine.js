@@ -29287,8 +29287,7 @@ if (hudTools) {
     if (parallelManager.isActive) {
       parallelManager.toggleMenu();
     } else {
-      parallelManager.enter(n);
-      parallelManager.openMenu();
+      parallelManager.showConfirmModal();
     }
   });
   hudTools.prepend(pBtn);
@@ -29493,7 +29492,7 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   const zn = D.read(),Sr = x.read(),Pn = R.active()?"gamepad":D.active()?"touch":"keyboard",on = Pn === "gamepad"?Rn:Pn === "touch"?zn:Sr,Mt = !document.hidden && document.hasFocus();
   be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on;
   if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
-    parallelManager.arenas[parallelManager.activeSlot]?.setControls(0, on);
+    parallelManager.applyActivePlayerControls(on);
   } else {
     n.setControls(r, on);
   }
@@ -29572,10 +29571,10 @@ function wt(W){
   if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
     parallelManager.stepBackgroundArenas(s.lastTicks, s.alpha);
   }
-  const activeSimInstance = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.arenas[parallelManager.activeSlot] : n;
+  const activeSimInstance = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.getActiveArena() : n;
   const goalScored = activeSimInstance.pollGoal() !== 0;
   a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (
-    (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive ? parallelManager.resetActiveSlot() : n.resetKickoff()),
+    (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive ? parallelManager.handleActiveWorldGoal() : n.resetKickoff()),
     w(), s.sync(W), N.resetBallTrail(),
     typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(activeSimInstance ? activeSimInstance.state : null)
   ), pe.update(a.state), an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode, D.setMatchActive(a.state.mode === "match"), pBtn && (pBtn.style.display = a.state.mode === "match" ? "none" : "")), He.mark();

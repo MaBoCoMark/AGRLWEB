@@ -11,11 +11,11 @@ import jC from '../physics/RocketSimWasm.js';
 
 export const DEFAULT_TRAJECTORY_SETTINGS = {
   enabled: true,          // Default enabled in Free Play
-  duration: 2.5,          // 0.5s - 5.0s, step 0.1s
-  lineThickness: 4.0,     // 1.0 - 100.0, step 0.5
-  existTime: 80,          // 0ms - 100ms, default 80ms
-  hiddenTime: 20,         // 0ms - 100ms, default 20ms
-  color: '#00f0ff',       // Cyan neon glow
+  duration: 2.5,          // 0.5s - 10.0s, step 0.1s
+  lineThickness: 30.0,    // 1.0 - 100.0, step 0.5, default 30.0
+  existTime: 80,          // 0ms - 1000ms, default 80ms
+  hiddenTime: 20,         // 0ms - 1000ms, default 20ms
+  color: '#000000',       // Pure black #000
 };
 
 const STORAGE_KEY = 'car_soccer_trajectory_settings';
@@ -30,8 +30,8 @@ export class BallTrajectoryPredictor {
     this.group = new THREE.Group();
     this.group.name = 'BallTrajectoryPrediction';
 
-    // Maximum ticks: 5.0 seconds at 120Hz = 600 ticks
-    this.maxTicks = 600;
+    // Maximum ticks: 10.0 seconds at 120Hz = 1200 ticks
+    this.maxTicks = 1200;
     this.maxVertices = this.maxTicks * 2;
     this.maxIndices = (this.maxTicks - 1) * 6;
 
@@ -153,10 +153,12 @@ export class BallTrajectoryPredictor {
       if (saved) {
         const parsed = JSON.parse(saved);
         const merged = { ...DEFAULT_TRAJECTORY_SETTINGS, ...parsed };
-        merged.lineThickness = Math.max(1.0, Math.min(100.0, Number(merged.lineThickness) || 4.0));
-        merged.duration = Math.max(0.5, Math.min(5.0, Number(merged.duration) || 2.5));
-        merged.existTime = Math.max(0, Math.min(100, parseInt(merged.existTime, 10) || 80));
-        merged.hiddenTime = Math.max(0, Math.min(100, parseInt(merged.hiddenTime, 10) || 20));
+        if (parsed.color === '#00f0ff') merged.color = '#000000';
+        if (parsed.lineThickness === 4.0 || parsed.lineThickness === undefined) merged.lineThickness = 30.0;
+        merged.lineThickness = Math.max(1.0, Math.min(100.0, Number(merged.lineThickness) || 30.0));
+        merged.duration = Math.max(0.5, Math.min(10.0, Number(merged.duration) || 2.5));
+        merged.existTime = Math.max(0, Math.min(1000, parseInt(merged.existTime, 10) ?? 80));
+        merged.hiddenTime = Math.max(0, Math.min(1000, parseInt(merged.hiddenTime, 10) ?? 20));
         return merged;
       }
     } catch (_) {}
@@ -970,8 +972,8 @@ export class BallTrajectoryPredictor {
             <label class="trajectory-label" for="traj-duration">Prediction Duration</label>
             <span class="trajectory-val" id="traj-duration-val">${Number(this.settings.duration).toFixed(1)}s</span>
           </div>
-          <input type="range" id="traj-duration" class="trajectory-slider" min="0.5" max="5.0" step="0.1" value="${this.settings.duration}" />
-          <span class="trajectory-hint">Forward prediction range (0.5s – 5.0s, step 0.1s)</span>
+          <input type="range" id="traj-duration" class="trajectory-slider" min="0.5" max="10.0" step="0.1" value="${this.settings.duration}" />
+          <span class="trajectory-hint">Forward prediction range (0.5s – 10.0s, step 0.1s)</span>
         </div>
 
         <div class="trajectory-row">
@@ -988,8 +990,8 @@ export class BallTrajectoryPredictor {
             <label class="trajectory-label" for="traj-exist">Exist Time (Solid)</label>
             <span class="trajectory-val" id="traj-exist-val">${this.settings.existTime} ms</span>
           </div>
-          <input type="range" id="traj-exist" class="trajectory-slider" min="0" max="100" step="1" value="${this.settings.existTime}" />
-          <span class="trajectory-hint">Solid line duration per cycle (0 – 100 ms)</span>
+          <input type="range" id="traj-exist" class="trajectory-slider" min="0" max="1000" step="1" value="${this.settings.existTime}" />
+          <span class="trajectory-hint">Solid line duration per cycle (0 – 1000 ms)</span>
         </div>
 
         <div class="trajectory-row">
@@ -997,14 +999,14 @@ export class BallTrajectoryPredictor {
             <label class="trajectory-label" for="traj-hidden">Hidden Time (Gap)</label>
             <span class="trajectory-val" id="traj-hidden-val">${this.settings.hiddenTime} ms</span>
           </div>
-          <input type="range" id="traj-hidden" class="trajectory-slider" min="0" max="100" step="1" value="${this.settings.hiddenTime}" />
-          <span class="trajectory-hint">Hidden gap duration per cycle (0 – 100 ms)</span>
+          <input type="range" id="traj-hidden" class="trajectory-slider" min="0" max="1000" step="1" value="${this.settings.hiddenTime}" />
+          <span class="trajectory-hint">Hidden gap duration per cycle (0 – 1000 ms)</span>
         </div>
 
         <div class="trajectory-row">
           <div class="trajectory-row__header">
             <label class="trajectory-label" for="traj-color">Line Color</label>
-            <input type="color" id="traj-color" value="${this.settings.color || "#00f0ff"}" style="background:none;border:none;width:36px;height:24px;cursor:pointer;" />
+            <input type="color" id="traj-color" value="${this.settings.color || "#000000"}" style="background:none;border:none;width:36px;height:24px;cursor:pointer;" />
           </div>
           <span class="trajectory-hint">Neon glow ribbon color</span>
         </div>
