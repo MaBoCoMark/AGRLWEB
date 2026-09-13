@@ -23,7 +23,7 @@ function downloadWasm(urls, destPaths) {
             res.on('end', () => {
               const buffer = Buffer.concat(chunks);
               // Verify wasm magic bytes \0asm (0x00, 0x61, 0x73, 0x6d)
-              if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x61 && buffer[2] === 0x73 && buffer[3] === 0x3d) {
+              if (buffer.length >= 4 && buffer[0] === 0x00 && buffer[1] === 0x61 && buffer[2] === 0x73 && buffer[3] === 0x6d) {
                 for (const dest of destPaths) {
                   try {
                     mkdirSync(dirname(dest), { recursive: true });
@@ -102,17 +102,17 @@ export default defineConfig({
           const pathname = (req.url || '').split('?')[0].split('#')[0];
 
           // 1. Handle ort-wasm requests (simd-threaded) specifically
-          if (pathname.includes('ort-wasm-simd-threaded') || pathname.endsWith('.wasm')) {
+          if (pathname.includes('ort-wasm-simd-threaded') || pathname.includes('ort-wasm')) {
             const inRoot = resolve(__dirname, '../public/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
             const inAssets = resolve(__dirname, '../public/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm');
             const genericDiskPath = resolve(__dirname, '../public', pathname.replace(/^\//, ''));
 
-            const foundPath = existsSync(inRoot)
+            const foundPath = existsSync(genericDiskPath)
+              ? genericDiskPath
+              : existsSync(inRoot)
               ? inRoot
               : existsSync(inAssets)
               ? inAssets
-              : existsSync(genericDiskPath)
-              ? genericDiskPath
               : null;
 
             if (foundPath) {
@@ -142,6 +142,16 @@ export default defineConfig({
                 return;
               }
             } catch (err) {}
+          } else if (pathname.endsWith('.wasm')) {
+            const genericDiskPath = resolve(__dirname, '../public', pathname.replace(/^\//, ''));
+            if (existsSync(genericDiskPath)) {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/wasm');
+              res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+              res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+              createReadStream(genericDiskPath).pipe(res);
+              return;
+            }
           }
 
           // 2. Handle /custom/ static file requests from repository root
