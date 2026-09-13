@@ -88,7 +88,11 @@ export class RenderClockScheduler {
           const target = this.nextFrameTime + this.frameInterval;
           this.nextFrameTime = target > now ? target : now + this.frameInterval;
         }
-        this.render(now);
+        try {
+          this.render(now);
+        } catch (renderErr) {
+          console.error('[RenderClockScheduler] Uncaught error during render tick:', renderErr);
+        }
 
         const sync = glCtx.fenceSync(glCtx.SYNC_GPU_COMMANDS_COMPLETE, 0);
         if (sync) {

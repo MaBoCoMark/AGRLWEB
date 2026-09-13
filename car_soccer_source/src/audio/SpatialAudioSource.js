@@ -7,7 +7,7 @@
  * - 3D HRTF Web Audio PannerNode with explicit mono speaker channel routing
  * - Cubic Hermite smoothstep distance attenuation (250 uu -> 4500 uu)
  * - Camera-bound Web Audio Listener synchronization (supports AudioParam & legacy APIs)
- * - Zero-allocation listener orientation updates
+ * - Zero-allocation listener orientation updates directly from camera world matrix
  */
 
 export const SPATIAL_AUDIO_CONFIG = {
@@ -33,10 +33,57 @@ export function calculateDistanceGain(distance) {
 // Internal listener state shared across all spatial audio instances
 class AudioListenerManager {
   constructor() {
-    this.position = { x: 0, y: 0, z: 0 };
+    this.position = {
+      x: 0,
+      y: 0,
+      z: 0,
+      copy(p) {
+        if (p) {
+          this.x = p.x ?? 0;
+          this.y = p.y ?? 0;
+          this.z = p.z ?? 0;
+        }
+        return this;
+      },
+      set(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+      },
+      setFromMatrixPosition(m) {
+        if (m && m.elements) {
+          this.x = m.elements[12];
+          this.y = m.elements[13];
+          this.z = m.elements[14];
+        }
+        return this;
+      }
+    };
     this.forward = { x: 0, y: 0, z: -1 };
     this.up = { x: 0, y: 1, z: 0 };
-    this.quaternion = { x: 0, y: 0, z: 0, w: 1 };
+    this.quaternion = {
+      x: 0,
+      y: 0,
+      z: 0,
+      w: 1,
+      copy(q) {
+        if (q) {
+          this.x = q.x ?? 0;
+          this.y = q.y ?? 0;
+          this.z = q.z ?? 0;
+          this.w = q.w ?? 1;
+        }
+        return this;
+      },
+      set(x, y, z, w) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w ?? 1;
+        return this;
+      }
+    };
     this.hasListener = false;
     this.sources = new Set();
   }
@@ -74,34 +121,60 @@ class AudioListenerManager {
   updateFromCamera(camera) {
     if (!camera) return;
 
-    if (typeof camera.updateWorldMatrix === 'function') {
-      camera.updateWorldMatrix(true, false);
-    }
+    try {
+      if (typeof camera.updateWorldMatrix === 'function') {
+        camera.updateWorldMatrix(true, false);
+      }
 
-    if (typeof camera.getWorldPosition === 'function') {
-      camera.getWorldPosition(this.position);
-    } else if (camera.position) {
-      this.position.x = camera.position.x;
-      this.position.y = camera.position.y;
-      this.position.z = camera.position.z;
-    }
+      if (camera.matrixWorld && camera.matrixWorld.elements) {
+        const te = camera.matrixWorld.elements;
+        this.position.x = te[12];
+        this.position.y = te[13];
+        this.position.z = te[14];
 
-    if (typeof camera.getWorldQuaternion === 'function') {
-      camera.getWorldQuaternion(this.quaternion);
-    } else if (camera.quaternion) {
-      this.quaternion.x = camera.quaternion.x;
-      this.quaternion.y = camera.quaternion.y;
-      this.quaternion.z = camera.quaternion.z;
-      this.quaternion.w = camera.quaternion.w;
-    }
+        // Three.js Camera orientation:
+        // Forward is local (0, 0, -1) -> -col 2 of matrixWorld: (-te[8], -te[9], -te[10])
+        const fx = -te[8], fy = -te[9], fz = -te[10];
+        const flen = Math.hypot(fx, fy, fz) || 1;
+        this.forward.x = fx / flen;
+        this.forward.y = fy / flen;
+        this.forward.z = fz / flen;
 
-    // Default orientation: Forward = (0, 0, -1), Up = (0, 1, 0)
-    this.forward = this.rotateVector({ x: 0, y: 0, z: -1 }, this.quaternion);
-    this.up = this.rotateVector({ x: 0, y: 1, z: 0 }, this.quaternion);
-    this.hasListener = true;
+        // Up is local (0, 1, 0) -> +col 1 of matrixWorld: (te[4], te[5], te[6])
+        const ux = te[4], uy = te[5], uz = te[6];
+        const ulen = Math.hypot(ux, uy, uz) || 1;
+        this.up.x = ux / ulen;
+        this.up.y = uy / ulen;
+        this.up.z = uz / ulen;
+      } else {
+        if (typeof camera.getWorldPosition === 'function') {
+          camera.getWorldPosition(this.position);
+        } else if (camera.position) {
+          this.position.x = camera.position.x ?? 0;
+          this.position.y = camera.position.y ?? 0;
+          this.position.z = camera.position.z ?? 0;
+        }
 
-    for (const source of this.sources) {
-      source.updateListener();
+        if (typeof camera.getWorldQuaternion === 'function') {
+          camera.getWorldQuaternion(this.quaternion);
+        } else if (camera.quaternion) {
+          this.quaternion.x = camera.quaternion.x ?? 0;
+          this.quaternion.y = camera.quaternion.y ?? 0;
+          this.quaternion.z = camera.quaternion.z ?? 0;
+          this.quaternion.w = camera.quaternion.w ?? 1;
+        }
+
+        this.forward = this.rotateVector({ x: 0, y: 0, z: -1 }, this.quaternion);
+        this.up = this.rotateVector({ x: 0, y: 1, z: 0 }, this.quaternion);
+      }
+
+      this.hasListener = true;
+
+      for (const source of this.sources) {
+        source.updateListener();
+      }
+    } catch (err) {
+      console.warn('[AudioListenerManager] Failed to update listener from camera:', err);
     }
   }
 }
@@ -114,7 +187,11 @@ export const listenerManager = new AudioListenerManager();
  * @param {Object} camera - Active camera
  */
 export function updateAudioListener(camera) {
-  listenerManager.updateFromCamera(camera);
+  try {
+    listenerManager.updateFromCamera(camera);
+  } catch (err) {
+    console.warn('[SpatialAudioSource] updateAudioListener failed:', err);
+  }
 }
 
 /**
@@ -136,9 +213,9 @@ export class SpatialAudioSource {
       z: 0,
       copy(p) {
         if (p) {
-          this.x = p.x;
-          this.y = p.y;
-          this.z = p.z;
+          this.x = p.x ?? 0;
+          this.y = p.y ?? 0;
+          this.z = p.z ?? 0;
         }
         return this;
       },
@@ -147,31 +224,50 @@ export class SpatialAudioSource {
         this.y = y;
         this.z = z;
         return this;
+      },
+      setFromMatrixPosition(m) {
+        if (m && m.elements) {
+          this.x = m.elements[12];
+          this.y = m.elements[13];
+          this.z = m.elements[14];
+        }
+        return this;
       }
     };
 
-    // Explicit mono input bus
-    this.input = context.createGain();
-    this.input.channelCount = 1;
-    this.input.channelCountMode = 'explicit';
-    this.input.channelInterpretation = 'speakers';
+    if (!context) {
+      this.input = null;
+      this.output = null;
+      this.panner = null;
+      return;
+    }
 
-    // HRTF Spatial Panner
-    this.panner = context.createPanner();
-    this.panner.panningModel = 'HRTF';
-    this.panner.channelCount = 1;
-    this.panner.channelCountMode = 'explicit';
-    this.panner.rolloffFactor = 0; // Distance gain handled explicitly via smoothstep
+    try {
+      // Explicit mono input bus
+      this.input = context.createGain();
+      this.input.channelCount = 1;
+      this.input.channelCountMode = 'explicit';
+      this.input.channelInterpretation = 'speakers';
 
-    // Output attenuation node
-    this.output = context.createGain();
-    this.output.gain.value = 0;
+      // HRTF Spatial Panner
+      this.panner = context.createPanner();
+      this.panner.panningModel = 'HRTF';
+      this.panner.channelCount = 1;
+      this.panner.channelCountMode = 'explicit';
+      this.panner.rolloffFactor = 0; // Distance gain handled explicitly via smoothstep
 
-    // Chain: input -> panner -> output -> destination
-    this.input.connect(this.panner);
-    this.panner.connect(this.output);
-    if (destinationNode) {
-      this.output.connect(destinationNode);
+      // Output attenuation node
+      this.output = context.createGain();
+      this.output.gain.value = 0;
+
+      // Chain: input -> panner -> output -> destination
+      this.input.connect(this.panner);
+      this.panner.connect(this.output);
+      if (destinationNode) {
+        this.output.connect(destinationNode);
+      }
+    } catch (err) {
+      console.warn('[SpatialAudioSource] Failed to create audio nodes:', err);
     }
 
     listenerManager.register(this);
@@ -183,15 +279,19 @@ export class SpatialAudioSource {
    * @param {{x: number, y: number, z: number}} pos 
    */
   setPosition(pos) {
+    if (!pos) return;
     this.position.copy(pos);
-    const t = this.context.currentTime;
-    if (this.panner.positionX) {
-      this.panner.positionX.setValueAtTime(pos.x, t);
-      this.panner.positionY.setValueAtTime(pos.y, t);
-      this.panner.positionZ.setValueAtTime(pos.z, t);
-    } else if (typeof this.panner.setPosition === 'function') {
-      this.panner.setPosition(pos.x, pos.y, pos.z);
-    }
+    if (!this.context || !this.panner) return;
+    try {
+      const t = this.context.currentTime;
+      if (this.panner.positionX) {
+        this.panner.positionX.setValueAtTime(pos.x, t);
+        this.panner.positionY.setValueAtTime(pos.y, t);
+        this.panner.positionZ.setValueAtTime(pos.z, t);
+      } else if (typeof this.panner.setPosition === 'function') {
+        this.panner.setPosition(pos.x, pos.y, pos.z);
+      }
+    } catch (err) {}
     this.applyGain();
   }
 
@@ -208,26 +308,30 @@ export class SpatialAudioSource {
    * Syncs Web Audio listener orientation and updates gain
    */
   updateListener() {
-    if (listenerManager.hasListener) {
-      const listener = this.context.listener;
-      const t = this.context.currentTime;
-      const { position, forward, up } = listenerManager;
+    if (!this.context) return;
+    try {
+      if (listenerManager.hasListener) {
+        const listener = this.context.listener;
+        if (!listener) return;
+        const t = this.context.currentTime;
+        const { position, forward, up } = listenerManager;
 
-      if (listener.positionX) {
-        listener.positionX.setValueAtTime(position.x, t);
-        listener.positionY.setValueAtTime(position.y, t);
-        listener.positionZ.setValueAtTime(position.z, t);
-        listener.forwardX.setValueAtTime(forward.x, t);
-        listener.forwardY.setValueAtTime(forward.y, t);
-        listener.forwardZ.setValueAtTime(forward.z, t);
-        listener.upX.setValueAtTime(up.x, t);
-        listener.upY.setValueAtTime(up.y, t);
-        listener.upZ.setValueAtTime(up.z, t);
-      } else if (typeof listener.setPosition === 'function') {
-        listener.setPosition(position.x, position.y, position.z);
-        listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+        if (listener.positionX) {
+          listener.positionX.setValueAtTime(position.x, t);
+          listener.positionY.setValueAtTime(position.y, t);
+          listener.positionZ.setValueAtTime(position.z, t);
+          listener.forwardX.setValueAtTime(forward.x, t);
+          listener.forwardY.setValueAtTime(forward.y, t);
+          listener.forwardZ.setValueAtTime(forward.z, t);
+          listener.upX.setValueAtTime(up.x, t);
+          listener.upY.setValueAtTime(up.y, t);
+          listener.upZ.setValueAtTime(up.z, t);
+        } else if (typeof listener.setPosition === 'function') {
+          listener.setPosition(position.x, position.y, position.z);
+          listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+        }
       }
-    }
+    } catch (err) {}
     this.applyGain();
   }
 
@@ -235,6 +339,7 @@ export class SpatialAudioSource {
    * Calculates distance attenuation and schedules gain ramps
    */
   applyGain() {
+    if (!this.context || !this.output) return;
     let target = 0;
     if (this.enabled && listenerManager.hasListener) {
       const dx = this.position.x - listenerManager.position.x;
@@ -247,16 +352,18 @@ export class SpatialAudioSource {
     if (target === this.targetGain) return;
     this.targetGain = target;
 
-    const t = this.context.currentTime;
-    const currentGain = this.output.gain.value;
-    this.output.gain.cancelScheduledValues(t);
+    try {
+      const t = this.context.currentTime;
+      const currentGain = this.output.gain.value;
+      this.output.gain.cancelScheduledValues(t);
 
-    if (target === 0 || this.context.state !== 'running') {
-      this.output.gain.setValueAtTime(target, t);
-    } else {
-      this.output.gain.setValueAtTime(currentGain, t);
-      this.output.gain.linearRampToValueAtTime(target, t + SPATIAL_AUDIO_CONFIG.RAMP_TIME);
-    }
+      if (target === 0 || this.context.state !== 'running') {
+        this.output.gain.setValueAtTime(target, t);
+      } else {
+        this.output.gain.setValueAtTime(currentGain, t);
+        this.output.gain.linearRampToValueAtTime(target, t + SPATIAL_AUDIO_CONFIG.RAMP_TIME);
+      }
+    } catch (err) {}
   }
 
   /**
@@ -266,9 +373,9 @@ export class SpatialAudioSource {
     this.setEnabled(false);
     listenerManager.unregister(this);
     try {
-      this.input.disconnect();
-      this.panner.disconnect();
-      this.output.disconnect();
+      this.input?.disconnect();
+      this.panner?.disconnect();
+      this.output?.disconnect();
     } catch (e) {}
   }
 }

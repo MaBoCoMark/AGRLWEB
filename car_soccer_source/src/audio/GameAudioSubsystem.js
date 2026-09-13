@@ -1075,7 +1075,9 @@ export class VehicleEngineAudio {
     this.unlock = () => {
       if (!this.disposed) {
         this.unlocked = true;
-        this.prepare();
+        try {
+          this.prepare();
+        } catch (e) {}
       }
     };
 
@@ -1104,6 +1106,19 @@ export class VehicleEngineAudio {
       } catch (err) {}
     }
   }
+
+  prepare() {
+    if (this.disposed) return Promise.resolve();
+    try {
+      const ctx = getAudioContext();
+      if (ctx?.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch (e) {}
+    return this.preload();
+  }
+
+  apply() {}
 
   preload() {
     if (this.disposed) return Promise.resolve();
