@@ -3,6 +3,7 @@ import jC from '../physics/RocketSimWasm.js';
 import { EMotorSynth } from '../audio/EMotorSynth.js';
 import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
 import { BallTrajectoryPredictor } from './BallTrajectoryPredictor.js';
+import { ParallelTrainingManager, PARALLEL_SLOTS } from '../training/ParallelTrainingManager.js';
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
   enumerable:!0,configurable:!0,writable:!0,value:t
@@ -29108,7 +29109,16 @@ async function dB(){
     for(const W of E)W.reset()
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
-    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity))
+    if (a.state.mode !== "match") {
+      if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
+        parallelManager.resetActiveSlot();
+        w();
+        s.sync();
+        typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity);
+      } else {
+        n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity);
+      }
+    }
   }
   ;
   x.onReset = T;
@@ -29119,7 +29129,7 @@ async function dB(){
   const N = new ow(n.ballRadius,i);
   await Promise.all([N.loadArena(),N.loadBall(),N.loadCarAndPadAssets()]),N.addCar(0),N.addPads(n.getPads());
   const X = W=>{
-    a.state.mode !== "match" && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail())
+    a.state.mode !== "match" && (!parallelManager || !parallelManager.isActive) && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail())
   }
   ;
   x.onBallControl = X,R.onBallControl = X,D.onBallControl = X;
@@ -29172,6 +29182,48 @@ We = Xe.attachGraphics(W=>{
 const speedometerHUD = new SpeedometerHUD(an);
 const trajectoryPredictor = new BallTrajectoryPredictor(an);
 N.scene.add(trajectoryPredictor.object);
+const parallelManager = new ParallelTrainingManager({
+  container: an,
+  arenaWorld: N,
+  cameraManager: H,
+  inputManager: x,
+  padInputManager: R,
+  physicsClass: yC,
+  createCarMesh: (asset, color) => z0(asset, color),
+  createBallMesh: (color) => iS(color),
+  recolorCar: (mesh, color) => fl(mesh, ul(color)),
+  resetEngineAudio: () => w(),
+  onSwitchCallback: (targetArena, targetPrev, targetCurr) => {
+    s.sim = targetArena;
+    s.prevState.set(targetPrev);
+    s.currState.set(targetCurr);
+    s.sync();
+    N.applyPhys(N.ball, s.prevState, s.currState, ht.BALL, 0);
+    N.applyPhys(N.cars[r], s.prevState, s.currState, ht.CARS, 0);
+    H.update(N.cars[r], N.ball, 0, be);
+  },
+  ht, ye, ln
+});
+const hudTools = an.querySelector(".hud-tools");
+if (hudTools) {
+  const pBtn = document.createElement("button");
+  pBtn.id = "parallel-training-btn";
+  pBtn.className = "hud-tool";
+  pBtn.type = "button";
+  pBtn.setAttribute("aria-label", "Multiplayer Parallel Training");
+  pBtn.setAttribute("title", "Multiplayer Parallel Training (Tab)");
+  pBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>';
+  pBtn.addEventListener("click", () => {
+    if (parallelManager.isActive) {
+      parallelManager.toggleMenu();
+    } else {
+      parallelManager.enter(n);
+      parallelManager.openMenu();
+    }
+  });
+  hudTools.prepend(pBtn);
+  parallelManager.hudToggleButton = pBtn;
+}
 const ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
     Se.hideDetails();
@@ -29370,7 +29422,11 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   ),je && (Rn = A));
   const zn = D.read(),Sr = x.read(),Pn = R.active()?"gamepad":D.active()?"touch":"keyboard",on = Pn === "gamepad"?Rn:Pn === "touch"?zn:Sr,Mt = !document.hidden && document.hasFocus();
   be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on;
-  n.setControls(r, on);
+  if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
+    parallelManager.arenas[parallelManager.activeSlot]?.setControls(0, on);
+  } else {
+    n.setControls(r, on);
+  }
 }
 ,Le = n.getPads(),Ie = ()=>{
   if(h)return;
@@ -29431,6 +29487,7 @@ finally{
   )
 }
 $e.clear(),te.shadowMap.needsUpdate = !0,I.render(0),ze = performance.now(),s.sync(ze),nd.remove();
+await parallelManager.enter(n);
 let Je = !0;
 function wt(W){
   var ar;
@@ -29442,8 +29499,17 @@ function wt(W){
     return;
   }
   const fe = Math.min((W - ze) / 1e3,.1);
-  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0;
-  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity)),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
+  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0);
+  if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
+    parallelManager.stepBackgroundArenas(s.lastTicks, s.alpha);
+  }
+  const activeSimInstance = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.arenas[parallelManager.activeSlot] : n;
+  const goalScored = activeSimInstance.pollGoal() !== 0;
+  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (
+    (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive ? parallelManager.resetActiveSlot() : n.resetKickoff()),
+    w(),s.sync(W),N.resetBallTrail(),
+    typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity)
+  ),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
   const activeCar = r;
