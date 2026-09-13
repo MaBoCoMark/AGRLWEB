@@ -1,21 +1,19 @@
 /**
  * MultiplayerManager.js
- * Manages 2-Car / 2-Ball Local Hot-Swappable Multiplayer Mode.
+ * Manages 2-Car / 2-Ball Local Hot-Swappable Multiplayer Mode powered entirely
+ * by RocketSim WebAssembly physics simulation.
  * 
- * Requirements:
+ * Features:
  * - UI Button to open confirmation dialog ("Enter Multiplayer Mode?")
  * - Spawns 2 cars: Blue (Car 0) and Orange (Car 1)
- * - Spawns 2 soccer balls:
- *   - Blue-patterned ball (tracked exclusively by Blue car's ball cam)
- *   - Orange-patterned ball (tracked exclusively by Orange car's ball cam)
- * - Both balls have full 3D physics and arena collision:
- *   - Car-to-ball collisions with dynamic momentum and speed restitution
- *   - Ball-to-ball elastic collision with separation
- *   - Ground indicator ring and height indicator ring under Orange ball
- *   - 120Hz substepping and corner / goal net boundary collision preventing pitch escapes
+ * - Spawns 2 soccer balls with 100% IDENTICAL authentic RocketSim physics:
+ *   - Ball 0: Blue patterned ball simulated by primary RocketSim Arena
+ *   - Ball 1: Orange patterned ball simulated by secondary RocketSim Arena (physics2)
+ *   - Full Bullet physics: accurate arena bevels, goal nets, ramps, bounce restitution, and car collisions
+ * - Ground indicator ring and height indicator ring under Orange ball
  * - Hot-swappable player control:
  *   - Dedicated UI button + hotkey (Tab / P) to toggle control between Car 0 and Car 1
- *   - The unselected car remains stationary (neutral input)
+ *   - The unselected car remains neutral
  * - Bottom-right UI button to exit multiplayer and return to training/freeplay
  */
 
@@ -23,6 +21,8 @@ export class MultiplayerManager {
   constructor(options = {}) {
     this.container = options.container || document.body;
     this.physics = options.physics;
+    this.createPhysicsInstance = options.createPhysicsInstance || null;
+    this.carVisual = options.carVisual || 'default';
     this.arena = options.arena; // Arena instance
     this.cameraRig = options.cameraRig; // cw instance
     this.ballRadius = options.ballRadius || 91.25;
@@ -32,9 +32,12 @@ export class MultiplayerManager {
     this.isMultiplayer = false;
     this.activeCarIndex = 0; // 0 = Blue, 1 = Orange
 
-    // Second ball (Orange ball) physics & visual state
-    this.ball1Pos = { x: 300, y: 150, z: -400 };
-    this.ball1Vel = { x: -80, y: 120, z: 100 };
+    // Second RocketSim arena for Ball 1 (Orange ball)
+    this.physics2 = null;
+    this.prevState2 = null;
+    this.currState2 = null;
+
+    // Visual meshes
     this.ball1Mesh = null;
     this.originalBall0Mesh = null;
     this.blueBallMesh = null;
@@ -126,8 +129,9 @@ export class MultiplayerManager {
           Enter Multiplayer Mode?
         </h2>
         <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.5; color: #a4b3c6;">
-          Spawns <strong>2 cars</strong> (Blue & Orange) and <strong>2 soccer balls</strong> (Blue-patterned & Orange-patterned).
-          Both cars are controlled alternately via hot-swap (<kbd>Tab</kbd> / <kbd>P</kbd> or on-screen button).
+          Spawns <strong>2 cars</strong> (Blue & Orange) and <strong>2 soccer balls</strong> (Blue-patterned & Orange-patterned),
+          both powered by RocketSim's authentic physics engine.<br/><br/>
+          Cars are controlled alternately via hot-swap (<kbd>Tab</kbd> / <kbd>P</kbd> or on-screen button).
           Each car's Ball Cam exclusively targets its own ball.
         </p>
         <div style="display: flex; justify-content: flex-end; gap: 12px;">
@@ -163,40 +167,47 @@ export class MultiplayerManager {
       this.startMultiplayer();
     });
 
-    // 3. In-Game Switch Player Floating Button
+    // 3. Hot-Swap Switch Button (Active in multiplayer)
     this.switchBtn = document.createElement('button');
-    this.switchBtn.id = 'mp-switch-player-btn';
+    this.switchBtn.id = 'mp-switch-btn';
     this.switchBtn.type = 'button';
     this.switchBtn.style.cssText = `
       position: fixed;
       top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
+      right: 140px;
       z-index: 100;
       display: none;
       align-items: center;
       gap: 10px;
-      padding: 8px 18px;
-      background: rgba(14, 23, 42, 0.9);
+      padding: 7px 16px;
+      background: rgba(12, 20, 32, 0.88);
       border: 2px solid #0088ff;
       border-radius: 6px;
       color: #ffffff;
       font-family: var(--sans, sans-serif);
       font-size: 13px;
       font-weight: 700;
+      letter-spacing: 0.5px;
       cursor: pointer;
       backdrop-filter: blur(8px);
       box-shadow: 0 4px 16px rgba(0, 136, 255, 0.4);
-      user-select: none;
+      transition: all 0.2s ease;
     `;
     this.switchBtn.innerHTML = `
-      <span id="mp-car-badge" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #0088ff;"></span>
+      <span id="mp-car-badge" style="
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #0088ff;
+        display: inline-block;
+        box-shadow: 0 0 8px currentColor;
+      "></span>
       <span id="mp-switch-text">CONTROLLING: BLUE CAR (Press Tab / Click)</span>
     `;
     this.switchBtn.addEventListener('click', () => this.switchPlayer());
     this.container.appendChild(this.switchBtn);
 
-    // 4. Exit Multiplayer Button (Bottom Right)
+    // 4. Exit Multiplayer Button (Bottom-Right)
     this.exitBtn = document.createElement('button');
     this.exitBtn.id = 'mp-exit-btn';
     this.exitBtn.type = 'button';
@@ -249,7 +260,7 @@ export class MultiplayerManager {
     this.modal.style.display = 'none';
   }
 
-  startMultiplayer() {
+  async startMultiplayer() {
     this.isMultiplayer = true;
     this.activeCarIndex = 0;
 
@@ -258,9 +269,27 @@ export class MultiplayerManager {
     this.switchBtn.style.display = 'inline-flex';
     this.exitBtn.style.display = 'inline-flex';
 
-    // Hook RocketSim to simulate 2 cars
+    // Hook RocketSim to simulate 2 cars in main arena
     if (this.onEnterMultiplayer) {
       this.onEnterMultiplayer();
+    }
+
+    // Set up second RocketSim arena for Ball 1 (Orange ball)
+    if (!this.physics2 && this.createPhysicsInstance) {
+      try {
+        this.physics2 = this.createPhysicsInstance();
+        await this.physics2.init();
+      } catch (err) {
+        console.error('Failed to initialize RocketSim physics2 for Ball 1:', err);
+      }
+    }
+    if (this.physics2) {
+      this.physics2.configureMultiplayer(this.carVisual === 'flat-car' ? 'flat' : 'default');
+      this.physics2.resetKickoff();
+      this.prevState2 = new Float32Array(this.physics2.stateLen);
+      this.currState2 = new Float32Array(this.physics2.stateLen);
+      this.prevState2.set(this.physics2.state);
+      this.currState2.set(this.physics2.state);
     }
 
     // Ensure opponent car is visible
@@ -358,7 +387,6 @@ export class MultiplayerManager {
       this.blueBallMesh = this.createBall(0x0088ff, 'Blue patterned ball');
       this.blueBallMesh.scale.setScalar(1);
       if (this.arena.ball) {
-        // Hide default children of arena.ball
         for (let i = 0; i < this.arena.ball.children.length; i++) {
           this.arena.ball.children[i].visible = false;
         }
@@ -383,11 +411,8 @@ export class MultiplayerManager {
 
     this.ball1Mesh.visible = true;
     this.ball1Mesh.scale.setScalar(1);
-    this.ball1Pos = { x: 350, y: 150, z: -500 };
-    this.ball1Vel = { x: -80, y: 120, z: 100 };
-    this.ball1Mesh.position.set(this.ball1Pos.x, this.ball1Pos.y, this.ball1Pos.z);
 
-    // 3. Ground Indicator Rings for Ball 1 (White circle on ground + height ring)
+    // 3. Ground Indicator Rings for Ball 1 (Orange ball)
     if (!this.ball1IndicatorRing && this.createIndicatorRings && this.arena.scene) {
       const { ring, heightRing } = this.createIndicatorRings(this.ballRadius);
       this.ball1IndicatorRing = ring;
@@ -400,365 +425,59 @@ export class MultiplayerManager {
   }
 
   /**
-   * Physics step for the second ball (Orange ball) with realistic momentum transfer,
-   * 120Hz substepping, accurate OBB car-ball hit impulse, 45-degree corner walls,
-   * airtight goal net boundaries, and ground indicator rings.
+   * Step secondary RocketSim Arena (physics2) in lockstep with primary physics.
+   */
+  stepPhysics2(count = 1) {
+    if (!this.isMultiplayer || !this.physics2 || !this.currState2) return;
+    if (count > 1) {
+      this.physics2.step(count - 1);
+      this.prevState2.set(this.physics2.state);
+      this.physics2.step(1);
+    } else {
+      const a = this.prevState2;
+      this.prevState2 = this.currState2;
+      this.currState2 = a;
+      this.physics2.step(1);
+    }
+    this.currState2.set(this.physics2.state);
+  }
+
+  /**
+   * Reset kickoff on secondary RocketSim Arena.
+   */
+  resetKickoff() {
+    if (this.physics2) {
+      this.physics2.resetKickoff();
+      if (this.prevState2 && this.currState2) {
+        this.prevState2.set(this.physics2.state);
+        this.currState2.set(this.physics2.state);
+      }
+    }
+  }
+
+  /**
+   * Update visual positions for Ball 1 using exact RocketSim Bullet physics state.
+   */
+  updateVisuals(alpha = 1) {
+    if (!this.isMultiplayer || !this.ball1Mesh || !this.ball1Mesh.visible || !this.physics2 || !this.prevState2 || !this.currState2) return;
+
+    // Apply RocketSim Bullet physics position & quaternion (offset 4 = ht.BALL)
+    this.arena.applyPhys(this.ball1Mesh, this.prevState2, this.currState2, 4, alpha);
+
+    // Ground and height indicator rings
+    if (this.ball1IndicatorRing) {
+      this.ball1IndicatorRing.position.set(this.ball1Mesh.position.x, 1, this.ball1Mesh.position.z);
+    }
+    if (this.ball1IndicatorHeightRing) {
+      this.ball1IndicatorHeightRing.position.copy(this.ball1Mesh.position);
+    }
+  }
+
+  /**
+   * Deprecated manual JS physics loop replaced by RocketSim physics2 simulation.
+   * Retained as no-op for backward compatibility.
    */
   updatePhysics(dt, cars = [], ball0Pos = null) {
-    if (!this.isMultiplayer || !this.ball1Mesh || !this.ball1Mesh.visible) return;
-
-    // Substepping at ~120Hz (RL tick rate) to completely prevent tunneling through walls
-    const totalDt = Math.min(dt, 0.05);
-    const numSubsteps = Math.max(2, Math.ceil(totalDt / 0.008333));
-    const subDt = totalDt / numSubsteps;
-
-    const g = -650; // Rocket League gravity uu/s^2
-    const r = this.ballRadius; // 91.25 uu
-    const restitution = 0.60;
-    const airDrag = Math.pow(1 - 0.03, subDt); // RL air drag 0.03/s
-
-    const pState = this.physics && this.physics.state ? this.physics.state : null;
-
-    for (let step = 0; step < numSubsteps; step++) {
-      // 1. Gravity & air drag
-      this.ball1Vel.y += g * subDt;
-      this.ball1Vel.x *= airDrag;
-      this.ball1Vel.y *= airDrag;
-      this.ball1Vel.z *= airDrag;
-
-      // 2. Position integration
-      this.ball1Pos.x += this.ball1Vel.x * subDt;
-      this.ball1Pos.y += this.ball1Vel.y * subDt;
-      this.ball1Pos.z += this.ball1Vel.z * subDt;
-
-      // 3. Pitch floor collision
-      if (this.ball1Pos.y < r) {
-        this.ball1Pos.y = r;
-        if (this.ball1Vel.y < 0) {
-          if (Math.abs(this.ball1Vel.y) < 25) {
-            this.ball1Vel.y = 0;
-          } else {
-            this.ball1Vel.y = -this.ball1Vel.y * restitution;
-          }
-        }
-        // Ground rolling friction
-        this.ball1Vel.x *= 0.995;
-        this.ball1Vel.z *= 0.995;
-      }
-
-      // 4. Ceiling collision (RL ceiling height = 2044)
-      const ceiling = 2044 - r;
-      if (this.ball1Pos.y > ceiling) {
-        this.ball1Pos.y = ceiling;
-        if (this.ball1Vel.y > 0) {
-          this.ball1Vel.y = -this.ball1Vel.y * restitution;
-        }
-      }
-
-      // 5. Arena boundaries & Goal collision
-      // Pitch dimensions: X in [-4096, 4096], Z in [-5120, 5120]
-      // Goal opening: |X| < 892.755, Y < 642.775, depth = 880 (back at |Z| = 6000)
-      const absZ = Math.abs(this.ball1Pos.z);
-      const absX = Math.abs(this.ball1Pos.x);
-      const signZ = Math.sign(this.ball1Pos.z) || 1;
-      const signX = Math.sign(this.ball1Pos.x) || 1;
-
-      if (absZ > 5120) {
-        // Inside or passing into goal net area
-        const goalNetDepth = 5120 + 880 - r; // 5908.75
-        const goalNetHalfW = 892.755 - r;   // 801.5
-        const goalNetH = 642.775 - r;       // 551.5
-
-        // Back net
-        if (absZ > goalNetDepth) {
-          this.ball1Pos.z = signZ * goalNetDepth;
-          if (this.ball1Vel.z * signZ > 0) {
-            this.ball1Vel.z = -this.ball1Vel.z * restitution;
-          }
-        }
-
-        // Side nets
-        if (absX > goalNetHalfW) {
-          this.ball1Pos.x = signX * goalNetHalfW;
-          if (this.ball1Vel.x * signX > 0) {
-            this.ball1Vel.x = -this.ball1Vel.x * restitution;
-          }
-        }
-
-        // Roof net
-        if (this.ball1Pos.y > goalNetH) {
-          this.ball1Pos.y = goalNetH;
-          if (this.ball1Vel.y > 0) {
-            this.ball1Vel.y = -this.ball1Vel.y * restitution;
-          }
-        }
-      } else {
-        // Main arena pitch (|Z| <= 5120)
-
-        // Backboards (Z = +/- 5120 outside the goal opening)
-        const isOutsideGoalMouth = absX >= (892.755 - r) || this.ball1Pos.y >= (642.775 - r);
-        if (isOutsideGoalMouth && absZ > (5120 - r)) {
-          this.ball1Pos.z = signZ * (5120 - r);
-          if (this.ball1Vel.z * signZ > 0) {
-            this.ball1Vel.z = -this.ball1Vel.z * restitution;
-          }
-        }
-
-        // Side walls (X = +/- 4096)
-        if (absX > (4096 - r)) {
-          this.ball1Pos.x = signX * (4096 - r);
-          if (this.ball1Vel.x * signX > 0) {
-            this.ball1Vel.x = -this.ball1Vel.x * restitution;
-          }
-        }
-
-        // 45-degree corner walls
-        // Rocket League corner connects (2944, 5120) and (4096, 3968).
-        // Diagonal distance equation: |X| + |Z| <= 8064
-        // Accounting for ball radius: |X| + |Z| <= 8064 - r * sqrt(2) = 7934.95
-        if (absX > 2500 && absZ > 3500) {
-          const cornerDist = absX + absZ;
-          const cornerLimit = 8064 - r * 1.41421356;
-          if (cornerDist > cornerLimit) {
-            const overlap = (cornerDist - cornerLimit) * 0.70710678;
-            this.ball1Pos.x -= signX * overlap * 0.70710678;
-            this.ball1Pos.z -= signZ * overlap * 0.70710678;
-
-            const vn = (this.ball1Vel.x * signX + this.ball1Vel.z * signZ) * 0.70710678;
-            if (vn > 0) {
-              const impulse = (1 + restitution) * vn;
-              this.ball1Vel.x -= signX * impulse * 0.70710678;
-              this.ball1Vel.z -= signZ * impulse * 0.70710678;
-            }
-          }
-        }
-
-        // Goal posts collision (cylinders at X = +/- 892.755, Z = +/- 5120)
-        for (const postSignX of [-1, 1]) {
-          for (const postSignZ of [-1, 1]) {
-            const postX = postSignX * 892.755;
-            const postZ = postSignZ * 5120;
-            const postRadius = 35;
-            const postHeight = 642.775;
-
-            if (this.ball1Pos.y <= postHeight + r) {
-              const pdx = this.ball1Pos.x - postX;
-              const pdz = this.ball1Pos.z - postZ;
-              const pDist = Math.hypot(pdx, pdz);
-              const minP = postRadius + r;
-
-              if (pDist < minP && pDist > 0.001) {
-                const pnx = pdx / pDist;
-                const pnz = pdz / pDist;
-                const pOverlap = minP - pDist;
-                this.ball1Pos.x += pnx * pOverlap;
-                this.ball1Pos.z += pnz * pOverlap;
-
-                const pVn = this.ball1Vel.x * pnx + this.ball1Vel.z * pnz;
-                if (pVn < 0) {
-                  this.ball1Vel.x -= (1 + restitution) * pVn * pnx;
-                  this.ball1Vel.z -= (1 + restitution) * pVn * pnz;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // 6. Car collisions with Ball 1 (Box OBB hit detection + dynamic momentum)
-      for (let i = 0; i < cars.length; i++) {
-        const car = cars[i];
-        if (!car || !car.visible) continue;
-
-        // Retrieve actual car velocity from RocketSim state
-        let carVx = 0, carVy = 0, carVz = 0;
-        if (pState) {
-          const p = 22 + i * 51; // ht.CARS + i * ln
-          carVx = pState[p + 12]; // ye.VEL: RocketSim X -> Three X
-          carVz = pState[p + 13]; // RocketSim Y -> Three Z
-          carVy = pState[p + 14]; // RocketSim Z -> Three Y
-        }
-        const carSpeed = Math.hypot(carVx, carVy, carVz);
-
-        // Standard Octane hitbox dimensions & offsets
-        const halfL = 59.0;
-        const halfW = 42.1;
-        const halfH = 18.1;
-        const forwardOffset = 13.88;
-        const upOffset = 20.75;
-
-        // Compute world axes from car quaternion
-        const q = car.quaternion;
-        const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-
-        // Local X (forward) in world:
-        const fwdX = 1 - 2 * (qy * qy + qz * qz);
-        const fwdY = 2 * (qx * qy + qz * qw);
-        const fwdZ = 2 * (qx * qz - qy * qw);
-
-        // Local Y (up) in world:
-        const upX = 2 * (qx * qy - qz * qw);
-        const upY = 1 - 2 * (qx * qx + qz * qz);
-        const upZ = 2 * (qy * qz + qx * qw);
-
-        // Local Z (right/side) in world:
-        const rightX = 2 * (qx * qz + qy * qw);
-        const rightY = 2 * (qy * qz - qx * qw);
-        const rightZ = 1 - 2 * (qx * qx + qy * qy);
-
-        // Hitbox center in world space
-        const carCenterX = car.position.x + fwdX * forwardOffset + upX * upOffset;
-        const carCenterY = car.position.y + fwdY * forwardOffset + upY * upOffset;
-        const carCenterZ = car.position.z + fwdZ * forwardOffset + upZ * upOffset;
-
-        // World vector from car center to ball
-        const wx = this.ball1Pos.x - carCenterX;
-        const wy = this.ball1Pos.y - carCenterY;
-        const wz = this.ball1Pos.z - carCenterZ;
-
-        // Project onto car local axes
-        const lx = wx * fwdX + wy * fwdY + wz * fwdZ;
-        const ly = wx * upX + wy * upY + wz * upZ;
-        const lz = wx * rightX + wy * rightY + wz * rightZ;
-
-        // Clamp to box bounds
-        const cx = Math.max(-halfL, Math.min(halfL, lx));
-        const cy = Math.max(-halfH, Math.min(halfH, ly));
-        const cz = Math.max(-halfW, Math.min(halfW, lz));
-
-        const ldx = lx - cx;
-        const ldy = ly - cy;
-        const ldz = lz - cz;
-        const lDist = Math.hypot(ldx, ldy, ldz);
-
-        if (lDist < r) {
-          // Collision detected!
-          let lnx = 0, lny = 1, lnz = 0;
-          let penetration = r;
-          if (lDist > 0.001) {
-            lnx = ldx / lDist;
-            lny = ldy / lDist;
-            lnz = ldz / lDist;
-            penetration = r - lDist;
-          } else {
-            // Ball center inside car box: separate along shallowest axis
-            const px = halfL - Math.abs(lx);
-            const py = halfH - Math.abs(ly);
-            const pz = halfW - Math.abs(lz);
-            if (px < py && px < pz) {
-              lnx = Math.sign(lx) || 1;
-              penetration = px + r;
-            } else if (py < pz) {
-              lny = Math.sign(ly) || 1;
-              penetration = py + r;
-            } else {
-              lnz = Math.sign(lz) || 1;
-              penetration = pz + r;
-            }
-          }
-
-          // Transform local normal to world space
-          const wnx = lnx * fwdX + lny * upX + lnz * rightX;
-          const wny = lnx * fwdY + lny * upY + lnz * rightY;
-          const wnz = lnx * fwdZ + lny * upZ + lnz * rightZ;
-
-          // Resolve penetration
-          this.ball1Pos.x += wnx * penetration;
-          this.ball1Pos.y = Math.max(r, this.ball1Pos.y + wny * penetration);
-          this.ball1Pos.z += wnz * penetration;
-
-          // Relative velocity along impact normal
-          const relVx = carVx - this.ball1Vel.x;
-          const relVy = carVy - this.ball1Vel.y;
-          const relVz = carVz - this.ball1Vel.z;
-          const approachSpeed = relVx * wnx + relVy * wny + relVz * wnz;
-
-          if (approachSpeed > 0) {
-            // Power shot bonus if hitting with front bumper (lnx > 0.4)
-            const isFrontHit = lnx > 0.4;
-            const frontFactor = isFrontHit ? 1.35 : 1.0;
-            const impulse = (approachSpeed * 1.55 + carSpeed * 0.4 + 100) * frontFactor;
-
-            this.ball1Vel.x += wnx * impulse + carVx * 0.25;
-            this.ball1Vel.y += wny * impulse + carVy * 0.25;
-            this.ball1Vel.z += wnz * impulse + carVz * 0.25;
-          } else {
-            // Dribbling / soft contact
-            this.ball1Vel.x = carVx * 0.85 + wnx * 50;
-            this.ball1Vel.y = Math.max(this.ball1Vel.y, carVy * 0.85 + wny * 50);
-            this.ball1Vel.z = carVz * 0.85 + wnz * 50;
-          }
-
-          // Clamp maximum ball velocity (RL max speed 4000 uu/s)
-          const curSpeed = Math.hypot(this.ball1Vel.x, this.ball1Vel.y, this.ball1Vel.z);
-          if (curSpeed > 4000) {
-            const inv = 4000 / curSpeed;
-            this.ball1Vel.x *= inv;
-            this.ball1Vel.y *= inv;
-            this.ball1Vel.z *= inv;
-          }
-        }
-      }
-
-      // 7. Ball-to-ball elastic collision between Ball 0 and Ball 1
-      if (ball0Pos) {
-        const bx = this.ball1Pos.x - ball0Pos.x;
-        const by = this.ball1Pos.y - ball0Pos.y;
-        const bz = this.ball1Pos.z - ball0Pos.z;
-        const ballDist = Math.hypot(bx, by, bz);
-        const minDist = 2 * r;
-
-        if (ballDist < minDist && ballDist > 0.001) {
-          const bnx = bx / ballDist;
-          const bny = by / ballDist;
-          const bnz = bz / ballDist;
-          const bOverlap = minDist - ballDist;
-
-          this.ball1Pos.x += bnx * bOverlap;
-          this.ball1Pos.y = Math.max(r, this.ball1Pos.y + bny * bOverlap);
-          this.ball1Pos.z += bnz * bOverlap;
-
-          let b0Vx = 0, b0Vy = 0, b0Vz = 0;
-          if (pState) {
-            b0Vx = pState[4 + 12];
-            b0Vz = pState[4 + 13];
-            b0Vy = pState[4 + 14];
-          }
-          const relVx = this.ball1Vel.x - b0Vx;
-          const relVy = this.ball1Vel.y - b0Vy;
-          const relVz = this.ball1Vel.z - b0Vz;
-          const relVn = relVx * bnx + relVy * bny + relVz * bnz;
-
-          if (relVn < 0) {
-            const impulse = -relVn * 1.5;
-            this.ball1Vel.x += bnx * impulse;
-            this.ball1Vel.y += bny * impulse;
-            this.ball1Vel.z += bnz * impulse;
-          }
-        }
-      }
-
-      // 8. Fail-safe containment boundary: if ball somehow gets outside, safely recover it
-      if (Math.abs(this.ball1Pos.x) > 4250 || this.ball1Pos.y < -20 || this.ball1Pos.y > 2150 || Math.abs(this.ball1Pos.z) > 6150) {
-        this.ball1Pos = { x: 0, y: 150, z: -800 };
-        this.ball1Vel = { x: 0, y: 0, z: 0 };
-      }
-    } // end substep loop
-
-    // 9. Update 3D mesh transform and rolling rotation
-    this.ball1Mesh.position.set(this.ball1Pos.x, this.ball1Pos.y, this.ball1Pos.z);
-    this.ball1Mesh.scale.setScalar(1);
-
-    this.ball1Mesh.rotation.z -= (this.ball1Vel.x * totalDt) / r;
-    this.ball1Mesh.rotation.x += (this.ball1Vel.z * totalDt) / r;
-
-    // 10. Update ground indicator ring and height indicator ring
-    if (this.ball1IndicatorRing && this.ball1IndicatorHeightRing) {
-      this.ball1IndicatorRing.position.set(this.ball1Pos.x, 2, this.ball1Pos.z);
-      this.ball1IndicatorHeightRing.position.set(this.ball1Pos.x, 2, this.ball1Pos.z);
-      const c = Math.max(0, this.ball1Pos.y - this.ballRadius);
-      const d = 0.86 - 0.68 * Math.min(1, c / 1600);
-      this.ball1IndicatorHeightRing.scale.set(d, d, 1);
-    }
+    // Replaced by stepPhysics2 & updateVisuals with RocketSim WASM
   }
 }

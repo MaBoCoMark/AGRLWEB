@@ -17844,6 +17844,7 @@ const ht = {
 }
 ,EC = 3;
 class yC{
+  static cachedCollisionData = null;
   constructor(){
     _(this,"module");
     _(this,"statePtr",0);
@@ -17860,27 +17861,31 @@ class yC{
   }
   async init(){
     this.module = await jC();
-    const mRes = await fetch("/assets/arena/collision/manifest.json");
-    const mCheck = validateAssetResponse(mRes, "/assets/arena/collision/manifest.json", "json");
-    if (!mCheck.ok) throw mCheck.error;
-    const e = await mRes.json();
-    const t = await Promise.all(e.map(async A => {
-      const cPath = `/assets/arena/collision/${A}`;
-      const cRes = await fetch(cPath);
-      const cCheck = validateAssetResponse(cRes, cPath, "cmf");
-      if (!cCheck.ok) throw cCheck.error;
-      return new Uint8Array(await cRes.arrayBuffer());
-    })), n = t.reduce((A, l) => A + l.length, 0), r = this.module._malloc(n), s = this.module._malloc(t.length * 4);
-  let a = 0;
-  t.forEach((A,l)=>{
-    this.module.HEAPU8.set(A,r + a),this.module.HEAP32[s / 4 + l] = A.length,a+=A.length
+    let t = yC.cachedCollisionData;
+    if (!t) {
+      const mRes = await fetch("/assets/arena/collision/manifest.json");
+      const mCheck = validateAssetResponse(mRes, "/assets/arena/collision/manifest.json", "json");
+      if (!mCheck.ok) throw mCheck.error;
+      const e = await mRes.json();
+      t = await Promise.all(e.map(async A => {
+        const cPath = `/assets/arena/collision/${A}`;
+        const cRes = await fetch(cPath);
+        const cCheck = validateAssetResponse(cRes, cPath, "cmf");
+        if (!cCheck.ok) throw cCheck.error;
+        return new Uint8Array(await cRes.arrayBuffer());
+      }));
+      yC.cachedCollisionData = t;
+    }
+    const n = t.reduce((A, l) => A + l.length, 0), r = this.module._malloc(n), s = this.module._malloc(t.length * 4);
+    let a = 0;
+    t.forEach((A,l)=>{
+      this.module.HEAPU8.set(A,r + a),this.module.HEAP32[s / 4 + l] = A.length,a+=A.length
+    });
+    const o = this.module._physics_init(r,s,t.length);
+    if(this.module._free(r),this.module._free(s),o !== 1)throw new Error("Physics initialization failed — check collision meshes");
+    if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
+    this.statePtr = this.module._physics_getStatePtr(),this.stateLen = this.module._physics_getStateSize(),this.controlsPtr = this.module._physics_getControlsPtr(),this.viewPtr = this.module._v0(),this.stateView = null,this.controlsView = null,this.viewView = null,this.module._v2()
   }
-  );
-  const o = this.module._physics_init(r,s,t.length);
-  if(this.module._free(r),this.module._free(s),o !== 1)throw new Error("Physics initialization failed — check collision meshes");
-  if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
-  this.statePtr = this.module._physics_getStatePtr(),this.stateLen = this.module._physics_getStateSize(),this.controlsPtr = this.module._physics_getControlsPtr(),this.viewPtr = this.module._v0(),this.stateView = null,this.controlsView = null,this.viewView = null,this.module._v2()
-}
 addCar(e,t = "default"){
   return this.module._physics_addCar(e,t === "flat"?1:0)
 }
@@ -17985,10 +17990,24 @@ class CC{
         this.alpha = this.accumulator / da;
         return
       }
-      if(s > 1)this.sim.step(s - 1),this.prevState.set(this.sim.state),this.sim.step(1);
-      else{
+      if(s > 1){
+        this.sim.step(s - 1);
+        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+          multiplayerManager.stepPhysics2(s - 1);
+        }
+        this.prevState.set(this.sim.state);
+        this.sim.step(1);
+        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+          multiplayerManager.stepPhysics2(1);
+        }
+      }else{
         const a = this.prevState;
-        this.prevState = this.currState,this.currState = a,this.sim.step(1)
+        this.prevState = this.currState;
+        this.currState = a;
+        this.sim.step(1);
+        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
+          multiplayerManager.stepPhysics2(1);
+        }
       }
       this.currState.set(this.sim.state),this.alpha = this.accumulator / da
     }
@@ -21941,26 +21960,49 @@ const a = vn(Nr({
 ;
 return rp.set(t,o),o
 }
-function ip(i,e){
-  switch(i.name){
-    case"wheel-metal":return e.wheelMetal;
-    case"tire":return e.tire;
-    case"lower-detail":return e.lowerDetail;
-    case"lamps":return e.lamps;
-    case"tail-lamps":return e.tailLamps;
-    case"body-shell":return e.body;
-    case"body-fill":return e.body;
-    case"paint":return e.body;
-    case"glass":return e.lowerDetail;
-    default:return e.lowerDetail
+function ip(i,e,mesh){
+  const name = (mesh && mesh.userData && mesh.userData.originalMaterialName) || (i && i.name) || "";
+  switch(name){
+    case"wheel-metal":
+    case"Arcade / wheel metal":
+    case"Realistic / wheel metal":
+      return e.wheelMetal;
+    case"tire":
+    case"Arcade / tire":
+    case"Realistic / tire":
+      return e.tire;
+    case"lower-detail":
+    case"Arcade / lower detail":
+    case"Realistic / lower detail":
+    case"glass":
+      return e.lowerDetail;
+    case"lamps":
+      return e.lamps;
+    case"tail-lamps":
+      return e.tailLamps;
+    case"body-shell":
+    case"body-fill":
+    case"paint":
+    case"Arcade / body paint":
+    case"Realistic / anodized pearl paint":
+      return e.body;
+    default:
+      if(mesh && mesh.name && (mesh.name.includes("body") || mesh.name.includes("shell") || mesh.name.includes("paint"))) return e.body;
+      return e.lowerDetail;
   }
-
 }
 function fl(i,e){
   i.traverse(t=>{
-    t instanceof Ee && (t.material = Array.isArray(t.material)?t.material.map(n=>ip(n,e)):ip(t.material,e),t.castShadow = !0,t.receiveShadow = !0)
-  }
-  ),Ji(i)
+    if(t instanceof Ee){
+      if(!t.userData.originalMaterialName && t.material){
+        t.userData.originalMaterialName = Array.isArray(t.material) ? (t.material[0]?.name || "") : (t.material.name || "");
+      }
+      t.material = Array.isArray(t.material)?t.material.map(n=>ip(n,e,t)):ip(t.material,e,t);
+      t.castShadow = !0;
+      t.receiveShadow = !0;
+    }
+  });
+  Ji(i);
 }
 function $0(i,e,t){
   const n = i.clone(!0);
@@ -22980,6 +23022,15 @@ class V1{
   async preload(){
     if((await this.load()).length !== 3)throw new Error("Golden Boost audio is unavailable")
   }
+  setSpatial(e){
+    if(this.spatial === e)return;
+    this.spatial = e;
+    if(!e && this.spatialBus){
+      this.spatialBus.dispose(),this.spatialBus = null;
+    }else if(e && !this.spatialBus && this.context){
+      this.spatialBus = new cg(this.context,$r()),this.spatialBus.setPosition(this.position),this.spatialBus.setEnabled(this.enabled);
+    }
+  }
   updateSpatial(e,t){
     var n,r;
     this.spatial && (this.position.copy(e),this.enabled = t,(n = this.spatialBus) == null || n.setPosition(e),(r = this.spatialBus) == null || r.setEnabled(t))
@@ -23249,6 +23300,9 @@ function J1(i){
   return n.frustumCulled = !1,n.renderOrder = 7,n
 }
 class K1{
+  setSpatial(e){
+    this.audio && this.audio.setSpatial(e);
+  }
   constructor(e,t,n,r = !0,s = !1){
     _(this,"car");
     _(this,"nozzleLocal");
@@ -24492,7 +24546,7 @@ class ow{
     _(this,"turf");
     _(this,"sky");
     _(this,"stadium",null);
-    _(this,"stadiumVisible",!0);
+    _(this,"stadiumVisible",!1);
     this.carVisual = t,this.scene.background = new Ne(4679561),this.scene.fog = new Ed(6586005,15e3,34e3),this.scene.add(new e0(13164543,2569e3,1.15)),this.carSun = this.makeSubjectSun(this.carSunTarget,cA),this.ballSun = this.makeSubjectSun(this.ballSunTarget,Lp),this.scene.add(this.carSunTarget,this.ballSunTarget,this.carSun,this.ballSun);
     const n = new eo(8956671,.35);
     n.position.set(- 2e3,2e3, - 2e3),this.scene.add(n),this.turf = GS(),this.sky = KS(),this.scene.add(this.turf,this.sky),this.ball = new dt,this.scene.add(this.ball),this.scene.add(this.ballLocatorArrow.object),this.scene.add(this.ballSpeedTrail.object),this.ballRadius = e;
@@ -24565,10 +24619,15 @@ class ow{
   setStadiumVisible(e){
     if(this.stadiumVisible !== e){
       this.stadiumVisible = e;
-      for(const t of[this.stadium,this.sky])t && (e?this.scene.add(t):t.removeFromParent());
-      this.scene.background = new Ne(e?4679561:0),this.markRenderTreeChanged()
+      if(this.stadium){
+        e ? this.scene.add(this.stadium) : this.stadium.removeFromParent();
+      }
+      if(this.sky && !this.sky.parent){
+        this.scene.add(this.sky);
+      }
+      this.scene.background = new Ne(4679561);
+      this.markRenderTreeChanged();
     }
-
   }
   async ensureOpponent(){
     this.cars.length > 1 || (this.gameCarAsset ?? (this.gameCarAsset = await Uh()),!(this.cars.length > 1) && (this.opponentSun = this.makeSubjectSun(this.opponentSunTarget,cA),this.opponentSun.visible = !1,this.scene.add(this.opponentSun,this.opponentSunTarget),this.addCar(1,"game-car")))
@@ -24814,7 +24873,11 @@ class ow{
   updateBoostVisuals(e,t,n,r = 0,s = !0){
     for(let a = 0;a < this.cars.length;a++){
       const o = s && e[ht.CARS + a * ln + ye.IS_BOOSTING] === 1;
-      for(const A of this.carBoosts[a])A.update(o,s && (a === 0?t:r) > .01,this.cars[a].visible,n,s)
+      const isAudibleActive = typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer ? a === multiplayerManager.activeCarIndex : a === 0;
+      for(const A of this.carBoosts[a]){
+        A.setSpatial(!isAudibleActive);
+        A.update(o,s && (isAudibleActive?t:r) > .01,this.cars[a].visible,n,s);
+      }
     }
 
   }
@@ -25628,6 +25691,25 @@ class tm {
     window.addEventListener("pointerdown", this.unlock, { passive: !0 });
     window.addEventListener("keydown", this.unlock);
   }
+  setSpatial(spatial) {
+    if (this.spatial === spatial) return;
+    this.spatial = spatial;
+    if (this.synth && this.synth.outputNode) {
+      try {
+        this.synth.outputNode.disconnect();
+        if (this.spatial) {
+          const ctx = qr();
+          if (!this.spatialBus) {
+            this.spatialBus = new cg(ctx, $r());
+            this.spatialBus.setPosition(this.position);
+          }
+          this.synth.outputNode.connect(this.spatialBus.input);
+        } else {
+          this.synth.outputNode.connect($r());
+        }
+      } catch (err) {}
+    }
+  }
   preload() {
     if (this.disposed) return Promise.resolve();
     try {
@@ -26047,11 +26129,11 @@ const _g = [{
 ),(i,e)=>{
   i.enabled = jr(e.enabled,i.enabled),i.phasesCollapsed = jr(e.phasesCollapsed,i.phasesCollapsed);for(const t of _g)i[t.key] = jr(e[t.key],i[t.key])
 }
-),Ma = 60,SA = 240,uA = rr("car-soccer.graphics-settings.v1",()=>({
-  showStadium:!0,limitFps:!0,maxFps:120,renderScale:getDefaultRenderScale()
+),Ma = 60,SA = 240,uA = rr("car-soccer.graphics-settings.v2",()=>({
+  showStadium:!1,limitFps:!0,maxFps:120,renderScale:getDefaultRenderScale()
 }
 ),(i,e)=>{
-  i.showStadium = jr(e.showStadium,i.showStadium),i.limitFps = jr(e.limitFps,i.limitFps),i.maxFps = _r(e.maxFps,i.maxFps,{
+  i.showStadium = jr(e.showStadiumDetails ?? e.showStadium, !1),i.limitFps = jr(e.limitFps,i.limitFps),i.maxFps = _r(e.maxFps,i.maxFps,{
     min:Ma,max:SA,integer:!0
   }
   ),i.renderScale = _r(e.renderScale,i.renderScale ?? getDefaultRenderScale(),{
@@ -26483,7 +26565,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                   <p class="zone__note">The surroundings outside the playable arena.</p>
                 </header>
                 <div class="zone__rows">
-                  ${Pr("showStadium","Show Stadium","Draws the stands, roof, lights, signage, and sky.","graphics")}
+                  ${Pr("showStadium","Show Stadium Details","Draws the stands, roof, lights, and exterior stadium architecture.","graphics")}
                 </div>
               </section>
             </section>
@@ -29013,7 +29095,7 @@ async function dB(){
     for(const W of E)W.reset()
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
-    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync())
+    a.state.mode !== "match" && (n.resetKickoff(),(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.resetKickoff()),w(),s.sync())
   }
   ;
   x.onReset = T;
@@ -29075,6 +29157,8 @@ const speedometerHUD = new SpeedometerHUD(an);
 const multiplayerManager = new MultiplayerManager({
   container: an,
   physics: n,
+  createPhysicsInstance: () => new yC(),
+  carVisual: i,
   arena: N,
   cameraRig: H,
   ballRadius: n.ballRadius,
@@ -29323,12 +29407,13 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on;
   if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
     const neutral = {throttle:0,steer:0,pitch:0,yaw:0,roll:0,jump:!1,boost:!1,handbrake:!1};
-    if(multiplayerManager.activeCarIndex === 0){
-      n.setControls(0, on);
-      n.setControls(1, neutral);
-    } else {
-      n.setControls(1, on);
-      n.setControls(0, neutral);
+    const c0 = multiplayerManager.activeCarIndex === 0 ? on : neutral;
+    const c1 = multiplayerManager.activeCarIndex === 1 ? on : neutral;
+    n.setControls(0, c0);
+    n.setControls(1, c1);
+    if (multiplayerManager.physics2) {
+      multiplayerManager.physics2.setControls(0, c0);
+      multiplayerManager.physics2.setControls(1, c1);
     }
   } else {
     n.setControls(r, on);
@@ -29412,10 +29497,12 @@ function wt(W){
     return;
   }
   const fe = Math.min((W - ze) / 1e3,.1);
-  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0),a.state.mode === "freeplay" && n.pollGoal() !== 0 && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail()),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
+  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0 || (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer && multiplayerManager.physics2 && multiplayerManager.physics2.pollGoal() !== 0);
+  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.resetKickoff()),w(),s.sync(W),N.resetBallTrail()),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
-  const Nt = ht.CARS + r * ln;
+  const activeCar = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
+  const Nt = ht.CARS + activeCar * ln;
   Y.update(fe,s.currState[Nt + ye.FLIP_RESET_SERIAL],s.currState[Nt + ye.DEMOED] !== 1),g.update({
     jumpSerial:s.currState[Nt + ye.JUMP_SERIAL],dodgeSerial:s.currState[Nt + ye.DODGE_SERIAL],doubleJumpSerial:s.currState[Nt + ye.DOUBLE_JUMP_SERIAL],wheelImpactSerial:s.currState[Nt + ye.WHEEL_IMPACT_SERIAL],wheelImpactSpeed:s.currState[Nt + ye.WHEEL_IMPACT_SPEED],audible:s.currState[Nt + ye.DEMOED] !== 1
   }
@@ -29425,11 +29512,10 @@ function wt(W){
     carSerial:Rn + zn,carSpeed:Sr,carPan:zn !== y[1]?Pn:0,worldSerial:s.currState[Nt + ye.BALL_WORLD_IMPACT_SERIAL],worldSpeed:s.currState[Nt + ye.BALL_WORLD_IMPACT_SPEED],worldSurface:s.currState[Nt + ye.BALL_WORLD_SURFACE] === 0?0:1,worldPan:Pn,audible:!0
   }
   ),y[0] = Rn,y[1] = zn,He.mark();
-  const activeCar = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
   const on = ht.CARS + activeCar * ln,Mt = s.currState;
   be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]);
   if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-    multiplayerManager.updatePhysics(fe, N.cars, N.ball.position);
+    multiplayerManager.updateVisuals(s.alpha);
     const activeCarIdx = multiplayerManager.activeCarIndex;
     const activeBall = activeCarIdx === 0 ? N.ball : (multiplayerManager.ball1Mesh || N.ball);
     H.update(N.cars[activeCarIdx], activeBall, fe, be);
@@ -29440,14 +29526,17 @@ function wt(W){
   }
   He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
   for(let bn = 0;bn < E.length;bn++){
-    const B = ht.CARS + bn * ln,pi = bn === r?ke:l,In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
+    if (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) {
+      E[bn].setSpatial(bn !== activeCar);
+    }
+    const B = ht.CARS + bn * ln,pi = bn === activeCar?ke:(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer?{throttle:0,handbrake:!1}:l),In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
     E[bn].update({
       forwardSpeed:Ys,throttle:pi.throttle,handbrake:pi.handbrake,boosting:In && Mt[B + ye.IS_BOOSTING] === 1,onGround:In && Mt[B + ye.ON_GROUND] === 1,alive:In && Mt[B + ye.DEMOED] !== 1,audible:x.enabled && Ft,controllerActive:R.active() || D.active(),position:(ar = N.cars[bn]) == null?void 0:ar.position
     }
     ,fe)
   }
   N.prepareBallSpeedTrail(H.camera);
-  const nn = ht.CARS + r * ln,ir = s.currState[nn + ye.SUPERSONIC] === 1 && s.currState[nn + ye.DEMOED] !== 1;
+  const nn = ht.CARS + activeCar * ln,ir = s.currState[nn + ye.SUPERSONIC] === 1 && s.currState[nn + ye.DEMOED] !== 1;
   Te.set(s.currState[nn + ye.VEL],s.currState[nn + ye.VEL + 2],s.currState[nn + ye.VEL + 1]),S.update(fe,ir && x.enabled && Ft,Te,H.camera),C.update(ir,R.active(),x.enabled && Ft);
   const activeControlledIdx = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
   const activeCarPos = ht.CARS + activeControlledIdx * ln;
