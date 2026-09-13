@@ -29480,12 +29480,22 @@ function wt(W){
   }
   N.prepareBallSpeedTrail(H.camera);
   if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
+    const numActiveCars = Mt[ht.NUM_CARS];
+    const allCarHitSerials = [];
+    const activeCarObjects = [];
+    for (let ci = 0; ci < numActiveCars; ci++) {
+      allCarHitSerials.push(Mt[ht.CARS + ci * ln + ye.BALL_HIT_SERIAL]);
+      if (N.cars[ci]) activeCarObjects.push(N.cars[ci]);
+    }
     trajectoryPredictor.update({
       active: a.state.mode === "freeplay",
       ballPosition: N.ball.position,
       ballVelocity: N.ballVelocity,
       ballState: n.state,
       ballHitSerial: Rn,
+      carHitSerials: allCarHitSerials,
+      cars: activeCarObjects,
+      numCars: numActiveCars,
       kickoffReset: goalScored,
     });
     trajectoryPredictor.prepare(H.camera);

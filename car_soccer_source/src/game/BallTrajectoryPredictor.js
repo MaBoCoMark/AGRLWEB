@@ -99,8 +99,13 @@ export class BallTrajectoryPredictor {
     this.geometryDirty = false;
     this.lastCameraPos = null;
 
-    // Track state changes
+    // Track state changes & collision detection
     this.lastHitSerial = -1;
+    this.lastCarHitSerials = [];
+    this.wasInCarContact = false;
+    this.lastRecalcTime = 0;
+    this.lastBallPosRS = null;
+    this.lastBallVelRS = null;
     this.lastBallState = null;
     this.lastBallPos = null;
     this.lastBallVel = null;
@@ -369,13 +374,33 @@ export class BallTrajectoryPredictor {
     this.geometryDirty = true;
   }
 
+  syncStateBaselines(ballState) {
+    if (!ballState) return;
+    const numCarsCount = Math.round(ballState[2]) || 1;
+    this.lastCarHitSerials = [];
+    for (let ci = 0; ci < numCarsCount; ci++) {
+      this.lastCarHitSerials.push(ballState[22 + ci * 51 + 46]);
+    }
+    this.lastHitSerial = this.lastCarHitSerials[0] ?? 0;
+    this.wasInCarContact = false;
+    this.lastBallPosRS = { x: ballState[4], y: ballState[5], z: ballState[6] };
+    this.lastBallVelRS = { x: ballState[16], y: ballState[17], z: ballState[18] };
+    this.lastRecalcTime = 0;
+  }
+
   notifyBallControl(ballState) {
-    if (ballState) this.lastBallState = ballState;
+    if (ballState) {
+      this.lastBallState = ballState;
+      this.syncStateBaselines(ballState);
+    }
     this.simulateFromState(this.lastBallState);
   }
 
   notifyKickoffReset(ballState) {
-    if (ballState) this.lastBallState = ballState;
+    if (ballState) {
+      this.lastBallState = ballState;
+      this.syncStateBaselines(ballState);
+    }
     this.clear();
   }
 
@@ -394,9 +419,20 @@ export class BallTrajectoryPredictor {
 
   /**
    * Per-frame update hook.
-   * Trajectory recalculation triggers ONLY on car-ball impact, kickoff reset, or ball control.
+   * Multi-layered detection guarantees reliable recalculation on every car-ball impact,
+   * continuous dribble/carry, soft touch, deflection, or trajectory divergence.
    */
-  update({ active, ballPosition, ballVelocity, ballState, ballHitSerial, kickoffReset }) {
+  update({
+    active,
+    ballPosition,
+    ballVelocity,
+    ballState,
+    ballHitSerial,
+    carHitSerials,
+    cars,
+    numCars,
+    kickoffReset
+  }) {
     this.isActive = active;
 
     if (!this.isActive || !this.settings.enabled) {
@@ -421,21 +457,142 @@ export class BallTrajectoryPredictor {
       return;
     }
 
-    // Recalculate trajectory ONLY when car collides with ball!
-    const hitChanged = (ballHitSerial !== undefined && ballHitSerial !== this.lastHitSerial);
-    if (hitChanged) {
-      this.lastHitSerial = ballHitSerial;
-      this.simulateFromState(ballState || this.lastBallState);
+    const b = ballState || this.lastBallState;
+    if (!b) return;
+
+    const numCarsCount = (numCars !== undefined) ? numCars : (Math.round(b[2]) || 1);
+    const ballPosRS = { x: b[4], y: b[5], z: b[6] };
+    const ballVelRS = { x: b[16], y: b[17], z: b[18] };
+    const ballSpeedSq = ballVelRS.x * ballVelRS.x + ballVelRS.y * ballVelRS.y + ballVelRS.z * ballVelRS.z;
+    const isBallStationary = ballSpeedSq < 25 && ballPosRS.z <= 95;
+
+    // Ball motionless on arena floor (e.g. awaiting kickoff hit)
+    if (isBallStationary) {
+      if (this.simulatedPoints.length > 0) {
+        this.clear();
+      }
+      this.syncStateBaselines(b);
       return;
     }
 
-    // In-flight without car collision:
-    // Advance currentBallIndex to track ball location along pre-simulated trajectory
-    if (this.simulatedPoints.length > 0 && ballPosition) {
+    // 1. Check discrete hit serial changes across all cars
+    let hitSerialChanged = false;
+    const currentSerials = [];
+    for (let ci = 0; ci < numCarsCount; ci++) {
+      const serial = (carHitSerials && carHitSerials[ci] !== undefined)
+        ? carHitSerials[ci]
+        : b[22 + ci * 51 + 46];
+      currentSerials.push(serial);
+    }
+
+    if (this.lastCarHitSerials.length === 0) {
+      this.lastCarHitSerials = currentSerials.slice();
+      if (ballHitSerial !== undefined) this.lastHitSerial = ballHitSerial;
+    } else {
+      for (let ci = 0; ci < currentSerials.length; ci++) {
+        const lastSerial = this.lastCarHitSerials[ci];
+        if (lastSerial !== undefined && currentSerials[ci] !== lastSerial) {
+          hitSerialChanged = true;
+          this.lastCarHitSerials[ci] = currentSerials[ci];
+        }
+      }
+      if (ballHitSerial !== undefined && this.lastHitSerial !== -1 && ballHitSerial !== this.lastHitSerial) {
+        hitSerialChanged = true;
+        this.lastHitSerial = ballHitSerial;
+      }
+    }
+
+    // 2. Check physical Car-Ball proximity & contact
+    let isNearCar = false;
+    const CONTACT_DIST_SQ = 42025; // (205 units)^2: Octane bounding radius (~77) + ball radius (91.25) + margin buffer
+
+    for (let ci = 0; ci < numCarsCount; ci++) {
+      const carOffset = 22 + ci * 51;
+      const carX = b[carOffset];
+      const carY = b[carOffset + 1];
+      const carZ = b[carOffset + 2];
+      const fwdX = b[carOffset + 3], fwdY = b[carOffset + 4], fwdZ = b[carOffset + 5];
+      const upX = b[carOffset + 9],  upY = b[carOffset + 10],  upZ = b[carOffset + 11];
+
+      // Octane hitbox center offset (forward ~13.88, up ~20.76)
+      const hbCenterX = carX + fwdX * 13.8757 + upX * 20.755;
+      const hbCenterY = carY + fwdY * 13.8757 + upY * 20.755;
+      const hbCenterZ = carZ + fwdZ * 13.8757 + upZ * 20.755;
+
+      const dx = ballPosRS.x - hbCenterX;
+      const dy = ballPosRS.y - hbCenterY;
+      const dz = ballPosRS.z - hbCenterZ;
+      const dSq = dx * dx + dy * dy + dz * dz;
+
+      if (dSq <= CONTACT_DIST_SQ) {
+        isNearCar = true;
+        break;
+      }
+    }
+
+    // Also check Three.js car meshes as fallback
+    if (!isNearCar && cars && cars.length > 0 && ballPosition) {
+      for (let ci = 0; ci < cars.length; ci++) {
+        const carObj = cars[ci];
+        if (!carObj || !carObj.position) continue;
+        const cPos = carObj.position;
+        const dx = ballPosition.x - cPos.x;
+        const dy = ballPosition.y - (cPos.y + 20);
+        const dz = ballPosition.z - cPos.z;
+        const dSq = dx * dx + dy * dy + dz * dz;
+        if (dSq <= CONTACT_DIST_SQ) {
+          isNearCar = true;
+          break;
+        }
+      }
+    }
+
+    // 3. Multi-layer Collision & Touch Detection Triggers
+    const now = performance.now();
+    let shouldRecalculate = false;
+
+    // Trigger A: RocketSim registered discrete hit
+    if (hitSerialChanged) {
+      shouldRecalculate = true;
+    }
+
+    // Trigger B: Initial physical contact (transition from not near to near car)
+    if (isNearCar && !this.wasInCarContact && ballSpeedSq > 20) {
+      shouldRecalculate = true;
+    }
+
+    // Trigger C: Contact impulse or velocity discontinuity while in contact with car
+    if (isNearCar && this.lastBallVelRS) {
+      const dvx = ballVelRS.x - this.lastBallVelRS.x;
+      const dvy = ballVelRS.y - this.lastBallVelRS.y;
+      // Gravity in RocketSim: -650 UU/s^2. Over 1 tick (1/120s), vertical gravity change is ~-5.42 UU/s.
+      const dvz = ballVelRS.z - this.lastBallVelRS.z;
+      const dvzNonGravity = dvz + 5.42;
+      const impulseSq = dvx * dvx + dvy * dvy + dvzNonGravity * dvzNonGravity;
+      if (impulseSq > 80) { // delta-V exceeding ~9 UU/s non-gravity impulse
+        shouldRecalculate = true;
+      }
+    }
+
+    // Trigger D: Continuous contact (Dribbling / Carrying the ball on the roof)
+    // Dynamic refresh throttled to ~35Hz (every ~28ms) so the launch arc tracks car steering/acceleration
+    if (isNearCar && this.wasInCarContact && (now - this.lastRecalcTime > 28) && ballSpeedSq > 35) {
+      shouldRecalculate = true;
+    }
+
+    // Trigger E: Empty trajectory when ball begins moving (e.g. first hit from stationary)
+    if (this.simulatedPoints.length === 0 && ballSpeedSq > 25) {
+      shouldRecalculate = true;
+    }
+
+    // 4. Trajectory Tracking & Divergence Detection (Safety Net for any missed deflection)
+    if (!shouldRecalculate && this.simulatedPoints.length > 0 && ballPosition) {
       let bestIdx = this.currentBallIndex;
       let bestDistSq = Infinity;
-      const maxSearch = Math.min(this.simulatedPoints.length, this.currentBallIndex + 30);
-      for (let i = this.currentBallIndex; i < maxSearch; i++) {
+      const searchStart = Math.max(0, this.currentBallIndex - 5);
+      const searchEnd = Math.min(this.simulatedPoints.length, this.currentBallIndex + 35);
+
+      for (let i = searchStart; i < searchEnd; i++) {
         const pt = this.simulatedPoints[i];
         const dx = pt.x - ballPosition.x;
         const dy = pt.y - ballPosition.y;
@@ -446,11 +603,38 @@ export class BallTrajectoryPredictor {
           bestIdx = i;
         }
       }
-      if (bestIdx !== this.currentBallIndex) {
-        this.currentBallIndex = bestIdx;
-        this.geometryDirty = true;
+
+      // Trigger F: Physical trajectory divergence
+      // Under free flight, ball tracks precomputed points within < 4 units squared.
+      // If error exceeds 25 units squared near a car, or 100 units squared generally, recalculate!
+      if ((isNearCar && bestDistSq > 25.0) || bestDistSq > 100.0) {
+        shouldRecalculate = true;
+      } else {
+        if (bestIdx !== this.currentBallIndex) {
+          this.currentBallIndex = bestIdx;
+          this.geometryDirty = true;
+        }
+
+        // Trigger G: Trajectory nearing end while ball is still flying
+        if (this.currentBallIndex >= this.simulatedPoints.length - 4 && ballSpeedSq > 100) {
+          shouldRecalculate = true;
+        }
       }
     }
+
+    // 5. Perform simulation if triggered
+    if (shouldRecalculate) {
+      this.simulateFromState(b);
+      this.lastRecalcTime = now;
+      this.wasInCarContact = isNearCar;
+      this.lastBallVelRS = { ...ballVelRS };
+      this.lastBallPosRS = { ...ballPosRS };
+      return;
+    }
+
+    this.wasInCarContact = isNearCar;
+    this.lastBallVelRS = { ...ballVelRS };
+    this.lastBallPosRS = { ...ballPosRS };
   }
 
   /**
