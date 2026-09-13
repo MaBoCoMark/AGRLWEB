@@ -29158,7 +29158,7 @@ async function dB(){
       }
       w();
       s.sync();
-      const currentSim = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.arenas[parallelManager.activeSlot] : n;
+      const currentSim = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.getActiveArena() : n;
       if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
         trajectoryPredictor.notifyKickoffReset(currentSim ? currentSim.state : null);
       }
@@ -29569,7 +29569,7 @@ function wt(W){
   const fe = Math.min((W - ze) / 1e3,.1);
   ze = W, a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p), a.state.paused || a.state.mode === "match" && a.state.phase === "ended" ? (he(), s.sync(W)) : s.update(W, he, a.state.mode === "match" ? me : void 0);
   if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
-    parallelManager.stepBackgroundArenas(s.lastTicks, s.alpha);
+    parallelManager.stepBackgroundArenas(s.lastTicks, s.alpha, s.prevState, s.currState);
   }
   const activeSimInstance = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.getActiveArena() : n;
   const goalScored = activeSimInstance.pollGoal() !== 0;

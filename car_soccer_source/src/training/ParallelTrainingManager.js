@@ -166,6 +166,7 @@ export class ParallelTrainingManager {
     this.players = PARALLEL_SLOTS.map(slot => ({
       id: slot.id,
       currentWorldId: slot.id,
+      arenaCarIndex: 0,
       unlimitedBoost: false,
       lastTouchedBall: null,
       score: 0,
@@ -398,6 +399,7 @@ export class ParallelTrainingManager {
       this.players = PARALLEL_SLOTS.map(slot => ({
         id: slot.id,
         currentWorldId: slot.id,
+        arenaCarIndex: 0,
         unlimitedBoost: false,
         lastTouchedBall: null,
         score: 0,
@@ -417,6 +419,8 @@ export class ParallelTrainingManager {
 
       // 5. Configure initial kickoffs and spawn points for all 6 arenas
       for (let i = 0; i < 6; i++) {
+        this.players[i].arenaCarIndex = 0;
+        this.players[i].currentWorldId = i;
         this._resetArenaToKickoff(i);
         this.spawnPlayer(this.players[i], i);
       }
@@ -594,12 +598,13 @@ export class ParallelTrainingManager {
     if (targetWorldId === p.currentWorldId) return;
     if (targetWorldId < 0 || targetWorldId >= 6) return;
 
-    const currentWorld = this.worlds[p.currentWorldId];
+    const sourceWorldId = p.currentWorldId;
+    const currentWorld = this.worlds[sourceWorldId];
     const targetWorld = this.worlds[targetWorldId];
 
     // 判断迁移类型
     if (p.id === currentWorld.ownerId) {
-      // 情况 A：p.id === currentWorld.ownerId（宿主迁移）
+      // 情况 A：p.id === currentWorld.ownerId（宿主迁移，带走本房间所有成员）
       const movingGroup = Array.from(currentWorld.presentPlayerIds);
       for (const pid of movingGroup) {
         const member = this.players[pid];
@@ -609,50 +614,153 @@ export class ParallelTrainingManager {
       for (const pid of movingGroup) {
         targetWorld.presentPlayerIds.add(pid);
       }
-      // 隐藏 currentWorld.ball（归位至原点并不可见）
-      this.hideWorldBall(currentWorld.id);
-
-      // 球与世界恢复
-      if (targetWorldId === p.id && targetWorld.presentPlayerIds.size === movingGroup.length) {
-        this.restoreWorldBall(targetWorldId);
-      } else {
-        this.showWorldBall(targetWorldId);
-      }
-
-      // 位置重置：调用 SpawnPlayer
-      for (const pid of movingGroup) {
-        const member = this.players[pid];
-        this.spawnPlayer(member, targetWorldId);
-      }
     } else {
-      // 情况 B：p.id !== currentWorld.ownerId（访客迁移）
+      // 情况 B：p.id !== currentWorld.ownerId（访客迁移，仅移动单人）
       currentWorld.presentPlayerIds.delete(p.id);
       targetWorld.presentPlayerIds.add(p.id);
       p.currentWorldId = targetWorldId;
-
-      // 球与世界恢复
-      if (targetWorldId === p.id && targetWorld.presentPlayerIds.size === 1) {
-        this.restoreWorldBall(targetWorldId);
-      } else {
-        this.showWorldBall(targetWorldId);
-      }
-
-      if (currentWorld.presentPlayerIds.size === 0) {
-        this.hideWorldBall(currentWorld.id);
-      }
-
-      // 位置重置：调用 SpawnPlayer
-      this.spawnPlayer(p, targetWorldId);
     }
 
-    // If active player was part of migration, rebind
-    if (p.id === this.activePlayerIndex) {
+    // 球与世界显示状态管理
+    if (currentWorld.presentPlayerIds.size === 0) {
+      this.hideWorldBall(currentWorld.id);
+    }
+    if (targetWorld.presentPlayerIds.size > 0) {
+      this.showWorldBall(targetWorld.id);
+    }
+
+    // 同步重构受影响的两个世界的物理 Arena（生成准确数量的多车，多车原生碰撞，且仅 1 个球）
+    this._syncWorldArena(sourceWorldId);
+    this._syncWorldArena(targetWorldId);
+
+    // If active player was part of migration, rebind active player
+    const activePlayer = this.players[this.activePlayerIndex];
+    if (activePlayer && (activePlayer.currentWorldId === targetWorldId || activePlayer.currentWorldId === sourceWorldId)) {
       this.setActivePlayer(this.activePlayerIndex, true);
     }
 
     this._updateVisualVisibility();
     this._updateBottomLeftHud();
     this._renderCards();
+    this.updateVisuals(0);
+  }
+
+  /**
+   * Rebuild & Synchronize physics arena for a world to contain exactly
+   * the cars of players present in this world, with car-to-car collision.
+   */
+  _syncWorldArena(worldId) {
+    const world = this.worlds[worldId];
+    if (!world) return;
+    const arena = this.arenas[worldId];
+    if (!arena || !arena.module) return;
+
+    const { ht, ln } = this.constants;
+    const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
+    const presentIds = Array.from(world.presentPlayerIds);
+
+    // 情况 1：世界中无玩家（空世界）：隐藏球并清空 Arena
+    if (presentIds.length === 0) {
+      this.hideWorldBall(worldId);
+      if (arena.module._physics_createArena() !== 1) {
+        console.error(`Failed to clear arena for empty world ${worldId}`);
+      }
+      arena.statePtr = arena.module._physics_getStatePtr();
+      arena.stateLen = arena.module._physics_getStateSize();
+      arena.controlsPtr = arena.module._physics_getControlsPtr();
+      arena.stateView = null;
+      arena.controlsView = null;
+      if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
+      if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
+      return;
+    }
+
+    // 情况 2：世界中有 1~6 名玩家
+    // 若此世界为当前用户所操控的活动世界，当前活动驾驶员（activePlayerIndex）必须排在 Car 0
+    let orderedPlayerIds;
+    if (worldId === activeWorldId && world.presentPlayerIds.has(this.activePlayerIndex)) {
+      orderedPlayerIds = [
+        this.activePlayerIndex,
+        ...presentIds.filter(id => id !== this.activePlayerIndex).sort((a, b) => a - b)
+      ];
+    } else {
+      orderedPlayerIds = [...presentIds].sort((a, b) => a - b);
+    }
+
+    // 保存该世界原本已在场的车辆和球的物理状态
+    let savedBallState = null;
+    if (world.ballVisible && arena.state && arena.state.length > ht.BALL + 18) {
+      savedBallState = arena.state.slice(ht.BALL, ht.BALL + 18);
+    }
+
+    const savedCarStates = new Map();
+    for (const pid of orderedPlayerIds) {
+      const pl = this.players[pid];
+      if (pl && pl.arenaCarIndex !== undefined && pl.currentWorldId === worldId && arena.state) {
+        const offset = ht.CARS + pl.arenaCarIndex * ln;
+        if (offset + ln <= arena.state.length) {
+          savedCarStates.set(pid, arena.state.slice(offset, offset + ln));
+        }
+      }
+    }
+
+    // 重新创建物理 Arena（重置为 0 辆车和 1 个球）
+    if (arena.module._physics_createArena() !== 1) {
+      console.error(`Failed to recreate arena for world ${worldId}`);
+      return;
+    }
+    arena.statePtr = arena.module._physics_getStatePtr();
+    arena.stateLen = arena.module._physics_getStateSize();
+    arena.controlsPtr = arena.module._physics_getControlsPtr();
+    arena.stateView = null;
+    arena.controlsView = null;
+
+    // 为该世界的所有玩家添加物理车辆（RocketSim 原生支持每个 arena 多辆车）
+    for (let i = 0; i < orderedPlayerIds.length; i++) {
+      const pid = orderedPlayerIds[i];
+      const pl = this.players[pid];
+      const team = PARALLEL_SLOTS[pid].team;
+      const assignedIndex = arena.addCar(team, 'default');
+      pl.arenaCarIndex = assignedIndex;
+      pl.currentWorldId = worldId;
+    }
+
+    // 重置 Kickoff 基础参数
+    arena.resetKickoff(-1);
+
+    // 恢复球的状态
+    if (savedBallState && world.ballVisible) {
+      arena.state.set(savedBallState, ht.BALL);
+      if (typeof arena.module._physics_setBallState === 'function') {
+        try { arena.module._physics_setBallState(arena.statePtr + ht.BALL * 4); } catch (e) {}
+      }
+    } else {
+      this.showWorldBall(worldId);
+    }
+
+    // 恢复原有车辆或为新迁入车辆安全生成
+    for (let i = 0; i < orderedPlayerIds.length; i++) {
+      const pid = orderedPlayerIds[i];
+      const pl = this.players[pid];
+      const offset = ht.CARS + i * ln;
+      if (savedCarStates.has(pid)) {
+        arena.state.set(savedCarStates.get(pid), offset);
+        if (typeof arena.module._physics_setCarState === 'function') {
+          try { arena.module._physics_setCarState(i, arena.statePtr + offset * 4); } catch (e) {}
+        }
+      } else {
+        this.spawnPlayer(pl, worldId);
+      }
+    }
+
+    // 同步前后状态缓存
+    if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
+    if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
+
+    // 若为当前活动世界，同步主引擎物理引用
+    if (worldId === activeWorldId && typeof this.onSwitchCallback === 'function') {
+      this.onSwitchCallback(arena, this.prevStates[worldId], this.currStates[worldId]);
+    }
   }
 
   /**
@@ -662,10 +770,28 @@ export class ParallelTrainingManager {
     const world = this.worlds[worldId];
     if (!world) return;
     world.ballVisible = false;
-    world.pos = { x: 0, y: 0, z: -1000 };
+    world.pos = { x: 0, y: 0, z: -10000 };
     world.vel = { x: 0, y: 0, z: 0 };
     if (world.ball) {
       world.ball.visible = false;
+    }
+    const ballMesh = this.ballMeshes[worldId];
+    if (ballMesh) {
+      ballMesh.visible = false;
+      ballMesh.position.set(0, -10000, 0);
+    }
+    const arena = this.arenas[worldId];
+    if (arena && arena.state) {
+      const bOff = this.constants.ht.BALL;
+      arena.state[bOff] = 0;
+      arena.state[bOff + 1] = 0;
+      arena.state[bOff + 2] = -10000;
+      arena.state[bOff + 12] = 0;
+      arena.state[bOff + 13] = 0;
+      arena.state[bOff + 14] = 0;
+      if (typeof arena.module._physics_setBallState === 'function') {
+        try { arena.module._physics_setBallState(arena.statePtr + bOff * 4); } catch (e) {}
+      }
     }
   }
 
@@ -695,8 +821,29 @@ export class ParallelTrainingManager {
       world.ball.visible = true;
     }
     const arena = this.arenas[worldId];
-    if (arena) {
-      arena.resetKickoff(-1);
+    if (arena && arena.state) {
+      const bOff = this.constants.ht.BALL;
+      arena.state[bOff] = 0;
+      arena.state[bOff + 1] = 0;
+      arena.state[bOff + 2] = 93;
+      arena.state[bOff + 3] = 1;
+      arena.state[bOff + 4] = 0;
+      arena.state[bOff + 5] = 0;
+      arena.state[bOff + 6] = 0;
+      arena.state[bOff + 7] = 1;
+      arena.state[bOff + 8] = 0;
+      arena.state[bOff + 9] = 0;
+      arena.state[bOff + 10] = 0;
+      arena.state[bOff + 11] = 1;
+      arena.state[bOff + 12] = 0;
+      arena.state[bOff + 13] = 0;
+      arena.state[bOff + 14] = 0;
+      arena.state[bOff + 15] = 0;
+      arena.state[bOff + 16] = 0;
+      arena.state[bOff + 17] = 0;
+      if (typeof arena.module._physics_setBallState === 'function') {
+        try { arena.module._physics_setBallState(arena.statePtr + bOff * 4); } catch (e) {}
+      }
     }
   }
 
@@ -712,7 +859,7 @@ export class ParallelTrainingManager {
     for (const pid of world.presentPlayerIds) {
       if (pid !== player.id) {
         const other = this.players[pid];
-        if (other) {
+        if (other && other.pos) {
           otherCarPositions.push({ x: other.pos.x, y: other.pos.y, z: other.pos.z });
         }
       }
@@ -791,10 +938,11 @@ export class ParallelTrainingManager {
     player.up = { x: 0, y: 0, z: 1 };
     player.right = { x: fy, y: -fx, z: 0 };
 
-    // Update physical arena state if player is in this world
+    // Update physical arena state for this player's car
     const arena = this.arenas[worldId];
     if (arena) {
-      const offset = this.constants.ht.CARS;
+      const cIdx = (player.arenaCarIndex !== undefined) ? player.arenaCarIndex : 0;
+      const offset = this.constants.ht.CARS + cIdx * this.constants.ln;
       if (arena.state && arena.state.length > offset + 20) {
         arena.state[offset + this.constants.ye.POS] = selected.x;
         arena.state[offset + this.constants.ye.POS + 1] = selected.y;
@@ -815,6 +963,9 @@ export class ParallelTrainingManager {
         arena.state[offset + this.constants.ye.RIGHT + 1] = -fx;
         arena.state[offset + this.constants.ye.RIGHT + 2] = 0;
         arena.state[offset + this.constants.ye.BOOST] = 100;
+        if (typeof arena.module._physics_setCarState === 'function') {
+          try { arena.module._physics_setCarState(cIdx, arena.statePtr + offset * 4); } catch (e) {}
+        }
       }
       if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
       if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
@@ -829,9 +980,60 @@ export class ParallelTrainingManager {
     if (targetPlayerIndex < 0 || targetPlayerIndex >= 6) return;
     if (!forceRebind && targetPlayerIndex === this.activePlayerIndex) return;
 
+    const targetPlayer = this.players[targetPlayerIndex];
+    const targetWorldId = targetPlayer.currentWorldId;
+    const { ht, ln } = this.constants;
+
+    // 确保目标玩家在目标世界的物理 Arena 中处于 Car 0
+    const arena = this.arenas[targetWorldId];
+    if (arena && targetPlayer.arenaCarIndex !== 0 && targetPlayer.arenaCarIndex !== undefined) {
+      const k = targetPlayer.arenaCarIndex;
+      const off0 = ht.CARS;
+      const offK = ht.CARS + k * ln;
+
+      // 寻找当前在该世界处于 Car 0 的玩家
+      const world = this.worlds[targetWorldId];
+      let car0Player = null;
+      if (world) {
+        for (const pid of world.presentPlayerIds) {
+          if (this.players[pid] && this.players[pid].arenaCarIndex === 0) {
+            car0Player = this.players[pid];
+            break;
+          }
+        }
+      }
+
+      // 交换 Car 0 与 Car k 的物理状态与缓存
+      if (arena.state && offK + ln <= arena.state.length) {
+        const tmp0 = arena.state.slice(off0, off0 + ln);
+        const tmpK = arena.state.slice(offK, offK + ln);
+        arena.state.set(tmpK, off0);
+        arena.state.set(tmp0, offK);
+        if (typeof arena.module._physics_setCarState === 'function') {
+          try {
+            arena.module._physics_setCarState(0, arena.statePtr + off0 * 4);
+            arena.module._physics_setCarState(k, arena.statePtr + offK * 4);
+          } catch (e) {}
+        }
+      }
+      if (this.prevStates[targetWorldId] && offK + ln <= this.prevStates[targetWorldId].length) {
+        const tmp0 = this.prevStates[targetWorldId].slice(off0, off0 + ln);
+        const tmpK = this.prevStates[targetWorldId].slice(offK, offK + ln);
+        this.prevStates[targetWorldId].set(tmpK, off0);
+        this.prevStates[targetWorldId].set(tmp0, offK);
+      }
+      if (this.currStates[targetWorldId] && offK + ln <= this.currStates[targetWorldId].length) {
+        const tmp0 = this.currStates[targetWorldId].slice(off0, off0 + ln);
+        const tmpK = this.currStates[targetWorldId].slice(offK, offK + ln);
+        this.currStates[targetWorldId].set(tmpK, off0);
+        this.currStates[targetWorldId].set(tmp0, offK);
+      }
+
+      if (car0Player) car0Player.arenaCarIndex = k;
+      targetPlayer.arenaCarIndex = 0;
+    }
+
     this.activePlayerIndex = targetPlayerIndex;
-    const player = this.players[targetPlayerIndex];
-    const targetWorldId = player.currentWorldId;
 
     // 1. Update visual dye on active car and ball
     this._applySlotVisuals(targetPlayerIndex);
@@ -854,6 +1056,7 @@ export class ParallelTrainingManager {
     this.resetEngineAudio();
 
     // 5. Update HUD and UI
+    this._updateVisualVisibility();
     this._updateBottomLeftHud();
     this._renderCards();
   }
@@ -870,8 +1073,10 @@ export class ParallelTrainingManager {
       this.players[world.lastTouchedPlayer].score += 1;
     }
 
-    // 2. Local Reset Scope:
-    // Only reset players present in Worlds[w]
+    // 2. Reset Worlds[w].ball to midfield (0, 0, 93) with zero velocity
+    this.restoreWorldBall(worldId);
+
+    // 3. Local Reset Scope: Only reset players present in Worlds[w]
     for (const pid of world.presentPlayerIds) {
       const p = this.players[pid];
       if (p) {
@@ -879,16 +1084,24 @@ export class ParallelTrainingManager {
       }
     }
 
-    // Reset Worlds[w].ball to midfield (0, 0, 93) with zero velocity
-    this.restoreWorldBall(worldId);
+    // 4. Update state buffers
+    const arena = this.arenas[worldId];
+    if (arena && arena.state) {
+      if (this.prevStates[worldId]) this.prevStates[worldId].set(arena.state);
+      if (this.currStates[worldId]) this.currStates[worldId].set(arena.state);
+    }
 
-    // If this is the active world, reset audio and notify
+    // 5. If this is the active world, reset audio and notify
     if (worldId === this.players[this.activePlayerIndex].currentWorldId) {
       this.resetEngineAudio();
+      if (typeof this.onSwitchCallback === 'function' && arena) {
+        this.onSwitchCallback(arena, this.prevStates[worldId], this.currStates[worldId]);
+      }
     }
 
     this._updateBottomLeftHud();
     this._renderCards();
+    this.updateVisuals(0);
   }
 
   handleActiveWorldGoal() {
@@ -911,9 +1124,15 @@ export class ParallelTrainingManager {
     this.players[playerId].unlimitedBoost = isUnlimited;
     this.unlimitedBoost[playerId] = isUnlimited;
 
-    const worldId = this.players[playerId].currentWorldId;
-    if (this.arenas[worldId]) {
-      this.arenas[worldId].setUnlimitedBoost(isUnlimited);
+    const player = this.players[playerId];
+    const worldId = player.currentWorldId;
+    const arena = this.arenas[worldId];
+    if (arena && arena.state) {
+      const cIdx = (player.arenaCarIndex !== undefined) ? player.arenaCarIndex : 0;
+      const off = this.constants.ht.CARS + cIdx * this.constants.ln;
+      if (isUnlimited && off + this.constants.ye.BOOST < arena.state.length) {
+        arena.state[off + this.constants.ye.BOOST] = 100;
+      }
     }
     this._updateBottomLeftHud();
     this._renderCards();
@@ -939,12 +1158,33 @@ export class ParallelTrainingManager {
     if (!this.isActive) return;
     const p = this.players[this.activePlayerIndex];
     if (!p) return;
-    const arena = this.arenas[p.currentWorldId];
-    if (arena) {
-      arena.setControls(0, controls);
-      if (p.unlimitedBoost) {
-        arena.setUnlimitedBoost(true);
-        arena.state[this.constants.ht.CARS + this.constants.ye.BOOST] = 100;
+    const worldId = p.currentWorldId;
+    const arena = this.arenas[worldId];
+    if (!arena) return;
+
+    const { ht, ln, ye } = this.constants;
+    const world = this.worlds[worldId];
+
+    // Controls for active driver (always car 0 in active world)
+    arena.setControls(0, controls);
+
+    // Apply zero controls to other idle cars and unlimited boost refill
+    if (world) {
+      for (const pid of world.presentPlayerIds) {
+        const pl = this.players[pid];
+        if (!pl || pl.arenaCarIndex === undefined) continue;
+        const cIdx = pl.arenaCarIndex;
+
+        if (cIdx !== 0) {
+          arena.setControls(cIdx, ZERO_CONTROLS);
+        }
+
+        if (pl.unlimitedBoost && arena.state) {
+          const off = ht.CARS + cIdx * ln;
+          if (off + ye.BOOST < arena.state.length) {
+            arena.state[off + ye.BOOST] = 100;
+          }
+        }
       }
     }
   }
@@ -958,49 +1198,68 @@ export class ParallelTrainingManager {
   /**
    * Step background arenas at 120Hz
    */
-  stepBackgroundArenas(ticks, alpha) {
+  stepBackgroundArenas(ticks, alpha, activePrevState = null, activeCurrState = null) {
     if (!this.isActive) return;
-    const { ht, ye } = this.constants;
+    const { ht, ln, ye } = this.constants;
     const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
 
+    // Sync active world state buffers if provided from s
+    if (activePrevState && this.prevStates[activeWorldId]) {
+      this.prevStates[activeWorldId].set(activePrevState);
+    }
+    if (activeCurrState && this.currStates[activeWorldId]) {
+      this.currStates[activeWorldId].set(activeCurrState);
+    } else {
+      const activeArena = this.arenas[activeWorldId];
+      if (activeArena && activeArena.state && this.currStates[activeWorldId]) {
+        this.currStates[activeWorldId].set(activeArena.state);
+      }
+    }
+
+    // Step background worlds
     for (let w = 0; w < 6; w++) {
       if (w === activeWorldId) continue;
+      const world = this.worlds[w];
       const arena = this.arenas[w];
-      if (!arena) continue;
+      if (!world || !arena) continue;
+
+      // Skip empty background worlds (saves CPU)
+      if (world.presentPlayerIds.size === 0) continue;
 
       if (ticks > 0) {
         if (this.prevStates[w] && this.currStates[w]) {
           this.prevStates[w].set(this.currStates[w]);
         }
 
-        // Shield controls: inertially simulated with ZERO_CONTROLS
-        arena.setControls(0, ZERO_CONTROLS);
+        // Apply zero controls and boost refills for all cars in this background world
+        for (const pid of world.presentPlayerIds) {
+          const pl = this.players[pid];
+          if (!pl || pl.arenaCarIndex === undefined) continue;
+          const cIdx = pl.arenaCarIndex;
 
-        const hostPlayer = this.players[w];
-        if (hostPlayer && hostPlayer.unlimitedBoost) {
-          arena.setUnlimitedBoost(true);
-          arena.state[ht.CARS + ye.BOOST] = 100;
+          arena.setControls(cIdx, ZERO_CONTROLS);
+
+          if (pl.unlimitedBoost && arena.state) {
+            const off = ht.CARS + cIdx * ln;
+            if (off + ye.BOOST < arena.state.length) {
+              arena.state[off + ye.BOOST] = 100;
+            }
+          }
         }
 
         arena.step(ticks);
 
-        // Goal detection on World w
+        // Goal detection on background World w
         const goalScored = arena.pollGoal() !== 0;
         if (goalScored) {
           this.onGoalScored(w);
-        } else if (this.currStates[w]) {
+        } else if (this.currStates[w] && arena.state) {
           this.currStates[w].set(arena.state);
         }
       }
     }
 
-    // Active arena goal detection
-    const activeArena = this.arenas[activeWorldId];
-    if (activeArena && activeArena.pollGoal() !== 0) {
-      this.onGoalScored(activeWorldId);
-    }
-
-    // Touch tracking: check if cars touch balls in their respective worlds
+    // Touch tracking
     this._updateTouchTracking();
 
     // Visual updates
@@ -1022,7 +1281,7 @@ export class ParallelTrainingManager {
       // Check distance from cars in this world to the ball
       for (const pid of world.presentPlayerIds) {
         const p = this.players[pid];
-        if (!p) continue;
+        if (!p || !p.pos) continue;
         const dx = p.pos.x - ballX;
         const dy = p.pos.y - ballY;
         const dz = p.pos.z - ballZ;
@@ -1037,11 +1296,11 @@ export class ParallelTrainingManager {
   }
 
   /**
-   * Update visual positions of all 6 cars and 6 balls
+   * Update visual positions of all cars and balls
    */
   updateVisuals(alpha) {
     if (!this.isActive) return;
-    const { ht } = this.constants;
+    const { ht, ln, ye } = this.constants;
     const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
 
     // 1. Update Cars
@@ -1055,15 +1314,30 @@ export class ParallelTrainingManager {
       const curr = this.currStates[worldId];
 
       if (pIdx === this.activePlayerIndex) {
-        // Active driver is rendered directly from active arena
-        carMesh.visible = false; // Primary game renders N.cars[0]
+        // Active driver is rendered directly from active arena via N.cars[0]
+        carMesh.visible = false;
+        if (this.arenaWorld && this.arenaWorld.cars && this.arenaWorld.cars[0]) {
+          p.pos.x = this.arenaWorld.cars[0].position.x;
+          p.pos.y = this.arenaWorld.cars[0].position.z;
+          p.pos.z = this.arenaWorld.cars[0].position.y;
+        }
       } else {
-        carMesh.visible = true;
-        if (prev && curr) {
-          this._applyPhysTransform(carMesh, prev, curr, ht.CARS, alpha);
-          p.pos.x = carMesh.position.x;
-          p.pos.y = carMesh.position.z; // Three.js Z is RocketSim Y
-          p.pos.z = carMesh.position.y; // Three.js Y is RocketSim Z
+        const world = this.worlds[worldId];
+        const isPresent = world && world.presentPlayerIds.has(pIdx);
+        const cIdx = (p.arenaCarIndex !== undefined) ? p.arenaCarIndex : 0;
+        const offset = ht.CARS + cIdx * ln;
+
+        if (isPresent && prev && curr && (offset + ln <= curr.length)) {
+          const isDemoed = (curr[offset + ye.DEMOED] === 1);
+          carMesh.visible = !isDemoed;
+          if (!isDemoed) {
+            this._applyPhysTransform(carMesh, prev, curr, offset, alpha);
+            p.pos.x = carMesh.position.x;
+            p.pos.y = carMesh.position.z; // Three.js Z is RocketSim Y
+            p.pos.z = carMesh.position.y; // Three.js Y is RocketSim Z
+          }
+        } else {
+          carMesh.visible = false;
         }
       }
     }
@@ -1097,9 +1371,12 @@ export class ParallelTrainingManager {
     const activeWorldId = this.players[this.activePlayerIndex].currentWorldId;
 
     for (let pIdx = 0; pIdx < 6; pIdx++) {
+      const p = this.players[pIdx];
       const carMesh = this.carMeshes[pIdx];
-      if (carMesh) {
-        carMesh.visible = (pIdx !== this.activePlayerIndex);
+      if (carMesh && p) {
+        const world = this.worlds[p.currentWorldId];
+        const isPresent = world && world.presentPlayerIds.has(pIdx);
+        carMesh.visible = (pIdx !== this.activePlayerIndex && isPresent);
       }
     }
 
@@ -1754,15 +2031,17 @@ export class ParallelTrainingManager {
 
       for (let c = 0; c < 6; c++) {
         const targetSlot = PARALLEL_SLOTS[c];
+        const targetWorld = this.worlds[c];
         const isVisible = this.isButtonVisible(r, c);
         const isCurrentWorld = (p.currentWorldId === c);
+        const occupantCount = targetWorld ? targetWorld.presentPlayerIds.size : 0;
 
         const worldBtn = document.createElement('button');
         worldBtn.type = 'button';
         worldBtn.className = `world-target-btn ${isCurrentWorld ? 'is-current-world' : ''}`;
         worldBtn.style.setProperty('--world-color', targetSlot.hex);
         worldBtn.setAttribute('data-target-world', c);
-        worldBtn.setAttribute('title', `迁移至 ${targetSlot.name} 世界 (World ${c})`);
+        worldBtn.setAttribute('title', `迁移至 ${targetSlot.name} 世界 (World ${c}, 当前 ${occupantCount} 车)`);
 
         if (!isVisible) {
           worldBtn.style.display = 'none';
@@ -1771,6 +2050,7 @@ export class ParallelTrainingManager {
         worldBtn.innerHTML = `
           <span class="world-btn-pip" style="background:${targetSlot.hex};"></span>
           <span class="world-btn-label">W${c} ${targetSlot.nameZh}</span>
+          ${occupantCount > 1 ? `<span style="font-size:10px;opacity:0.85;margin-left:2px;font-weight:700;">(${occupantCount}车)</span>` : ''}
           ${isCurrentWorld ? '<span class="world-here-badge">当前</span>' : ''}
         `;
 
@@ -1805,7 +2085,7 @@ export class ParallelTrainingManager {
           ${slot.name} <span style="opacity:0.75;font-weight:600;">(${slot.nameZh}车)</span>
         </span>
         <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,0.12);border:1px solid ${worldSlot.hex};color:${worldSlot.hex};">
-          World ${p.currentWorldId} (${worldSlot.nameZh}世界)
+          World ${p.currentWorldId} (${worldSlot.nameZh}世界 · ${this.worlds[p.currentWorldId] ? this.worlds[p.currentWorldId].presentPlayerIds.size : 1}车同场)
         </span>
         <span style="font-size:11px;color:${p.unlimitedBoost ? '#38bdf8' : '#94a3b8'};font-weight:700;">
           ${p.unlimitedBoost ? '⚡ Boost: INF' : 'Boost: 100'}
