@@ -353,5 +353,57 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
       - 7 项测试用例全部通过，覆盖 LUT 插值数学准确性、几何体生成、实例化网格属性缓冲、生命周期步进、Bloom 激活标记、向后兼容别名校验。
       - 全量 13 大测试套件 61 项单元测试 100% 验收通过（`npm test` 全部通过）。
 
-### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
+14. **双主题材质管线与卡通描边渐变抽取至 `src/effects/ThemeMaterialPipeline.js`（✅ Phase 7.6 已落地）**：
+    - `src/effects/ThemeMaterialPipeline.js`（原 `CarSoccerEngine.js` 第 20380~20450 行混淆代码）：
+      - **街机/拟真双主题材质注册与响应式切换机制**：
+        - `createMultiThemeMaterial`（原 `vn`）：将 `arcade` 材质与 `realistic` 材质以 WeakMap 绑定并根据当前激活主题动态返回有效材质变体。
+        - `getThemeMaterial`（原 `Vi`）：按需获取指定主题材质变体，非双主题材质安全穿透返回自身。
+        - `isMultiThemeMaterial`（原 `F0`）：判定材质是否具备主题变体。
+        - `resolveThemeMaterial`（原 `D0`）：单材质与材质数组的批处理解析。
+      - **场景层级自动追踪与弱引用垃圾回收守护**：
+        - `registerThemeSubtree`（原 `Ji`，此前在上下文注入中被误命名为 `markMatrixDirty`）：深度遍历 3D 层级，排除 `flip-reset-indicator`、`realistic-reset-pulse`、`car-hitbox` 等非主题网格，利用 `WeakRef` 将目标网格收集入 `Set`，并在 `ThemeManager` 触发 `onThemeChange` 事件时零开销自动热替换所有存活网格的材质；已回收网格自动析构。
+      - **街机 4 像素光照梯度阶梯与卡通着色管线**：
+        - `getArcadeLightRampTexture`（原 `$s`）：单例 4 像素 RGBA `[28, 90, 170, 255]` 梯度阶梯图（NearestFilter、非 Mipmap），实现纯粹的手绘/赛璐璐阶梯漫反射。
+        - `createCelShadedToonMaterial`（原 `Nr`，此前在上下文注入中被误命名为 `cloneMaterial`）：创建带有光照阶梯映射的 `MeshToonMaterial`。
+        - `applyArcadeCelShading`（原 `N0`，此前在上下文注入中被误命名为 `setShadowFlags`）：深度遍历模型，识别标准 PBR 材质（排除透明与玻璃折射材质），克隆漫反射、自发光、凹凸法线贴图（法线强度乘以 0.2 避免赛璐璐杂色），以 `createMultiThemeMaterial` 组合为双模材质，并挂载到自动更新总线。
+    - **纠偏主引擎历史误导别名**：
+      - 将此前在 `VehicleAssembly` 和 `ArenaWorld` 中误标的 `markMatrixDirty: Ji` 还原为材质层级注册器 `registerThemeSubtree`。
+      - 将误标的 `cloneMaterial: Nr` 还原为赛璐璐材质生成器 `createCelShadedToonMaterial`。
+      - 将误标的 `setShadowFlags: N0` 还原为街机着色管线装配器 `applyArcadeCelShading`。
+
+15. **场景着色器异步预热与 PWA 服务工作线程抽取（✅ Phase 7.7 已落地）**：
+    - `src/game/ShaderPrewarmer.js`（原 `CarSoccerEngine.js` 第 20710~20755 行混淆代码）：
+      - `prewarmSceneShaders`（原 `hB`）：
+        - 全场景灯光可见性排列组合（$2^N$ 种灯光配置与动态消失光源树判定）。
+        - 遍历所有 `Mesh`, `Points`, `Line` 视觉节点，临时解除视锥剔除并设定有效 drawRange。
+        - 调用 `renderer.compileAsync(scene, camera)` 与辉光/最终后期通道预演，确保进入赛场第一帧绝不因为 WebGL Shader 动态编译而掉帧。
+        - 严格采用 `finally` 块 100% 恢复初始物体的可见性、视锥剔除标记、DrawRange、Pass 开启状态与渲染目标。
+    - `src/utils/ServiceWorkerManager.js`（原 `CarSoccerEngine.js` 第 20675~20710 行混淆代码）：
+      - `registerGameServiceWorker`（原 `cB`）与 `waitForServiceWorkerActivation`（原 `lB`）：
+        - 安全环境检测（`isSecureContext`、`serviceWorker`、`caches`）。
+        - 非阻塞 PWA 离线资源包注册与状态变更轮询，网络离线或无缓存时优雅跳过。
+    - **测试验收**：
+      - 新增 `tests/theme_materials_and_prewarmer.test.js`（6 项高覆盖率测试全部通过）。
+      - 全量 14 个测试套件、67 项单元测试全部通过（100% 通过率）。
+
+---
+
+## 5. 后续反混淆与现代化演进路线（Roadmap）
+
+### 阶段 7.8：Three.js 外部加载器与几何工具模块化（⏳ 下一步）
+- **目标**：将 `CarSoccerEngine.js` 第 18428~20380 行的 ~1,950 行 Three.js Addons 独立为专用模块：
+  - `src/loaders/OBJLoader.js`（原 `cb` / `lb` 及 `MTLLoader`）
+  - `src/loaders/GLTFLoader.js`（原 `ho` 及 `GLTFParser` / `$b`）
+  - `src/utils/BufferGeometryUtils.js`（`mergeVertices` / `hb`, `mergeGeometries` / `hl`, `toTrianglesDrawMode` / `Jf`, `cloneSkinnedMesh` / `db`）
+- **收益**：直接移除主引擎内约 2,000 行第三方内联胶水，为主引擎核心生命周期的抽取扫清阻碍。
+
+### 阶段 8.1：主引擎生命周期与 120Hz 渲染时钟解耦（⏳ 待实施）
+- **目标**：将 `CarSoccerEngine.js` 剩余的 `dB()` 初始化引导流与 `wt()` 120Hz 主时钟渲染循环重构并抽取为模块化运行时：
+  - 启动阶段：资产诊断校验、WASM 物理内核加载、三维场馆构建、相机与输入设备配对、UI HUD 挂载。
+  - 运行时阶段：物理插值步进、平行训练场多线程同步、AI 策略推理、3D 空间音频触发器阵列（进球、倒计时、超音速、撞击、无气提示）、后期后处理管线与性能监控。
+  - 消除所有剩余的局部混淆变量（`W`, `fe`, `Ft`, `Nt`, `Mt`, `be`, `nt`, `Te` 等），恢复为自解释的领域语言。
+
+### 阶段 8.2：Three.js 内核外部化与完全现代化（⏳ 终局）
+- **目标**：将内联的 1.7 万行 Three.js r185 替换为标准的 `import * as THREE from 'three'`，彻底消除剩余的大体积内联库，完成整个引擎的全面解耦与现代化。
+
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

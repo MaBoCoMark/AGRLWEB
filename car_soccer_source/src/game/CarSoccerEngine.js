@@ -1,4 +1,35 @@
 import { auditRequiredAssets, formatMissingAssetsHtml, validateAssetResponse } from './AssetDiagnostics.js';
+import {
+  createMultiThemeMaterial,
+  createMultiThemeMaterial as vn,
+  getThemeMaterial,
+  getThemeMaterial as Vi,
+  isMultiThemeMaterial,
+  isMultiThemeMaterial as F0,
+  resolveThemeMaterial,
+  resolveThemeMaterial as D0,
+  registerThemeSubtree,
+  registerThemeSubtree as Ji,
+  getArcadeLightRampTexture,
+  createCelShadedToonMaterial,
+  createCelShadedToonMaterial as Nr,
+  applyArcadeCelShading,
+  applyArcadeCelShading as N0,
+  setThemeMaterialThreeContext
+} from '../effects/ThemeMaterialPipeline.js';
+import {
+  prewarmSceneShaders,
+  prewarmSceneShaders as hB,
+  setShaderPrewarmerThreeContext
+} from './ShaderPrewarmer.js';
+import {
+  registerGameServiceWorker,
+  registerGameServiceWorker as cB,
+  waitForServiceWorkerActivation,
+  waitForServiceWorkerActivation as lB,
+  DEFAULT_SW_SCOPE as td,
+  DEFAULT_SW_SCRIPT as pm
+} from '../utils/ServiceWorkerManager.js';
 import jC from '../physics/RocketSimWasm.js';
 import { EMotorSynth } from '../audio/EMotorSynth.js';
 import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
@@ -18410,6 +18441,24 @@ setSpeedTrailThreeContext({
   NormalBlending: Gr,
   SRGBColorSpace: Ht
 });
+
+// Phase 7.6 & 7.7: Wire inlined Three.js classes to decoupled ThemeMaterialPipeline & ShaderPrewarmer
+setThemeMaterialThreeContext({
+  Mesh: Ee,
+  MeshStandardMaterial: lt,
+  MeshPhysicalMaterial: Cn,
+  MeshToonMaterial: Pj,
+  Material: Qt,
+  DataTexture: nl,
+  RGBAFormat: QA,
+  NearestFilter: Yt
+});
+setShaderPrewarmerThreeContext({
+  Light: ai,
+  Mesh: Ee,
+  Points: Ai,
+  Line: rl
+});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -20375,76 +20424,10 @@ function ep(i,e,t){
 }
 )
 }
-// Visual Themes (Phase 6 Deobfuscation & Modularization -> src/ui/ThemeManager.js)
-// Exported aliases: dl, Gh, I0, tr, qs, uo, L0
-const $A = new WeakMap,Hh = new Set,tp = new WeakSet;
-function vn(i,e){
-  const t = {
-    arcade:i,realistic:e
-  }
-  ;
-  return $A.set(i,t),$A.set(e,t),t[tr()]
-}
-function Vi(i,e){
-  var t;
-  return((t = $A.get(i)) == null?void 0:t[e]) ?? i
-}
-function F0(i){
-  return $A.has(i)
-}
-function D0(i,e){
-  if(!Array.isArray(i))return Vi(i,e);
-  for(let t = 0;t < i.length;t++)i[t] = Vi(i[t],e);
-  return i
-}
-function Ji(i){
-  i.traverse(e=>{
-    let p = e;
-    while(p){
-      if(p.name === "flip-reset-indicator" || p.name === "realistic-reset-pulse" || p.name === "car-hitbox") return;
-      p = p.parent;
-    }
-    !(e instanceof Ee) || tp.has(e) || !(Array.isArray(e.material)?e.material:[e.material]).some(F0) || (tp.add(e),Hh.add(new WeakRef(e)),e.material = D0(e.material,tr()))
-  }
-  )
-}
-uo(i=>{
-  for(const e of Hh){
-    const t = e.deref();t?t.material = D0(t.material,i):Hh.delete(e)
-  }
-
-}
-);
-const $s = new nl(new Uint8Array([28,90,170,255]),4,1,QA);
-$s.name = "Arcade / painted light ramp";
-$s.minFilter = $s.magFilter = Yt;
-$s.generateMipmaps = !1;
-$s.needsUpdate = !0;
-function Nr(i){
-  return new Pj({
-    ...i,gradientMap:$s
-  }
-  )
-}
-function N0(i){
-  const e = t=>{
-    if(F0(t))return Vi(t,tr());
-    if(!(t instanceof lt) || t.transparent || t instanceof Cn && t.transmission > 0 || t.onBeforeCompile !== Qt.prototype.onBeforeCompile)return t;
-    const n = Nr({
-
-    }
-    );
-    return Qt.prototype.copy.call(n,t),n.color.copy(t.color),n.emissive.copy(t.emissive),n.emissiveIntensity = t.emissiveIntensity,n.map = t.map,n.alphaMap = t.alphaMap,n.aoMap = t.aoMap,n.aoMapIntensity = t.aoMapIntensity,n.lightMap = t.lightMap,n.lightMapIntensity = t.lightMapIntensity,n.emissiveMap = t.emissiveMap,n.normalMap = t.normalMap,n.normalMapType = t.normalMapType,n.normalScale.copy(t.normalScale).multiplyScalar(.2),Object.assign(n,{
-      flatShading:t.flatShading
-    }
-    ),n.fog = t.fog,n.wireframe = t.wireframe,n.wireframeLinewidth = t.wireframeLinewidth,vn(n,t)
-  }
-  ;
-  i.traverse(t=>{
-    t instanceof Ee && (t.material = Array.isArray(t.material)?t.material.map(e):e(t.material))
-  }
-  ),Ji(i)
-}
+// --- Visual Themes & Cel-Shading Pipeline (Phase 7.6 Deobfuscation -> src/effects/ThemeMaterialPipeline.js) ---
+// Extracted functions and aliases:
+// - vn (createMultiThemeMaterial), Vi (getThemeMaterial), F0 (isMultiThemeMaterial), D0 (resolveThemeMaterial)
+// - Ji (registerThemeSubtree / markMatrixDirty), $s (arcade light ramp), Nr (createCelShadedToonMaterial / cloneMaterial), N0 (applyArcadeCelShading / setShadowFlags)
 // --- Phase 7.4 Deobfuscation & Modularization: Vehicle Assembly Subsystem ---
 // Extracted to src/entities/VehicleAssembly.js:
 // Octane (Uh, z0, V0, W0, Yb, Jb, Kb, np, ul, ip, fl, /tmp/code_8f436d6f.sh), Dominus (Y0, Z0, Q0, r1),
@@ -20673,71 +20656,10 @@ const aB = PerformanceOverlayHUD;
 
 // Analytics disabled in development
 const oB = "phc_rwFXBqE8hWPtW4YS84PSHCxxXAFZfJUC2rpREZfRt9sg",AB = false;
-const td = "/",pm =`${td}game-sw.js`;
-function lB(i){
-  return i.state === "activated" || i.state === "installed"?Promise.resolve():new Promise((e,t)=>{
-    const n = ()=>{
-      i.state === "installed" || i.state === "activated"?(i.removeEventListener("statechange",n),e()):i.state === "redundant" && (i.removeEventListener("statechange",n),t(new Error("The complete game could not be downloaded. Check your connection and reload.")))
-    }
-    ;i.addEventListener("statechange",n),n()
-  }
-  )
-}
-async function cB(i){
-  if(!window.isSecureContext || !("serviceWorker" in navigator) || !("caches" in window)) {
-    console.log("[App] Service Worker skipped: running in development or insecure context.");
-    return;
-  }
-  const e = t=>{
-    var n;
-    (n = t.data) == null || n.kind
-  };
-  navigator.serviceWorker.addEventListener("message",e);
-  try{
-    const t = await navigator.serviceWorker.getRegistration(td);
-    const n = t != null && t.active && !navigator.onLine ? t : await navigator.serviceWorker.register(pm,{
-      scope: td,
-      updateViaCache: "none"
-    }).catch(s=>{
-      if(t != null && t.active) return t;
-      console.warn("[App] Service Worker registration skipped:", s.message);
-      return null;
-    });
-    if(!n) return;
-    if(n.installing) try {
-      await lB(n.installing);
-    } catch(s) {
-      if(!n.active) return;
-    }
-    await navigator.serviceWorker.ready;
-  } catch(swErr) {
-    console.warn("[App] Service Worker registration skipped:", swErr.message);
-  }
-}
-
-
-
-async function hB(i,e,t,n){
-  const r=new Set;
-  e.traverseVisible(h=>{h instanceof ai&&r.add(h)});
-  const s=[],a=new Map,o=(n.passes??[]).map(h=>({pass:h,enabled:h.enabled})),A=(n.disappearingLightRoots??[]).map(h=>{const d=[];return h.traverse(u=>{u instanceof ai&&d.push(u)}),d}).filter(h=>h.length>0),l=i.getRenderTarget(),c=i.shadowMap.needsUpdate;
-  e.traverse(h=>{var d,u;if(s.push({object:h,visible:h.visible,frustumCulled:h.frustumCulled}),h.visible=!0,h.frustumCulled=!1,h instanceof Ee||h instanceof Ai||h instanceof rl){const p=h.geometry;p.drawRange.count===0&&!a.has(p)&&(a.set(p,{...p.drawRange}),p.setDrawRange(0,((d=p.index)==null?void 0:d.count)??((u=p.attributes.position)==null?void 0:u.count)??0))}});
-  for(const{pass:h}of o)h.enabled=!0;
-  try{
-    const h=new Set;
-    for(const d of[!1,!0])for(let u=0;u<2**A.length;u++){
-      for(const{object:v}of s)v instanceof ai&&(v.visible=d||r.has(v));
-      for(let v=0;v<A.length;v++)if(u&1<<v)for(const g of A[v])g.visible=!1;
-      const p=s.filter(({object:v})=>v instanceof ai&&v.visible).map(({object:v})=>v.id).join(",");
-      h.has(p)||(h.add(p),await i.compileAsync(e,t),await n.renderBloom(),i.shadowMap.needsUpdate=!0,n.renderFinal())
-    }
-  }finally{
-    for(const{object:h,visible:d,frustumCulled:u}of s)h.visible=d,h.frustumCulled=u;
-    for(const[h,d]of a)h.setDrawRange(d.start,d.count);
-    for(const{pass:h,enabled:d}of o)h.enabled=d;
-    i.shadowMap.needsUpdate=c,i.setRenderTarget(l)
-  }
-}
+// --- PWA Service Worker & Scene Shader Prewarmer (Phase 7.7 Deobfuscation) ---
+// Extracted to:
+// - src/utils/ServiceWorkerManager.js (registerGameServiceWorker / cB, waitForServiceWorkerActivation / lB, td, pm)
+// - src/game/ShaderPrewarmer.js (prewarmSceneShaders / hB)
 
 const an = document.querySelector("#app");
 const ml = i => {
