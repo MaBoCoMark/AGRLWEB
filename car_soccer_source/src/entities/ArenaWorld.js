@@ -1174,5 +1174,6 @@ export {
   createSuspensionUnit as mg,
   createOffroadWheelMesh as gg,
   createSuspensionKnuckle as vg,
-  setupCarReactionJets as jg
+  setupCarReactionJets as jg,
+  DEFAULT_TEAM_COLORS as xn
 };

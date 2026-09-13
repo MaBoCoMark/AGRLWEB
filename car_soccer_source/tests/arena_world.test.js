@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -9,6 +10,7 @@ import {
   TURF_TEXTURE_WIDTH,
   TURF_TEXTURE_HEIGHT,
   DEFAULT_TEAM_COLORS,
+  xn,
   OCTANE_HITBOX_PRESET,
   createCarHitboxWireframe,
   RS,
@@ -157,4 +159,33 @@ test('5. Backward compatibility aliases match implementations', () => {
   assert.equal(gg, createOffroadWheelMesh);
   assert.equal(vg, createSuspensionKnuckle);
   assert.equal(jg, setupCarReactionJets);
+  assert.equal(xn, DEFAULT_TEAM_COLORS);
+});
+
+test('6. ArenaWorld teamColors and CarSoccerEngine xn declaration integrity', () => {
+  const enginePath = new URL('../src/game/CarSoccerEngine.js', import.meta.url);
+  const engineSource = fs.readFileSync(enginePath, 'utf-8');
+  const lines = engineSource.split(String.fromCharCode(10));
+
+  let xnImportedOrDeclared = false;
+  let firstXnUsageLine = -1;
+  let xnDeclarationLine = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes('DEFAULT_TEAM_COLORS as xn') || /\bconst\s+xn\s*=/.test(line)) {
+      xnImportedOrDeclared = true;
+      if (xnDeclarationLine === -1) xnDeclarationLine = i + 1;
+    }
+    if (line.includes('teamColors: xn') || line.includes('xn[Ni]')) {
+      if (firstXnUsageLine === -1) firstXnUsageLine = i + 1;
+    }
+  }
+
+  assert.ok(xnImportedOrDeclared, 'Identifier xn must be imported or declared in CarSoccerEngine.js');
+  assert.ok(firstXnUsageLine > 0, 'First usage of xn should be found in CarSoccerEngine.js');
+  assert.ok(
+    xnDeclarationLine > 0 && xnDeclarationLine < firstXnUsageLine,
+    "xn must be declared before first usage to avoid ReferenceError"
+  );
 });

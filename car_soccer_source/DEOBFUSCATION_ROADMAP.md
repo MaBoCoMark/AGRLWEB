@@ -288,6 +288,13 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 移除内联混淆类、草皮纹理生成器与着色器约 926 行代码。
    - 引入三维上下文注入（`setArenaWorldThreeContext`）与车辆模型资产加载器注入（`setArenaWorldCarLoaders`）。
    - 保持 0 TDZ、0 白屏崩溃、0 功能倒退，`node --check` 语法校验通过。
+9. **缺陷修复：消除 `ReferenceError: Can't find variable: xn` (Bugfix)**：
+   - **根本原因**：在 Step 3 抽离 `ArenaWorld.js` 时，原 `CarSoccerEngine.js` 顶层的队色数组 `const xn = [3111891, 13857839]` 被迁移命名为 `DEFAULT_TEAM_COLORS`，但并未导出 `xn` 别名；而 `CarSoccerEngine.js` 顶层在第 21792 行 `setArenaWorldCarLoaders({ teamColors: xn })` 以及车库加载器 `NM`、`GM`、`OM`、`getTeamColor: () => xn[Ni]` 依然引用了 `xn`，导致模块评估时抛出 `ReferenceError: Can't find variable: xn`，整个引擎脚本停止执行，游戏开机白屏（仅有 canvas 背景底色）。
+   - **修复措施**：
+     1. 在 `src/entities/ArenaWorld.js` 向后兼容别名导出列表中增加 `DEFAULT_TEAM_COLORS as xn`。
+     2. 在 `src/game/CarSoccerEngine.js` 顶部实体模块导入语句中补充 `DEFAULT_TEAM_COLORS, DEFAULT_TEAM_COLORS as xn`，确保顶层配置与模型加载器中的 `xn` 全局有效。
+     3. 在 `tests/arena_world.test.js` 中扩充第 5 项别名断言及新增第 6 项声明完整性回归测试，杜绝 TDZ 与未定义变量崩溃。
+     4. 全量 10 大测试套件 36 项测试 100% 验收通过。
 
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

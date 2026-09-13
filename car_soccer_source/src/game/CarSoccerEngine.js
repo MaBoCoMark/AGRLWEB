@@ -346,7 +346,9 @@ import {
   createSuspensionUnit,
   createOffroadWheelMesh,
   createSuspensionKnuckle,
-  setupCarReactionJets
+  setupCarReactionJets,
+  DEFAULT_TEAM_COLORS,
+  DEFAULT_TEAM_COLORS as xn
 } from "../entities/index.js";
 
 var xg = Object.defineProperty;
