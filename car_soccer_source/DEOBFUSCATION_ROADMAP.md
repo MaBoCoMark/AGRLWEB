@@ -93,7 +93,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **12** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ✅ *阶段六 (Part 2)* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
 | **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ✅ **已完成** *(阶段六 Part 1)* | 键位映射、手柄配置、图像与音效配置弹窗 |
 | **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ✅ **已完成** *(阶段七 Part 1)* | 32位 RocketSim 视图内核同步、跟随相机、Ball Cam 球心锁定、动态 FOV、多平台 Swivel 视角偏移 |
-| **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `pS`, `bS` | `src/effects/` | ⏳ *阶段七 Part 2* | BoostBloom 辉光、FlipResetVisual 翻滚指示环、超音速速度线、球速拖尾与寻球指示器 |
+| **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `class Yw` | `src/effects/index.js`<br>`src/effects/BoostBloom.js`<br>`src/effects/FlipResetVisual.js`<br>`src/effects/SupersonicSpeedLinesPass.js` | ✅ **已完成** *(阶段七 Part 2)* | BoostBloom 渐进辉光、FlipResetVisual 翻滚重置环/粒子、SupersonicSpeedLinesPass 超音速全屏流线 |
 | **16** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七 Part 3* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
 | **17** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
@@ -232,13 +232,17 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 移除内联的混淆 `class cw` 与 `const Aw = 32, Sc = 32, wc = 35, Mc = 38, lw = 41;`。
    - 达成零性能损耗、零回归（`node --check` 与 7 大测试套件 17 项测试 100% PASS）。
 
-### 阶段七（Part 2）：视觉特效与后处理渲染通道解耦（⏳ 待实施）
-- 目标：将混杂在 `CarSoccerEngine.js` 中的五大独立视觉效果剥离至 `src/effects/`：
-  1. `FlipResetVisual`（原 `xw`）：四轮触球重置涟漪光环与粒子爆发特效。
-  2. `SupersonicSpeedLinesPass`（原 `Zw` / `Yw`）：超音速边缘运动残影与全屏加速流线 Pass。
-  3. `BoostBloom`（原 `fw`）：四重双线性降采样/升采样喷气发光通道。
-  4. `BallSpeedTrail`（原 `pS`）：足球高速移动轨迹拖尾线。
-  5. `BallLocatorArrow`（原 `bS`）：地面球心指示与指引光标。
+### 阶段七（Part 2）：视觉特效与后处理渲染通道解耦（✅ 已落地）
+1. 模块化抽取特效与后处理通道至 `src/effects/`：
+   - `src/effects/BoostBloom.js`（原 `fw`）：多级渐进双向滤波辉光（4 级双线性降采样与帐篷滤波器升采样），精确还原车载喷气尾焰与超音速大气晕光。
+   - `src/effects/FlipResetVisual.js`（原 `xw`）：翻滚重置视觉提示系统，支持街机八角星环（`_w`）与拟真半球冲击波（`Jp`）多主题渲染，集成 8 粒子火花爆发动效与音效触发生命周期。
+   - `src/effects/SupersonicSpeedLinesPass.js`（原 `Zw` 与 `Yw`）：基于 80 实例线段几何体的全屏后处理流线通道，结合视锥投影矩阵、摄像机姿态四元数取逆与车速矢量解算动态空间拉伸流线。
+   - `src/effects/index.js`：统一导出模块与全套向后兼容别名（`fw`, `Bc`, `Jn`, `Up`, `hw`, `dw`, `uw`, `qp`, `xw`, `_w`, `Ew`, `yw`, `Jp`, `mw`, `Vp`, `gw`, `Wp`, `ys`, `Yw`, `Zw`）。
+2. 单元测试验收 `tests/effects_subsystem.test.js`：
+   - 验证 5 项测试集（BoostBloom 常量/生命周期/尺寸自适应/销毁、FlipResetVisual 常量/星形几何体生成/火花粒子更新/序列号重置触发、SupersonicSpeedLinesPass 亚音速与超音速平滑阻尼插值切换），100% 通过。
+3. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
+   - 引入三维上下文注入接口（`setBoostBloomThreeContext`, `setFlipResetThreeContext`, `setSpeedLinesThreeContext`），实现零循环依赖。
+   - 移除内联约 500 行混淆着色器与类定义，`node --check` 与全量 8 大测试套件 22 项测试 100% 验收通过。
 
 ### 阶段七（Part 3）：三维球场世界与车辆实体解耦（⏳ 待实施）
 - 目标：解耦约 4,800 行的 `ArenaWorld`（原 `ow`），拆分为：

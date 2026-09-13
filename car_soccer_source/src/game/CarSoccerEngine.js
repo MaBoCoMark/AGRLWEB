@@ -232,6 +232,52 @@ import {
   im
 } from "../ui/SettingsSheet.js";
 import {
+  BoostBloom,
+  createBloomRenderTarget,
+  setBoostBloomThreeContext,
+  BLOOM_MIP_LEVELS,
+  BLOOM_DOWNSCALE_FACTOR,
+  BLOOM_THRESHOLD,
+  BLOOM_SMOOTH_WIDTH,
+  BLOOM_OUTPUT_STRENGTH,
+  BLOOM_WEIGHTS,
+  fw,
+  Bc,
+  Jn,
+  Up,
+  hw,
+  dw,
+  uw,
+  qp,
+  FlipResetVisual,
+  createStarShapeGeometry,
+  createSparksMaterial,
+  createSoftGlowMaterial,
+  enableLayerOne,
+  setFlipResetThreeContext,
+  RESET_INDICATOR_HEIGHT,
+  RESET_PULSE_DURATION,
+  RESET_SPARKS_DELAY,
+  RESET_SPARKS_DURATION,
+  RESET_SPARKS_COUNT,
+  RESET_ARCADE_COLOR_HEX,
+  xw,
+  _w,
+  Ew,
+  yw,
+  Jp,
+  mw,
+  Vp,
+  gw,
+  Wp,
+  ys,
+  SpeedLinesEffectPass,
+  SupersonicSpeedLinesPass,
+  setSpeedLinesThreeContext,
+  Yw,
+  Zw
+} from "../effects/index.js";
+import {
   CameraController,
   setCameraThreeContext,
   CAMERA_INPUT_SIZE,
@@ -18160,6 +18206,51 @@ setCameraThreeContext({
   PerspectiveCamera: fn,
   Vector3: F
 });
+setBoostBloomThreeContext({
+  WebGLRenderTarget: qn,
+  ShaderMaterial: Lt,
+  Vector2: Ae,
+  Color: Ne,
+  FullScreenQuad: ll,
+  HalfFloatType: er,
+  LinearFilter: qt
+});
+setFlipResetThreeContext({
+  Group: dt,
+  MeshBasicMaterial: cn,
+  Mesh: Ee,
+  RingGeometry: Ya,
+  BufferGeometry: Ct,
+  BufferAttribute: zt,
+  Points: Ai,
+  PlaneGeometry: ui,
+  SphereGeometry: Ur,
+  Shape: il,
+  ShapeGeometry: Rd,
+  ShaderMaterial: Lt,
+  Color: Ne,
+  Vector4: Pt,
+  MathUtils: Gt,
+  AdditiveBlending: li,
+  DoubleSide: Ut
+});
+setSpeedLinesThreeContext({
+  Pass: Js,
+  FullScreenQuad: ll,
+  ShaderMaterial: Lt,
+  Scene: el,
+  OrthographicCamera: Ld,
+  BufferGeometry: al,
+  BufferAttribute: Ke,
+  InstancedBufferAttribute: un,
+  Mesh: Ee,
+  Vector3: F,
+  Quaternion: jn,
+  Matrix4: mt,
+  DoubleSide: Ut,
+  CopyShader: _A,
+  MathUtils: Gt
+});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -22984,493 +23075,8 @@ class ow{
 
 }
 // CameraController (cw) modularized into src/camera/CameraController.js
-const Jn = 4,Up = .5,hw = 1.2,dw = .01,uw = .275 * 3,qp = [.76,.68,.6,.52 + .44],$p =`
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-function Bc(i,e){
-  const t = new qn(1,1,{
-    type:er,minFilter:qt,magFilter:qt,depthBuffer:e,stencilBuffer:!1
-  }
-  );
-  return t.texture.name = i,t.texture.generateMipmaps = !1,t
-}
-class fw{
-  constructor(e,t,n,r){
-    _(this,"texture");
-    _(this,"renderSubmissions",1 + Jn + (Jn - 1));
-    _(this,"renderer");
-    _(this,"sourceTarget",Bc("BoostBloom.source",!0));
-    _(this,"downTargets",[]);
-    _(this,"upTargets",[]);
-    _(this,"downsampleMaterial");
-    _(this,"upsampleMaterial");
-    _(this,"quad");
-    _(this,"oldClearColor",new Ne);
-    this.renderer = e;
-    for(let s = 0;s < Jn;s+=1)this.downTargets.push(Bc(`BoostBloom.down${s}`,!1)),s < Jn - 1 && this.upTargets.push(Bc(`BoostBloom.up${s}`,!1));
-this.texture = this.upTargets[0].texture,this.downsampleMaterial = new Lt({
-  uniforms:{
-    inputTexture:{
-      value:null
-    }
-    ,texelSize:{
-      value:new Ae
-    }
-    ,applyThreshold:{
-      value:0
-    }
-    ,threshold:{
-      value:hw
-    }
-    ,smoothWidth:{
-      value:dw
-    }
-
-  }
-  ,vertexShader:$p,fragmentShader:`
-        uniform sampler2D inputTexture;
-        uniform vec2 texelSize;
-        uniform float applyThreshold;
-        uniform float threshold;
-        uniform float smoothWidth;
-        varying vec2 vUv;
-
-        void main() {
-          // Four bilinear taps are enough for a stable, low-frequency boost
-          // halo and suppress the stair-stepping of a single scaled lookup.
-          vec3 color = (
-            texture2D(inputTexture, vUv + texelSize * vec2(-0.5, -0.5)).rgb +
-            texture2D(inputTexture, vUv + texelSize * vec2( 0.5, -0.5)).rgb +
-            texture2D(inputTexture, vUv + texelSize * vec2(-0.5,  0.5)).rgb +
-            texture2D(inputTexture, vUv + texelSize * vec2( 0.5,  0.5)).rgb
-          ) * 0.25;
-
-          if (applyThreshold > 0.5) {
-            float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
-            color *= smoothstep(threshold, threshold + smoothWidth, brightness);
-          }
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,depthTest:!1,depthWrite:!1,toneMapped:!1
-}
-),this.upsampleMaterial = new Lt({
-  uniforms:{
-    lowTexture:{
-      value:null
-    }
-    ,highTexture:{
-      value:null
-    }
-    ,lowTexelSize:{
-      value:new Ae
-    }
-    ,highWeight:{
-      value:1
-    }
-    ,lowWeight:{
-      value:1
-    }
-    ,outputStrength:{
-      value:1
-    }
-
-  }
-  ,vertexShader:$p,fragmentShader:`
-        uniform sampler2D lowTexture;
-        uniform sampler2D highTexture;
-        uniform vec2 lowTexelSize;
-        uniform float highWeight;
-        uniform float lowWeight;
-        uniform float outputStrength;
-        varying vec2 vUv;
-
-        void main() {
-          vec2 d = lowTexelSize;
-          // Tent-filter the coarser level while scaling it up. The diagonal
-          // taps carry twice the weight of the axial taps, matching the smooth
-          // rounded falloff expected from the old Gaussian chain.
-          vec3 low = (
-            texture2D(lowTexture, vUv + vec2(-d.x, -d.y)).rgb * 2.0 +
-            texture2D(lowTexture, vUv + vec2( d.x, -d.y)).rgb * 2.0 +
-            texture2D(lowTexture, vUv + vec2(-d.x,  d.y)).rgb * 2.0 +
-            texture2D(lowTexture, vUv + vec2( d.x,  d.y)).rgb * 2.0 +
-            texture2D(lowTexture, vUv + vec2(-2.0 * d.x, 0.0)).rgb +
-            texture2D(lowTexture, vUv + vec2( 2.0 * d.x, 0.0)).rgb +
-            texture2D(lowTexture, vUv + vec2(0.0, -2.0 * d.y)).rgb +
-            texture2D(lowTexture, vUv + vec2(0.0,  2.0 * d.y)).rgb
-          ) / 12.0;
-          vec3 high = texture2D(highTexture, vUv).rgb;
-          gl_FragColor = vec4(
-            (high * highWeight + low * lowWeight) * outputStrength,
-            1.0
-          );
-        }
-      `,depthTest:!1,depthWrite:!1,toneMapped:!1
-}
-),this.quad = new ll(this.downsampleMaterial),this.setSize(t,n,r)
-}
-setSize(e,t,n = this.renderer.getPixelRatio()){
-  let r = Math.max(1,Math.round(e * n * Up)),s = Math.max(1,Math.round(t * n * Up));
-  this.sourceTarget.setSize(r,s);
-  for(let a = 0;a < Jn;a+=1)r = Math.max(1,Math.round(r / 2)),s = Math.max(1,Math.round(s / 2)),this.downTargets[a].setSize(r,s),a < Jn - 1 && this.upTargets[a].setSize(r,s)
-}
-clear(){
-  const e = this.renderer,t = e.getRenderTarget(),n = e.getClearAlpha();
-  e.getClearColor(this.oldClearColor),e.setRenderTarget(this.upTargets[0]),e.setClearColor(0,0),e.clear(!0,!1,!1),e.setRenderTarget(t),e.setClearColor(this.oldClearColor,n)
-}
-render(e,t){
-  const n = this.renderer,r = n.getRenderTarget(),s = n.autoClear,a = n.getClearAlpha();
-  n.getClearColor(this.oldClearColor),n.autoClear = !1,n.setRenderTarget(this.sourceTarget),n.setClearColor(0,0),n.clear(!0,!0,!0),n.render(e,t),this.quad.material = this.downsampleMaterial;
-  let o = this.sourceTarget;
-  for(let l = 0;l < Jn;l+=1)this.downsampleMaterial.uniforms.inputTexture.value = o.texture,this.downsampleMaterial.uniforms.texelSize.value.set(1 / o.width,1 / o.height),this.downsampleMaterial.uniforms.applyThreshold.value = l === 0?1:0,n.setRenderTarget(this.downTargets[l]),this.quad.render(n),o = this.downTargets[l];
-  this.quad.material = this.upsampleMaterial;
-  let A = this.downTargets[Jn - 1];
-  for(let l = Jn - 2;l >= 0;l-=1)this.upsampleMaterial.uniforms.lowTexture.value = A.texture,this.upsampleMaterial.uniforms.highTexture.value = this.downTargets[l].texture,this.upsampleMaterial.uniforms.lowTexelSize.value.set(1 / A.width,1 / A.height),this.upsampleMaterial.uniforms.highWeight.value = qp[l],this.upsampleMaterial.uniforms.lowWeight.value = l === Jn - 2?qp[Jn - 1]:1,this.upsampleMaterial.uniforms.outputStrength.value = l === 0?uw:1,n.setRenderTarget(this.upTargets[l]),this.quad.render(n),A = this.upTargets[l];
-  n.setRenderTarget(r),n.setClearColor(this.oldClearColor,a),n.autoClear = s
-}
-dispose(){
-  this.sourceTarget.dispose();
-  for(const e of this.downTargets)e.dispose();
-  for(const e of this.upTargets)e.dispose();
-  this.downsampleMaterial.dispose(),this.upsampleMaterial.dispose(),this.quad.dispose()
-}
-}
-const mw = - 12,Vp = .24,gw = .05,Wp = .18,ys = 8,vw = new Ne(16773836),Xp = new Pt;
-// FlipResetAudio (jw) modularized into src/audio/GameAudioSubsystem.js
-function _w(){
-  const i = new il;
-  for(let e = 0;e < 8;e++){
-    const t = Math.PI / 2 + e * Math.PI / 4,n = e % 2 === 0?1:.25,r = Math.cos(t) * n,s = Math.sin(t) * n;
-    e === 0?i.moveTo(r,s):i.lineTo(r,s)
-  }
-  return i.closePath(),new Rd(i)
-}
-function Ew(){
-  return new Lt({
-    name:"Arcade / reset sparkles",uniforms:{
-      opacity:{
-        value:0
-      }
-      ,size:{
-        value:20
-      }
-      ,viewportHeight:{
-        value:1
-      }
-      ,realistic:{
-        value:0
-      }
-
-    }
-    ,vertexShader:`
-      #include <common>
-      uniform float size;
-      uniform float viewportHeight;
-      void main() {
-        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = size * projectionMatrix[1][1] * viewportHeight * 0.5;
-        if (isPerspectiveMatrix(projectionMatrix)) gl_PointSize /= max(1.0, -viewPosition.z);
-      }
-    `,fragmentShader:`
-      uniform float opacity;
-      uniform float realistic;
-      void main() {
-        vec2 p = abs(gl_PointCoord * 2.0 - 1.0);
-        float d = sqrt(p.x) + sqrt(p.y);
-        float aa = max(fwidth(d), 0.02);
-        float alpha = (1.0 - smoothstep(1.0 - aa, 1.0 + aa, d)) * opacity;
-        float inside = 1.0 - smoothstep(0.74 - aa, 0.74 + aa, d);
-        vec3 color = mix(vec3(0.02, 0.15, 0.38), vec3(1.8, 1.6, 1.0), inside);
-        if (realistic > 0.5) {
-          float glow = exp(-dot(p, p) * 7.0);
-          float streak = exp(-p.x * p.x * 170.0 - p.y * p.y * 5.0)
-            + exp(-p.y * p.y * 170.0 - p.x * p.x * 5.0);
-          alpha = (glow * 0.65 + streak * 0.35) * opacity;
-          color = vec3(0.72, 1.0, 0.82);
-        }
-        if (alpha < 0.003) discard;
-        gl_FragColor = vec4(color, alpha);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }
-    `,transparent:!0,depthWrite:!1,toneMapped:!0
-  }
-  )
-}
-function yw(i){
-  i.traverse(e=>e.layers.enable(Ti))
-}
-function Jp(i){
-  return new Lt({
-    name:"Realistic / reset glow",uniforms:{
-      color:{
-        value:i
-      }
-      ,opacity:{
-        value:0
-      }
-
-    }
-    ,vertexShader:`
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,fragmentShader:`
-      uniform vec3 color;
-      uniform float opacity;
-      varying vec2 vUv;
-      void main() {
-        float radius = length(vUv * 2.0 - 1.0);
-        float glow = mix(1.0, 0.72, smoothstep(0.0, 0.46, radius));
-        glow = mix(glow, 0.18, smoothstep(0.46, 0.72, radius));
-        glow *= 1.0 - smoothstep(0.72, 1.0, radius);
-        gl_FragColor = vec4(color, opacity * glow);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }
-    `,transparent:!0,blending:li,depthWrite:!1,side:Ut,toneMapped:!0
-  }
-  )
-}
-class xw{
-  constructor(e){
-    _(this,"root",new dt);
-    _(this,"ring");
-    _(this,"core");
-    _(this,"outlineMaterial");
-    _(this,"sparksGeometry",new Ct);
-    _(this,"sparksMaterial");
-    _(this,"sparks");
-    _(this,"sparkPositions",new Float32Array(ys * 3));
-    _(this,"sparkOrigins",new Float32Array(ys * 3));
-    _(this,"sparkVelocities",new Float32Array(ys * 3));
-    _(this,"audio",new jw);
-    _(this,"realistic",new dt);
-    _(this,"softRing");
-    _(this,"softCore");
-    _(this,"softDome");
-    _(this,"previousResetSerial",null);
-    _(this,"elapsed",1 / 0);
-    this.root.name = "flip-reset-indicator",this.root.position.y = mw,this.root.visible = !1,e.add(this.root);
-    const t = new cn({
-      name:"Arcade / reset ring",color:vw,transparent:!0,opacity:0,depthWrite:!1,side:Ut,toneMapped:!0
-    }
-    );
-    this.ring = new Ee(new Ya(.83,1,48),t),this.ring.rotation.x = - Math.PI / 2,this.ring.renderOrder = 9,this.root.add(this.ring),this.core = new Ee(_w(),t.clone()),this.core.material.color.setRGB(1.6,1.4,.9),this.core.rotation.x = - Math.PI / 2,this.core.position.y = .5,this.core.renderOrder = 10,this.root.add(this.core),this.outlineMaterial = t.clone(),this.outlineMaterial.color.set(1460613);
-    const n = new Ee(new Ya(.78,1.05,48),this.outlineMaterial);
-    n.renderOrder = 8,this.ring.add(n),this.sparksGeometry.setAttribute("position",new zt(this.sparkPositions,3)),this.sparksMaterial = Ew(),this.sparks = new Ai(this.sparksGeometry,this.sparksMaterial),this.sparks.onBeforeRender = a=>{
-      a.getCurrentViewport(Xp),this.sparksMaterial.uniforms.viewportHeight.value = Xp.w
-    }
-    ,this.sparks.frustumCulled = !1,this.sparks.renderOrder = 10,this.root.add(this.sparks);
-    const r = new Ne().setRGB(.72,1,.82),s = new ui(2,2);
-    this.softRing = new Ee(s,Jp(r)),this.softRing.rotation.x = - Math.PI / 2,this.softRing.renderOrder = 8,this.softCore = new Ee(s,Jp(new Ne(16777215))),this.softCore.rotation.x = - Math.PI / 2,this.softCore.position.y = .5,this.softCore.renderOrder = 9,this.softDome = new Ee(new Ur(1,32,12,0,Math.PI * 2,0,Math.PI * .5),new cn({
-      name:"Realistic / reset dome",color:r,opacity:0,transparent:!0,blending:li,depthWrite:!1,side:Ut
-    }
-    )),this.softDome.renderOrder = 8,this.realistic.name = "realistic-reset-pulse",this.realistic.visible = !1,this.realistic.add(this.softRing,this.softCore,this.softDome),this.root.add(this.realistic),yw(this.root)
-  }
-  preloadAudio(){
-    return this.audio.preload()
-  }
-  get bloomActive(){
-    return this.root.visible
-  }
-  update(e,t,n){
-    const r = this.previousResetSerial !== null && t !== this.previousResetSerial && n;
-    if(this.previousResetSerial = t,r){
-      this.play();
-      return
-    }
-    if(Number.isFinite(this.elapsed)){
-      if(this.elapsed+=e,this.elapsed >= Vp || !n){
-        this.stopVisual();
-        return
-      }
-      this.updateVisual()
-    }
-
-  }
-  play(e = !0){
-    this.elapsed = 0,this.root.visible = !0,this.seedSparks(),e && this.audio.play(),this.updateVisual()
-  }
-  seedSparks(){
-    for(let e = 0;e < ys;e+=1){
-      const t = e * 3,n = (e + Math.random() * .25) / ys * Math.PI * 2,r = 42 + Math.random() * 8,s = 100 + Math.random() * 60,a = - 4 + Math.random() * 8;
-      this.sparkOrigins[t] = Math.cos(n) * r,this.sparkOrigins[t + 1] = a,this.sparkOrigins[t + 2] = Math.sin(n) * r,this.sparkVelocities[t] = Math.cos(n) * s,this.sparkVelocities[t + 1] = 25 + Math.random() * 45,this.sparkVelocities[t + 2] = Math.sin(n) * s,this.sparkPositions[t] = this.sparkOrigins[t],this.sparkPositions[t + 1] = this.sparkOrigins[t + 1],this.sparkPositions[t + 2] = this.sparkOrigins[t + 2]
-    }
-    this.sparksGeometry.attributes.position.needsUpdate = !0
-  }
-  updateVisual(){
-    const e = tr() === "realistic";
-    this.ring.visible = this.core.visible = !e,this.realistic.visible = e;
-    if(this.sparksMaterial?.uniforms?.realistic) this.sparksMaterial.uniforms.realistic.value = e?1:0;
-    const t = Gt.clamp(this.elapsed / Vp,0,1),n = Math.pow(1 - t,1.65),r = 1 - Math.pow(1 - t,3);
-    this.ring.scale.setScalar(48 + r * 58);
-    if(this.ring?.material) this.ring.material.opacity = .62 * n;
-    if(this.outlineMaterial) this.outlineMaterial.opacity = .8 * n;
-    this.core.scale.setScalar(28 + r * 26);
-    this.core.rotation.z = r * .3;
-    if(this.core?.material) this.core.material.opacity = .72 * Math.pow(1 - t,2.5);
-    this.softRing.scale.setScalar(48 + r * 74);
-    if(this.softRing?.material?.uniforms?.opacity) this.softRing.material.uniforms.opacity.value = .62 * n;
-    this.softCore.scale.setScalar(28 + r * 58);
-    if(this.softCore?.material?.uniforms?.opacity) this.softCore.material.uniforms.opacity.value = (this.core?.material?.opacity ?? 0);
-    this.softDome.scale.setScalar(4.5 + r * 8.5);
-    if(this.softDome?.material) this.softDome.material.opacity = .44 * n;
-    const s = this.elapsed - gw,a = Gt.clamp(s / Wp,0,1);
-    if(this.sparks.visible = s >= 0 && s < Wp,this.sparks.visible){
-      const o = - 280 * s * s;
-      for(let A = 0;A < ys;A+=1){
-        const l = A * 3;
-        this.sparkPositions[l] = this.sparkOrigins[l] + this.sparkVelocities[l] * s,this.sparkPositions[l + 1] = this.sparkOrigins[l + 1] + this.sparkVelocities[l + 1] * s + o,this.sparkPositions[l + 2] = this.sparkOrigins[l + 2] + this.sparkVelocities[l + 2] * s
-      }
-      if(this.sparksMaterial?.uniforms?.opacity) this.sparksMaterial.uniforms.opacity.value = 1 - a * a;
-      if(this.sparksMaterial?.uniforms?.size) this.sparksMaterial.uniforms.size.value = 20 * (1 - a * .65);
-      this.sparksGeometry.attributes.position.needsUpdate = !0
-    }
-
-  }
-  stopVisual(){
-    this.elapsed = 1 / 0,this.root.visible = !1,this.sparks.visible = !1;
-    if(this.ring?.material) this.ring.material.opacity = 0;
-    if(this.core?.material) this.core.material.opacity = 0;
-    if(this.outlineMaterial) this.outlineMaterial.opacity = 0;
-    if(this.sparksMaterial?.uniforms?.opacity) this.sparksMaterial.uniforms.opacity.value = 0;
-    if(this.softRing?.material?.uniforms?.opacity) this.softRing.material.uniforms.opacity.value = 0;
-    if(this.softCore?.material?.uniforms?.opacity) this.softCore.material.uniforms.opacity.value = 0;
-    if(this.softDome?.material) this.softDome.material.opacity = 0;
-  }
-
-}
-// VehicleActionAudio (Sw), BallImpactAudio (kw), SupersonicAudio (Lw), and VehicleEngineAudio (tm)
-// modularized into src/audio/GameAudioSubsystem.js
-class Yw extends Js{
-  constructor(t){
-    super();
-    _(this,"copy",new ll(new Lt({
-      uniforms:sl.clone(_A.uniforms),vertexShader:_A.vertexShader,fragmentShader:_A.fragmentShader,depthTest:!1,depthWrite:!1
-    }
-    )));
-    _(this,"scene",new el);
-    _(this,"camera",new Ld);
-    const n = new al;
-    n.setAttribute("position",new Ke([0, - 1,0,1, - 1,0,0,1,0,0,1,0,1, - 1,0,1,1,0],3));
-    const r = new Float32Array(80 * 4);
-    for(let a = 0;a < r.length;a++){
-      const o = Math.sin((a + 1) * 127.1) * 43758.5453;
-      r[a] = o - Math.floor(o)
-    }
-    n.setAttribute("seed",new un(r,4)),n.instanceCount = 80;
-    const s = new Ee(n,t);
-    s.frustumCulled = !1,this.scene.add(s),this.enabled = !1
-  }
-  render(t,n,r){
-    this.copy.material.uniforms.tDiffuse.value = r.texture,t.setRenderTarget(this.renderToScreen?null:n),this.copy.render(t);
-    const s = t.autoClear;
-    t.autoClear = !1,t.render(this.scene,this.camera),t.autoClear = s
-  }
-
-}
-class Zw{
-  constructor(){
-    _(this,"pass");
-    _(this,"strength",0);
-    _(this,"time",0);
-    _(this,"viewVelocity",new F);
-    _(this,"inverseCamera",new jn);
-    _(this,"material",new Lt({
-      uniforms:{
-        time:{
-          value:0
-        }
-        ,strength:{
-          value:0
-        }
-        ,aspect:{
-          value:1
-        }
-        ,travel:{
-          value:new F(0,0, - 1)
-        }
-        ,cameraProjection:{
-          value:new mt
-        }
-
-      }
-      ,vertexShader:`
-      attribute vec4 seed;
-      uniform float time, strength, aspect;
-      uniform vec3 travel;
-      uniform mat4 cameraProjection;
-      varying vec2 vStroke;
-      varying vec2 vScreen;
-      varying float vOpacity;
-      void main() {
-        vec3 reference = abs(travel.y) > 0.95 ? vec3(1., 0., 0.) : vec3(0., 1., 0.);
-        vec3 side = normalize(cross(travel, reference));
-        vec3 up = cross(side, travel);
-        float angle = seed.x * 6.2831853;
-        float radius = mix(240., 1550., sqrt(seed.y));
-        float phase = fract(seed.z + time * (0.58 + seed.w * 0.22));
-        vec3 head = (side * cos(angle) + up * sin(angle)) * radius
-          + travel * mix(2400., -2400., phase);
-        vec3 tail = head + travel * mix(240., 440., seed.w);
-        // Clip in camera space before division, including a camera looking backward.
-        float visible = step(30., -min(head.z, tail.z));
-        if (visible < 0.5) {
-          gl_Position = vec4(2., 2., 2., 1.);
-          vScreen = vec2(2.);
-          vStroke = position.xy;
-          vOpacity = 0.;
-          return;
-        }
-        if (head.z > -30.) head = mix(head, tail, (-30. - head.z) / (tail.z - head.z));
-        if (tail.z > -30.) tail = mix(tail, head, (-30. - tail.z) / (head.z - tail.z));
-        vec4 a = cameraProjection * vec4(head, 1.);
-        vec4 b = cameraProjection * vec4(tail, 1.);
-        vec2 start = a.xy / max(a.w, 0.01);
-        vec2 end = b.xy / max(b.w, 0.01);
-        vec2 delta = (end - start) * vec2(aspect, 1.);
-        vec2 normal = vec2(-delta.y, delta.x) / max(length(delta), 0.0001);
-        float width = mix(0.0018, 0.0028, seed.w);
-        vec2 point = mix(start, end, position.x)
-          + normal / vec2(aspect, 1.) * position.y * width;
-        gl_Position = vec4(point, 0., 1.);
-        vScreen = point * 0.5 + 0.5;
-        vStroke = position.xy;
-        vOpacity = visible * strength * mix(0.30, 0.48, seed.w)
-          * smoothstep(0., 0.08, phase) * (1. - smoothstep(0.88, 1., phase));
-      }
-    `,fragmentShader:`
-      uniform float aspect;
-      varying vec2 vStroke;
-      varying vec2 vScreen;
-      varying float vOpacity;
-      void main() {
-        float width = 1. - smoothstep(0.15, 1., abs(vStroke.y));
-        float cap = smoothstep(0., 0.08, vStroke.x) * (1. - smoothstep(0.35, 1., vStroke.x));
-        float centerClear = smoothstep(0.12, 0.34, length((vScreen - 0.5) * vec2(aspect, 1.)));
-        gl_FragColor = vec4(vec3(0.88, 0.96, 1.), width * cap * centerClear * vOpacity);
-      }
-    `,transparent:!0,depthTest:!1,depthWrite:!1,toneMapped:!1,side:Ut
-    }
-    ));
-    this.pass = new Yw(this.material)
-  }
-  update(e,t,n,r){
-    const s = Math.max(0,Math.min(e,.1));
-    this.strength = Gt.damp(this.strength,t?1:0,t?12:18,s),this.time+=s,this.pass.enabled = this.strength > .002;
-    const a = this.material.uniforms;
-    a.time.value = this.time,a.strength.value = this.strength,a.aspect.value = r.aspect,a.cameraProjection.value.copy(r.projectionMatrix),this.inverseCamera.copy(r.quaternion).invert(),this.viewVelocity.copy(n).applyQuaternion(this.inverseCamera),this.viewVelocity.lengthSq() > 1 && a.travel.value.copy(this.viewVelocity).normalize()
-  }
-
-}
+// Visual Effects Subsystem (BoostBloom/fw, FlipResetVisual/xw, SupersonicSpeedLinesPass/Zw, SpeedLinesEffectPass/Yw)
+// modularized into src/effects/index.js
 // Centralized SVG UI Icons (Deobfuscated & Modularized)
 const jM = ICONS;
 const Vt = renderIcon;
