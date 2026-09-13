@@ -231,6 +231,24 @@ import {
   Pr,
   im
 } from "../ui/SettingsSheet.js";
+import {
+  HITBOX_PRESETS,
+  createWhiteboxCarModel,
+  CAR_VISUAL_IDS,
+  CAR_VISUAL_OPTIONS,
+  garageSettingsStore,
+  PAD_NAVIGATION_BUTTONS,
+  GarageTurntable,
+  GarageDialog,
+  setGarageThreeContext,
+  setGarageModelLoaders,
+  HM,
+  UM,
+  kM,
+  Fc,
+  Qh,
+  xs
+} from "../ui/GarageDialog.js";
 
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
@@ -18103,6 +18121,26 @@ const WC = VEHICLE_ACTIONS;
 const La = touchSettingsStore;
 const yA = applyTouchLayoutToDom;
 const Lh = getScreenSafeArea;
+
+// Phase 6 Part 2: Wire inlined Three.js classes to decoupled Garage system
+setGarageThreeContext({
+  Group: dt,
+  BoxGeometry: Tn,
+  MeshStandardMaterial: lt,
+  Mesh: Ee,
+  EdgesGeometry: Nm,
+  LineBasicMaterial: Gi,
+  LineSegments: Wa,
+  WebGLRenderer: l0,
+  Scene: el,
+  PMREMGenerator: NA,
+  RoomEnvironment: c0,
+  HemisphereLight: e0,
+  DirectionalLight: eo,
+  PerspectiveCamera: fn,
+  Box3: xr,
+  Vector3: F
+});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -23461,84 +23499,8 @@ const _M = TouchLayoutEditor;
 // - src/ui/SettingsSheet.js (Settings dialog, camera/controls/audio/graphics/training tuning, pad nav, aliases BM, _g, Yh, uA, Ma, SA, EM, Ps, bM, Zh, SM, wM, nm, yM, xM, Kd, rm, CM, Na, MM, Pr, im)
 let activeSettingsOverlay = null;
 let activeGraphicsSettings = null;
-const HITBOX_PRESETS = {
-  "hitbox-octane": { name: "Octane", length: 118.01, width: 84.20, height: 36.16, forward: 13.88, up: 20.75 },
-  "hitbox-dominus": { name: "Dominus", length: 127.93, width: 83.28, height: 31.30, forward: 9.0, up: 15.75 },
-  "hitbox-breakout": { name: "Breakout", length: 131.57, width: 80.52, height: 30.30, forward: 12.5, up: 18.65 },
-  "hitbox-hybrid": { name: "Hybrid", length: 127.02, width: 82.19, height: 34.16, forward: 13.88, up: 17.60 },
-  "hitbox-plank": { name: "Batmobile (Plank)", length: 128.82, width: 84.67, height: 29.40, forward: 9.0, up: 19.36 },
-  "hitbox-merc": { name: "Merc", length: 120.72, width: 76.80, height: 41.66, forward: 12.5, up: 12.50 }
-};
-
-function createWhiteboxCarModel(presetId, teamColor = 0x0088ff) {
-  const cfg = HITBOX_PRESETS[presetId] || HITBOX_PRESETS["hitbox-octane"];
-  const root = new dt();
-  root.name = `whitebox-${cfg.name}`;
-
-  const bodyGeom = new Tn(cfg.length, cfg.height, cfg.width);
-  const bodyMat = new lt({
-    color: teamColor,
-    roughness: 0.35,
-    metalness: 0.2
-  });
-  const rearMat = new lt({
-    color: 0xffffff,
-    roughness: 0.35,
-    metalness: 0.2
-  });
-  const materials = [
-    bodyMat, // Face 0: +X (Front - team color)
-    rearMat, // Face 1: -X (Rear / 车屁股 - White)
-    bodyMat, // Face 2: +Y (Top - team color)
-    bodyMat, // Face 3: -Y (Bottom - team color)
-    bodyMat, // Face 4: +Z (Side - team color)
-    bodyMat  // Face 5: -Z (Side - team color)
-  ];
-  const bodyMesh = new Ee(bodyGeom, materials);
-  bodyMesh.position.set(cfg.forward, cfg.up, 0);
-  bodyMesh.castShadow = true;
-  bodyMesh.receiveShadow = true;
-
-  const edgesGeom = new Nm(bodyGeom);
-  const wireMat = new Gi({ color: 16777215, transparent: true, opacity: 0.85 });
-  const wireMesh = new Wa(edgesGeom, wireMat);
-  bodyMesh.add(wireMesh);
-  root.add(bodyMesh);
-
-  return root;
-}
-
-const kM = ["hitbox-octane","hitbox-dominus","hitbox-breakout","hitbox-hybrid","hitbox-plank","hitbox-merc","game-car","flat-car"],Fc = [{
-  id:"hitbox-octane",label:"Octane (Whitebox)",isPreset:true
-}
-,{
-  id:"hitbox-dominus",label:"Dominus (Whitebox)",isPreset:true
-}
-,{
-  id:"hitbox-breakout",label:"Breakout (Whitebox)",isPreset:true
-}
-,{
-  id:"hitbox-hybrid",label:"Hybrid (Whitebox)",isPreset:true
-}
-,{
-  id:"hitbox-plank",label:"Batmobile/Plank (Whitebox)",isPreset:true
-}
-,{
-  id:"hitbox-merc",label:"Merc (Whitebox)",isPreset:true
-}
-,{
-  id:"game-car",label:"Default Car",isPreset:false
-}
-,{
-  id:"flat-car",label:"Flat Car",isPreset:false
-}
-],Qh = rr("car-soccer.display-settings.v1",()=>({
-  carVisual:"game-car"
-}
-),(i,e)=>{
-  i.carVisual = cl(e.carVisual,kM,i.carVisual)
-}
-),_a = 384,Ea = 216,Ni = 0,TM = new F(0,1,0),RM = new F(0, - 1,0),PM = new F(156.12,77,109).normalize(),IM = 292,LM = 11;
+// Ni (default blue team color index) and direction normals used by suspension helpers FM and DM
+const Ni = 0, TM = new F(0, 1, 0), RM = new F(0, - 1, 0);
 function FM(i,e,t){
   i.position.set((e.x + t.x) / 2,(e.y + t.y) / 2,(e.z + t.z) / 2);
   const n = new F(t.x - e.x,t.y - e.y,t.z - e.z),r = n.length();
@@ -23619,309 +23581,15 @@ async function OM(){
   }
   ),i
 }
-class HM{
-  constructor(){
-    _(this,"renderer",null);
-    _(this,"scene",null);
-    _(this,"camera",null);
-    _(this,"envTarget",null);
-    _(this,"turntables",new Map);
-    _(this,"targets",new Map);
-    _(this,"frame",0);
-    _(this,"lastTime",0);
-    _(this,"spin",0);
-    const e = new WeakRef(this);
-    uo(()=>{
-      const t = e.deref();t != null && t.frame && t.draw()
-    }
-    )
-  }
-  init(){
-    if(this.renderer)return;
-    const e = new l0({
-      antialias:!0,alpha:!0
-    }
-    );
-    e.setPixelRatio(Math.min(window.devicePixelRatio,2)),e.setSize(_a,Ea,!1),e.toneMapping = oo,e.toneMappingExposure = 1.15,e.outputColorSpace = Ht,this.renderer = e;
-    const t = new el,n = new NA(e),r = new c0;
-    this.envTarget = n.fromScene(r,.04),t.environment = this.envTarget.texture,t.environmentIntensity = .5,n.dispose(),r.traverse(A=>{
-      const l = A;l.isMesh && (l.geometry.dispose(),(Array.isArray(l.material)?l.material:[l.material]).forEach(c=>c.dispose()))
-    }
-    ),t.add(new e0(13625599,1581103,.8));
-    const s = new eo(16777215,2);
-    s.position.set(2500,4e3,1500),t.add(s);
-    const a = new eo(8956671,.35);
-    a.position.set(- 2e3,2e3, - 2e3),t.add(a),this.scene = t;
-    const o = new fn(28,_a / Ea,1,2e3);
-    o.position.copy(PM).multiplyScalar(IM),o.lookAt(0,0,0),this.camera = o
-  }
-  attach(e){
-    this.init();
-    const t = document.createElement("canvas");
-    t.width = _a,t.height = Ea;
-    const n = t.getContext("2d");
-    n && this.targets.set(e,n);
-    const r = a=>{
-      const o = new dt,l = new xr().setFromObject(a).getCenter(new F);
-      a.position.set(- l.x, - l.y + LM, - l.z),o.add(a),this.turntables.set(e,o)
-    }
-    ,s = e.startsWith("hitbox-")?Promise.resolve(createWhiteboxCarModel(e, xn[Ni])).then(r):e === "flat-car"?OM().then(r):GM().then(r);
-    return{
-      canvas:t,ready:s
-    }
+// --- Phase 6 Part 2 Deobfuscation & Modularization: Garage Turntable, Hitbox Presets, and GarageDialog ---
+// Vehicle showcase turntable (HM), Garage modal dialog (UM), Hitbox presets, and display settings store (Qh)
+// have been extracted to src/ui/GarageDialog.js.
+setGarageModelLoaders({
+  loadFlatCar: OM,
+  loadGameCar: GM,
+  getTeamColor: () => xn[Ni]
+});
 
-  }
-  async preload(){
-    const{
-      renderer:e,scene:t,camera:n
-    }
-     = this;
-    if(!e || !t || !n)return;
-    const r = tr();
-    try{
-      for(const s of dl){
-        qs(s,{
-          persist:!1
-        }
-        ),document.documentElement.dataset.theme = r;
-        for(const a of this.turntables.values()){
-          t.add(a);
-          try{
-            await e.compileAsync(t,n),e.render(t,n)
-          }
-          finally{
-            t.remove(a)
-          }
-
-        }
-
-      }
-
-    }
-    finally{
-      qs(r,{
-        persist:!1
-      }
-      )
-    }
-    this.draw()
-  }
-  start(){
-    if(this.frame)return;
-    this.lastTime = performance.now();
-    const e = t=>{
-      this.frame = requestAnimationFrame(e);
-      const n = Math.min((t - this.lastTime) / 1e3,.1);
-      this.lastTime = t,this.spin+=n * .45,this.draw()
-    }
-    ;
-    this.frame = requestAnimationFrame(e)
-  }
-  stop(){
-    this.frame && cancelAnimationFrame(this.frame),this.frame = 0
-  }
-  draw(){
-    const{
-      renderer:e,scene:t,camera:n
-    }
-     = this;
-    if(!(!e || !t || !n))for(const[r,s]of this.turntables){
-      const a = this.targets.get(r);
-      a && (s.rotation.y = this.spin,t.add(s),e.render(t,n),t.remove(s),a.clearRect(0,0,_a,Ea),a.drawImage(e.domElement,0,0,_a,Ea))
-    }
-
-  }
-
-}
-const xs = {
-  confirm:0,back:1,left:14,right:15,up:12,down:13
-}
-;
-class UM{
-  constructor(e,t){
-    _(this,"overlay");
-    _(this,"stage",new HM);
-    _(this,"display",Qh.load());
-    _(this,"onOpenChange");
-    _(this,"openState",!1);
-    _(this,"preparing",null);
-    _(this,"padPoll",0);
-    _(this,"padPrev",[]);
-    _(this,"padRepeatAt",0);
-    _(this,"padDir",0);
-    _(this,"padKey",null);
-    _(this,"padWaitForNeutral",!1);
-    _(this,"pollPad",e=>{
-      var A;if(this.padPoll = requestAnimationFrame(this.pollPad),!this.openState)return;const t = this.firstPad(),n = t?JSON.stringify([t.id,t.index]):null;if(n !== this.padKey){
-        this.padKey = n,this.padPrev = ((t == null?void 0:t.buttons) ?? []).map(l=>l.pressed),this.padDir = 0,this.padWaitForNeutral = !0;return
-      }
-      if(!t)return;const r = l=>{
-        var c;return((c = t.buttons[l]) == null?void 0:c.pressed) ?? !1
-      }
-      ,s = l=>{
-        const c = r(l),h = this.padPrev[l] ?? !1;return this.padPrev[l] = c,c && !h
-      }
-      ;if(s(xs.back)){
-        this.hide();return
-      }
-      if(s(xs.confirm)){
-        document.body.classList.add("pad-nav"),(A = document.activeElement) == null || A.click();return
-      }
-      s(xs.up),s(xs.down);const a = t.axes[0] ?? 0;let o = (r(xs.right)?1:0) - (r(xs.left)?1:0);if(o === 0 && Math.abs(a) > .55 && (o = Math.sign(a)),this.padWaitForNeutral){
-        if(o !== 0)return;this.padWaitForNeutral = !1
-      }
-      if(o === 0){
-        this.padDir = 0;return
-      }
-      if(o !== this.padDir)this.padDir = o,this.padRepeatAt = e + 380;else{
-        if(e < this.padRepeatAt)return;this.padRepeatAt = e + 160
-      }
-      document.body.classList.add("pad-nav"),this.moveFocus(o)
-    }
-    );
-    this.onOpenChange = t,e.insertAdjacentHTML("beforeend",`
-      <button id="car-button" class="car-tab" type="button"
-              aria-label="Choose the car body" title="Garage" aria-haspopup="dialog">
-        <span class="car-tab__icon" aria-hidden="true">${Vt("car-profile",36)}</span>
-        <span class="car-tab__copy">
-          <span class="car-tab__label">Garage</span>
-          <span class="car-tab__ride"></span>
-        </span>
-      </button>
-
-      <div id="car-overlay" class="car-overlay" hidden aria-hidden="true">
-        <section class="car-dialog" role="dialog" aria-modal="true" aria-labelledby="car-dialog-title">
-          <header class="car-dialog__head">
-            <div>
-              <h2 id="car-dialog-title">Garage</h2>
-              <p class="car-dialog__subtitle">Choose your ride.</p>
-            </div>
-            <button class="sheet-head__close" type="button" data-car-close aria-label="Close">
-              ${Vt("x",24)}
-            </button>
-          </header>
-
-          <div class="car-grid" role="radiogroup" aria-label="Car body">
-            ${Fc.map(n=>`
-              <button class="car-card" type="button" role="radio" aria-checked="false"
-                      data-car-choice="${n.id}">
-                <span class="car-card__stage" data-car-stage="${n.id}">
-                  <span class="car-card__equipped" aria-hidden="true">${Vt("check",19)}</span>
-                  <span class="car-card__status" data-car-status="${n.id}">Loading…</span>
-                </span>
-                <span class="car-card__body">
-                  <span class="car-card__name">${n.label}</span>
-                  <span class="car-card__action" aria-hidden="true">
-                    <span class="car-card__state"></span>
-                    ${Vt("arrow-right",18)}
-                  </span>
-                </span>
-              </button>
-            `).join("")
-}
-
-          </div>
-          <footer class="car-dialog__foot">
-            <span>${Vt("arrows-clockwise",16)} Switching cars restarts the arena.</span>
-            <span class="car-dialog__keys"><kbd>←</kbd><kbd>→</kbd> Choose <kbd>Enter</kbd> Select</span>
-          </footer>
-        </section>
-      </div>
-    `),this.overlay = e.querySelector("#car-overlay"),e.querySelector("#car-button").addEventListener("click",()=>this.show()),this.overlay.querySelector("[data-car-close]").addEventListener("click",()=>this.hide()),this.overlay.addEventListener("mousedown",n=>{
-  n.target === this.overlay && this.hide()
-}
-),this.overlay.querySelectorAll("[data-car-choice]").forEach(n=>{
-  n.addEventListener("click",()=>this.choose(n.dataset.carChoice))
-}
-),window.addEventListener("keydown",n=>{
-  if(this.openState){
-    if(n.code === "Escape"){
-      n.preventDefault(),this.hide();return
-    }
-    (n.code === "ArrowLeft" || n.code === "ArrowRight") && (n.preventDefault(),this.moveFocus(n.code === "ArrowRight"?1: - 1))
-  }
-
-}
-),this.syncCards()
-}
-get isOpen(){
-  return this.openState
-}
-show(){
-  var e,t;
-  this.openState || (this.openState = !0,this.preload().catch(()=>{
-
-  }
-  ),this.overlay.hidden = !1,this.overlay.setAttribute("aria-hidden","false"),this.onOpenChange(!0),requestAnimationFrame(()=>this.overlay.classList.add("is-open")),this.startPreviews(),(e = this.cards()[0]) == null || e.focus(),this.padPrev = (((t = this.firstPad()) == null?void 0:t.buttons) ?? []).map(n=>n.pressed),this.startPadNav())
-}
-hide(){
-  var e;
-  this.openState && (this.openState = !1,this.overlay.classList.remove("is-open"),this.overlay.setAttribute("aria-hidden","true"),this.onOpenChange(!1),this.stopPadNav(),this.stage.stop(),window.setTimeout(()=>{
-    this.openState || (this.overlay.hidden = !0)
-  }
-  ,180),(e = document.querySelector("#car-button")) == null || e.focus())
-}
-preload(){
-  if(this.preparing)return this.preparing;
-  const e = [];
-  for(const t of Fc){
-    const n = this.overlay.querySelector(`[data-car-stage="${t.id}"]`),r = this.overlay.querySelector(`[data-car-status="${t.id}"]`);
-if(!n)continue;
-const{
-  canvas:s,ready:a
-}
-= this.stage.attach(t.id);
-s.className = "car-card__canvas",n.appendChild(s),e.push(a.then(()=>{
-  r == null || r.remove(),this.openState && this.startPreviews()
-}
-).catch(o=>{
-  r && (r.textContent = "Model unavailable",r.classList.add("is-missing"));const A = this.overlay.querySelector(`[data-car-choice="${t.id}"]`);throw A == null || A.classList.add("is-unavailable"),o
-}
-))
-}
-return this.preparing = Promise.all(e).then(()=>this.stage.preload()),this.preparing
-}
-startPreviews(){
-  this.stage.start(),window.matchMedia("(prefers-reduced-motion: reduce)").matches && requestAnimationFrame(()=>this.stage.stop())
-}
-cards(){
-  return Array.from(this.overlay.querySelectorAll("[data-car-choice]"))
-}
-moveFocus(e){
-  const t = this.cards();
-  if(t.length === 0)return;
-  const n = t.indexOf(document.activeElement),r = n === - 1?0:(n + e + t.length) % t.length;
-  t[r].focus()
-}
-syncCards(){
-  var t;
-  const e = document.querySelector(".car-tab__ride");
-  e && (e.textContent = ((t = Fc.find(n=>n.id === this.display.carVisual)) == null?void 0:t.label) ?? "");
-  for(const n of this.cards()){
-    const r = n.dataset.carChoice === this.display.carVisual;
-    n.classList.toggle("is-selected",r),n.setAttribute("aria-checked",String(r));
-    const s = n.querySelector(".car-card__state");
-    s && (s.textContent = r?"Equipped":"Select")
-  }
-
-}
-choose(e){
-  if(this.display.carVisual === e){
-    this.hide();
-    return
-  }
-  this.display.carVisual = e,Qh.save(this.display),this.syncCards(),this.overlay.classList.add("is-committing"),window.setTimeout(()=>location.reload(),320)
-}
-firstPad(){
-  return Ks()
-}
-startPadNav(){
-  this.padPoll || (this.padPoll = requestAnimationFrame(this.pollPad))
-}
-stopPadNav(){
-  this.padPoll && cancelAnimationFrame(this.padPoll),this.padPoll = 0,this.padDir = 0
-}
-}
 // --- Phase 5 Deobfuscation & Modularization: MatchStateMachine, MatchDialog, and RLBotAgent ---
 // The following subsystems have been extracted into clean, modular ES components:
 // - src/game/MatchStateMachine.js (Match rules, 120Hz clock, overtime, kickoff countdown, aliases VM, qM, sm, Is, am, om, zM)

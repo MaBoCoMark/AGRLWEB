@@ -90,7 +90,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **09** | **全平台输入控制器** | `SC`, `XC`, `ib`, `_M`, `BC`, `Rh`, `Yo` | `src/input/MultiPlatformInput.js` | ✅ **已完成** | 键鼠映射、Gamepad 轮询、移动端虚拟摇杆、Bindings 存储与重映射 |
 | **10** | **比赛与模式状态机** | `class VM`, `class $M`, `qM`, `sm` | `src/game/MatchStateMachine.js`<br>`src/ui/MatchDialog.js` | ✅ **已完成** | Kickoff 开球、321 倒计时、进球判定、加时赛判定、实时记分牌与手柄导航 |
 | **11** | **RL Bot 强化学习代理**| `class QM`, `JM`, `KM`, `ZM`, `pl`, `JA`, `Am`, `XM`, `dm` | `src/ai/RLBotAgent.js` | ✅ **已完成** | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer)、Nexto 离散动作表与开球例程、智能启发式保底 AI |
-| **12** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ⏳ *阶段六* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
+| **12** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ✅ *阶段六 (Part 2)* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
 | **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ⏳ *阶段六* | 键位映射、手柄配置、图像与音效配置弹窗 |
 | **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
 | **15** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
@@ -198,8 +198,24 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 3. 补充 Phase 6 完整单元测试套件 `tests/settings_and_theme.test.js`：覆盖主题变更订阅、全量配置项校验、范围限制与默认值恢复、UI 生命周期及别名兼容性，测试集 100% 通过。
 4. 重构 `src/game/CarSoccerEngine.js`：移除 1,132 行内联混淆实现，以规范别名无损接入，消除 TDZ 风险。
 
-### 阶段六（续）：车库展示台与车辆选择弹窗解耦（规划中 Part 2）
-- 目标：解耦 `GarageTurntable` (`HM`)、`createWhiteboxCarModel`、车辆碰撞盒标准规格表 `HITBOX_PRESETS` 与 `GarageDialog` (`UM`)。
+### 阶段六（续）：车库展示台与车辆选择弹窗解耦（✅ 已落地 Part 2）
+1. 创建 `src/ui/GarageDialog.js`：
+   - 抽离标准车辆碰撞盒规格表 `HITBOX_PRESETS`：严格对齐上游 RocketSim C++ 核心（`Sim/Car/CarConfig/CarConfig.h`），包含 Octane、Dominus、Breakout、Hybrid、Batmobile (Plank)、Merc 六大标准物理盒尺寸（length/width/height）与轴距质心偏移（forward/up）。
+   - 抽离程序化车身线框/实体构建器 `createWhiteboxCarModel(presetId, teamColor, three)`：根据 Hitbox 规格自动构建 6 面独立物理材质网格，车头为队伍色、车尾白标朝向指示，附带外廓线段高亮 `LineSegments`。
+   - 抽离车身外观存储器 `garageSettingsStore`（原 `Qh`，键名 `car-soccer.display-settings.v1`）、支持车型列表 `CAR_VISUAL_IDS`（原 `kM`）与车型选项卡 `CAR_VISUAL_OPTIONS`（原 `Fc`）。
+   - 抽离 3D 展台离屏渲染器 `GarageTurntable`（原 `HM`）：基于 WebGLRenderer、RoomEnvironment 与 PMREM 独立舞台离屏渲染旋转车模，支持多主题实时编译预热与 2D Canvas 绘制同步。
+   - 抽离车库选择弹窗 `GarageDialog`（原 `UM`）：提供车库触发 Tab 按钮、九宫格车模卡片展示、双轴手柄 D-pad / 摇杆平滑焦点穿梭导航（原 `xs`）、键盘左右键快速切换及车型热装配。
+   - 提供解耦依赖注入机制 `setGarageThreeContext` 与 `setGarageModelLoaders`，消除模块与游戏主循环外部闭包耦合。
+2. 编写 Phase 6 Part 2 单元测试套件 `tests/garage_dialog.test.js`：
+   - 验证 6 大 Hitbox 规格几何参数与 RocketSim 物理定义 100% 吻合。
+   - 验证 LocalStorage 读写防腐与非法车型回退机制。
+   - 验证程序化白盒模型尺寸、材质索引与偏移装配正确性。
+   - 验证 3D 展台生命周期（init, attach, preload, start, stop, draw）。
+   - 验证弹窗 DOM 结构、手柄方向键切换与卡片装配。
+   - 验证所有向下兼容别名（`HM`, `UM`, `HITBOX_PRESETS`, `createWhiteboxCarModel`, `kM`, `Fc`, `Qh`, `xs`）。
+3. 重构 `src/game/CarSoccerEngine.js`：
+   - 移除 460 余行内联混淆实现，通过解耦模块无损接入。
+   - 通过 `node --check` 语法校验与全部 6 大测试套件 100% 验收。
 
 ### 阶段七：相机控制器与三维球场解耦
 - 目标：解耦跟随相机 `cw`（Ball Cam 球心锁定、镜头震动与穿墙防穿刺）与球场世界实体 `ow`。
