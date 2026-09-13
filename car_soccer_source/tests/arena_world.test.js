@@ -31,8 +31,19 @@ import {
   jg,
   BUFFER_OFFSETS,
   CAR_STATE_OFFSETS,
-  CAR_STATE_STRIDE
+  CAR_STATE_STRIDE,
+  OCTANE_BOOST_OUTLETS,
+  FLAT_CAR_BOOST_OUTLETS,
+  loadStadiumContinuousBoundary,
+  loadStadiumArchitecture,
+  WS,
+  JS
 } from '../src/entities/ArenaWorld.js';
+import {
+  splitBoundaryMeshAtHeight,
+  createRoundedGoalPath,
+  assembleBakedGeometries
+} from '../src/entities/StadiumArena.js';
 
 test('1. Arena constants match Rocket League & RocketSim physical specifications', () => {
   assert.equal(ARENA_WIDTH, 8192, 'Arena width must be 8192 Unreal Units');
@@ -188,4 +199,76 @@ test('6. ArenaWorld teamColors and CarSoccerEngine xn declaration integrity', ()
     xnDeclarationLine > 0 && xnDeclarationLine < firstXnUsageLine,
     "xn must be declared before first usage to avoid ReferenceError"
   );
+});
+
+test('7. Exhaust outlets, twin emitters, and hitbox LineSegments verification (Bugs A & C)', () => {
+  // Bug C: Hitbox uses LineSegments and EdgesGeometry, not diagonal-triangulated Mesh wireframe
+  const hitbox = createCarHitboxWireframe(OCTANE_HITBOX_PRESET);
+  assert.ok(hitbox);
+  assert.equal(hitbox.name, 'car-hitbox');
+  assert.equal(hitbox.material.wireframe, undefined, 'LineBasicMaterial must not rely on quad wireframe triangulation');
+  assert.ok(hitbox.geometry.geo, 'Geometry should wrap EdgesGeometry');
+
+  // Bug A: Boost outlets must be at rear (X ~ -57) and lateral offsets (Z != 0)
+  assert.equal(OCTANE_BOOST_OUTLETS.length, 2, 'Octane has twin exhausts');
+  assert.equal(OCTANE_BOOST_OUTLETS[0][0], -57, 'Left outlet is at car tail');
+  assert.equal(OCTANE_BOOST_OUTLETS[0][1], 10.25, 'Left outlet height');
+  assert.equal(OCTANE_BOOST_OUTLETS[0][2], 20.4278, 'Left outlet lateral offset');
+  assert.equal(OCTANE_BOOST_OUTLETS[1][2], -20.4278, 'Right outlet symmetric lateral offset');
+
+  assert.equal(FLAT_CAR_BOOST_OUTLETS.length, 2, 'Flat car has twin exhausts');
+  assert.ok(FLAT_CAR_BOOST_OUTLETS[0][0] < -57, 'Flat car outlet at tail');
+
+  // Verify ArenaWorld creates twin emitters on addCar
+  const world = new ArenaWorld(91.25, 'game-car');
+  world.addCar(0, 'hitbox-octane');
+  assert.equal(world.carBoosts.length, 1);
+  assert.equal(world.carBoosts[0].length, 2, 'Car must have exactly two boost emitters at twin outlets');
+});
+
+test('8. Stadium boundary mesh splitting and goal path construction (Bug D)', () => {
+  assert.equal(typeof splitBoundaryMeshAtHeight, 'function');
+  assert.equal(typeof createRoundedGoalPath, 'function');
+
+  // Test triangle splitting across height 280
+  const mockGoal = {
+    positions: [
+      0, 100, 0,
+      100, 400, 0,
+      -100, 400, 0
+    ],
+    normals: [0, 1, 0, 0, 1, 0, 0, 1, 0],
+    uv: [0, 0, 1, 1, 0, 1],
+    indices: [0, 1, 2]
+  };
+  const [lower, upper] = splitBoundaryMeshAtHeight(mockGoal, 280);
+  assert.ok(lower.positions.length > 0, 'Lower bank vertices generated');
+  assert.ok(upper.positions.length > 0, 'Upper wall vertices generated');
+
+  // Test goal mouth rounded frame spline
+  const goalPath = createRoundedGoalPath(1, 5145);
+  assert.ok(goalPath);
+  assert.ok(goalPath.curves.length >= 10, 'Goal path has rounded corners with multiple curve segments');
+});
+
+test('9. Stadium architecture and visibility toggle (Bug E)', () => {
+  const world = new ArenaWorld(91.25, 'game-car');
+  const mockStadium = {
+    name: 'Stadium / stadium architecture',
+    children: [],
+    removeFromParent() { this.parent = null; }
+  };
+  world.stadium = mockStadium;
+  world.scene.add(mockStadium);
+
+  world.setStadiumVisible(false);
+  assert.equal(world.stadiumVisible, false);
+
+  world.setStadiumVisible(true);
+  assert.equal(world.stadiumVisible, true);
+  assert.ok(world.scene.children.includes(mockStadium));
+
+  // Backward compatibility alias checks
+  assert.equal(WS, loadStadiumContinuousBoundary);
+  assert.equal(JS, loadStadiumArchitecture);
 });

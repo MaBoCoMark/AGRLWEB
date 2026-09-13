@@ -21,6 +21,7 @@
  */
 
 import { BoostPadSystem } from './BoostPadSystem.js';
+import { loadStadiumContinuousBoundary, loadStadiumArchitecture } from './StadiumArena.js';
 import { BallLocatorArrow, bS } from './BallLocatorArrow.js';
 import { SpeedTrail, pS } from './SpeedTrail.js';
 import { DemolitionEffect, nS } from './DemolitionEffect.js';
@@ -45,6 +46,16 @@ export const ARENA_BOUNDARY_SPLIT_Y = 280; // ja
 export const TEAM_BLUE_HEX = 2844350;      // hi
 export const TEAM_ORANGE_HEX = 16750126;   // di
 export const DEFAULT_TEAM_COLORS = [3111891, 13857839]; // xn
+
+export const OCTANE_BOOST_OUTLETS = [
+  [-57, 10.25, 20.4278],
+  [-57, 10.25, -20.4278]
+];
+
+export const FLAT_CAR_BOOST_OUTLETS = [
+  [-57.16878128051758, 9.5, 5.489756107330322],
+  [-57.16878128051758, 9.5, -5.489756107330322]
+];
 
 export const OCTANE_HITBOX_PRESET = {
   length: 120.507,
@@ -88,8 +99,13 @@ let arenaWorldThreeContext = {
   PlaneGeometry: null,
   BufferGeometry: null,
   BufferAttribute: null,
+  EdgesGeometry: null,
+  LineSegments: null,
+  LineBasicMaterial: null,
   TubeGeometry: null,
   CatmullRomCurve3: null,
+  CurvePath: null,
+  LineCurve3: null,
   LatheGeometry: null,
   TorusGeometry: null,
   RingGeometry: null,
@@ -157,7 +173,7 @@ export function setArenaWorldCarLoaders(loaders) {
   arenaWorldCarLoaders = { ...arenaWorldCarLoaders, ...loaders };
 }
 
-function resolveContext() {
+export function resolveContext() {
   const G = arenaWorldThreeContext;
   return {
     Group: G.Group || (typeof THREE !== 'undefined' ? THREE.Group : class {
@@ -214,12 +230,42 @@ function resolveContext() {
     BufferAttribute: G.BufferAttribute || (typeof THREE !== 'undefined' ? THREE.BufferAttribute : class {
       constructor(arr, itemSize) { this.array = arr; this.itemSize = itemSize; }
     }),
+    EdgesGeometry: G.EdgesGeometry || (typeof THREE !== 'undefined' ? THREE.EdgesGeometry : class {
+      constructor(geo) { this.geo = geo; }
+      dispose() {}
+    }),
+    LineSegments: G.LineSegments || (typeof THREE !== 'undefined' ? THREE.LineSegments : class {
+      constructor(geo, mat) {
+        this.geometry = geo;
+        this.material = mat;
+        this.children = [];
+        this.name = '';
+        this.visible = true;
+        this.position = new (resolveContext().Vector3)();
+        this.quaternion = new (resolveContext().Quaternion)();
+        this.scale = new (resolveContext().Vector3)(1, 1, 1);
+        this.rotation = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+        this.renderOrder = 0;
+      }
+      traverse(fn) { fn(this); this.children.forEach(c => c.traverse?.(fn)); }
+    }),
+    LineBasicMaterial: G.LineBasicMaterial || (typeof THREE !== 'undefined' ? THREE.LineBasicMaterial : class {
+      constructor(params = {}) { Object.assign(this, params); }
+      dispose() {}
+    }),
     TubeGeometry: G.TubeGeometry || (typeof THREE !== 'undefined' ? THREE.TubeGeometry : class {
       constructor() {}
       dispose() {}
     }),
     CatmullRomCurve3: G.CatmullRomCurve3 || (typeof THREE !== 'undefined' ? THREE.CatmullRomCurve3 : class {
       constructor(pts = []) { this.points = pts; }
+    }),
+    CurvePath: G.CurvePath || (typeof THREE !== 'undefined' ? THREE.CurvePath : class {
+      constructor() { this.curves = []; }
+      add(c) { this.curves.push(c); }
+    }),
+    LineCurve3: G.LineCurve3 || (typeof THREE !== 'undefined' ? THREE.LineCurve3 : class {
+      constructor(v1, v2) { this.v1 = v1; this.v2 = v2; }
     }),
     LatheGeometry: G.LatheGeometry || (typeof THREE !== 'undefined' ? THREE.LatheGeometry : class {
       constructor() {}
@@ -525,17 +571,17 @@ export function updateSuspensionUnitSpring(susUnit, knucklePos) {
  * Generates procedural wireframe box for visual hitbox debugging.
  */
 export function createCarHitboxWireframe(preset = OCTANE_HITBOX_PRESET) {
-  const { BoxGeometry, MeshBasicMaterial, Mesh } = resolveContext();
+  const { BoxGeometry, EdgesGeometry, LineSegments, LineBasicMaterial } = resolveContext();
   const boxGeom = new BoxGeometry(preset.length, preset.height, preset.width);
-  const boxMat = new MeshBasicMaterial({
+  const edgesGeom = new EdgesGeometry(boxGeom);
+  const lineMat = new LineBasicMaterial({
     color: 16777215,
     transparent: true,
     opacity: 0.9,
     depthTest: true,
-    depthWrite: false,
-    wireframe: true
+    depthWrite: false
   });
-  const hitboxMesh = new Mesh(boxGeom, boxMat);
+  const hitboxMesh = new LineSegments(edgesGeom, lineMat);
   hitboxMesh.name = "car-hitbox";
   hitboxMesh.position.set(preset.forward, preset.up, 0);
   hitboxMesh.renderOrder = 100;
@@ -1056,22 +1102,103 @@ export class ArenaWorld {
         console.warn("Realistic car asset failed to load:", err);
       }
     }
+
+    const {
+      OBJLoader,
+      TextureLoader,
+      SRGBColorSpace,
+      MeshStandardMaterial,
+      multiThemeMaterial,
+      cloneMaterial,
+      Mesh
+    } = resolveContext();
+
+    if (OBJLoader && TextureLoader) {
+      try {
+        const objLoader = new OBJLoader();
+        const texLoader = new TextureLoader();
+        const loadTex = async (path) => {
+          const tex = await texLoader.loadAsync(path);
+          if (tex && SRGBColorSpace) tex.colorSpace = SRGBColorSpace;
+          return tex;
+        };
+        const [bigActive, bigIdle, smallActive, smallIdle, albedo] = await Promise.all([
+          objLoader.loadAsync("/assets/arena/pads/large-active.obj"),
+          objLoader.loadAsync("/assets/arena/pads/large-idle.obj"),
+          objLoader.loadAsync("/assets/arena/pads/small-active.obj"),
+          objLoader.loadAsync("/assets/arena/pads/small-idle.obj"),
+          loadTex("/assets/arena/pads/albedo.png")
+        ]);
+
+        const padMat = (typeof multiThemeMaterial === 'function') ? multiThemeMaterial(
+          cloneMaterial ? cloneMaterial({ map: albedo }) : new MeshStandardMaterial({ map: albedo }),
+          new MeshStandardMaterial({ map: albedo, roughness: 0.6, metalness: 0.2 })
+        ) : new MeshStandardMaterial({ map: albedo, roughness: 0.6, metalness: 0.2 });
+
+        for (const obj of [bigActive, bigIdle, smallActive, smallIdle]) {
+          if (obj) {
+            if (obj.rotation && typeof obj.rotation.x === 'number') {
+              obj.rotation.x = -Math.PI / 2;
+            }
+            obj.traverse?.(child => {
+              if (child instanceof Mesh || child.isMesh) {
+                child.material = padMat;
+              }
+            });
+          }
+        }
+        this.padTemplates = {
+          bigFull: bigActive,
+          bigBase: bigIdle,
+          smallFull: smallActive,
+          smallBase: smallIdle
+        };
+      } catch (err) {
+        console.warn("Pad models failed to load, keeping primitive fallbacks", err);
+      }
+    }
+
     this.markRenderTreeChanged();
   }
 
   async loadArena() {
+    try {
+      const [boundary, stadium] = await Promise.all([
+        loadStadiumContinuousBoundary(resolveContext).catch(err => {
+          console.warn("Continuous stadium boundary failed to load:", err);
+          return null;
+        }),
+        loadStadiumArchitecture(resolveContext).catch(err => {
+          console.warn("Stadium architecture failed to load:", err);
+          return null;
+        })
+      ]);
+      if (boundary) {
+        this.boundary = boundary;
+        this.scene.add(boundary);
+      }
+      if (stadium) {
+        this.stadium = stadium;
+        if (this.stadiumVisible) {
+          this.scene.add(stadium);
+        }
+      }
+    } catch (err) {
+      console.warn("loadArena skipped:", err);
+    }
     this.markRenderTreeChanged();
   }
 
   setStadiumVisible(visible) {
     if (this.stadiumVisible !== visible) {
       this.stadiumVisible = visible;
-      if (this.stadium) {
-        visible ? this.scene.add(this.stadium) : this.stadium.removeFromParent();
+      for (const t of [this.stadium, this.sky]) {
+        if (t) {
+          visible ? this.scene.add(t) : t.removeFromParent?.();
+        }
       }
-      if (this.sky && !this.sky.parent) {
-        this.scene.add(this.sky);
-      }
+      const { Color } = resolveContext();
+      this.scene.background = new Color(visible ? 4679561 : 0);
       this.markRenderTreeChanged();
     }
   }
@@ -1124,7 +1251,7 @@ export class ArenaWorld {
       this.carHitboxes.push(hitboxBox);
       this.carGimbals.push(null);
       carRoot.add(hitboxBox);
-      boostOutlets = [new Vector3(0, 10, -50)];
+      boostOutlets = OCTANE_BOOST_OUTLETS.map(([x, y, z]) => new Vector3(x, y, z));
     } else if (isRealistic && arenaWorldCarLoaders.createRealisticCarModel) {
       const realisticGroup = new Group();
       realisticGroup.name = "realistic-car";
@@ -1146,7 +1273,7 @@ export class ArenaWorld {
         this.carGimbals.push(null);
         carRoot.add(realisticGroup, hitboxBox);
       }
-      boostOutlets = [model.boostOutlet || new Vector3(0, 10, -50)];
+      boostOutlets = [model.boostOutlet || new Vector3(-57, 10.25, 0)];
     } else {
       let carModel;
       if (isFlat && arenaWorldCarLoaders.createFlatCarModel && this.flatCarAsset) {
@@ -1167,7 +1294,11 @@ export class ArenaWorld {
       this.carHitboxes.push(hitboxBox);
       this.carGimbals.push(null);
       carRoot.add(hitboxBox);
-      boostOutlets = [new Vector3(0, 10, -50)];
+      if (isFlat) {
+        boostOutlets = FLAT_CAR_BOOST_OUTLETS.map(([x, y, z]) => new Vector3(x, y, z));
+      } else {
+        boostOutlets = OCTANE_BOOST_OUTLETS.map(([x, y, z]) => new Vector3(x, y, z));
+      }
     }
 
     let wheelSpecs;
@@ -1244,7 +1375,8 @@ export class ArenaWorld {
       update() {}
       preload() { return Promise.resolve(); }
     };
-    this.carBoosts.push((boostOutlets || [new Vector3(0, 10, -50)]).map(pos => new BoostEmitterClass(this.scene, carRoot, pos, true, isBot)));
+    const defaultOutlets = OCTANE_BOOST_OUTLETS.map(([x, y, z]) => new Vector3(x, y, z));
+    this.carBoosts.push((boostOutlets || defaultOutlets).map((pos, p) => new BoostEmitterClass(this.scene, carRoot, pos, p === 0, isBot)));
 
     const demoEffect = new DemolitionEffect();
     this.carDemolitions.push(demoEffect);
@@ -1531,6 +1663,10 @@ export class ArenaWorld {
 
 // Backward-compatibility aliases
 export {
+  loadStadiumContinuousBoundary,
+  loadStadiumArchitecture,
+  loadStadiumContinuousBoundary as WS,
+  loadStadiumArchitecture as JS,
   ArenaWorld as ow,
   createCarHitboxWireframe as RS,
   createCompetitionTurfMesh as GS,
