@@ -94,7 +94,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ✅ **已完成** *(阶段六 Part 1)* | 键位映射、手柄配置、图像与音效配置弹窗 |
 | **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ✅ **已完成** *(阶段七 Part 1)* | 32位 RocketSim 视图内核同步、跟随相机、Ball Cam 球心锁定、动态 FOV、多平台 Swivel 视角偏移 |
 | **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `class Yw` | `src/effects/index.js`<br>`src/effects/BoostBloom.js`<br>`src/effects/FlipResetVisual.js`<br>`src/effects/SupersonicSpeedLinesPass.js` | ✅ **已完成** *(阶段七 Part 2)* | BoostBloom 渐进辉光、FlipResetVisual 翻滚重置环/粒子、SupersonicSpeedLinesPass 超音速全屏流线 |
-| **16** | **三维球场与视觉实体**| `class ow`, `class bS`, `class nS`, `class pS`, `BallVisual`, `BoostPadSystem` | `src/entities/BallLocatorArrow.js`<br>`src/entities/DemolitionEffect.js`<br>`src/entities/BoostPadSystem.js`<br>`src/entities/SpeedTrail.js`<br>`src/entities/BallVisual.js` | 🔄 **进行中 (Step 1 & 2 落地)** | 3D箭头、自毁烟雾、34颗补给垫、超速动态拖尾带、经典二十面体/拟真双模足球 |
+| **16** | **三维球场与视觉实体**| `class ow`, `class bS`, `class nS`, `class pS`, `BallVisual`, `BoostPadSystem` | `src/entities/BallLocatorArrow.js`<br>`src/entities/DemolitionEffect.js`<br>`src/entities/BoostPadSystem.js`<br>`src/entities/SpeedTrail.js`<br>`src/entities/BallVisual.js`<br>`src/entities/ArenaWorld.js` | ✅ **已完成 (Phase 7 全部落地)** | 3D箭头、自毁烟雾、34颗补给垫、超速动态拖尾带、经典双模足球、8192x10240标准球场、天空穹顶、底盘悬挂与赛车世界控制器 |
 | **17** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
@@ -272,8 +272,22 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
      1. 将 `setBallVisualThreeContext` 移至原 `BallVisual` 抽离位（第 21718 行之后），确保全部依赖类（包括 `ho`、`Ao` 等）均已声明完成，并配置防御性 getter (`get GLTFLoader() { return ho; }`)。
      2. 在 `src/entities/BallVisual.js` 中更新 `setBallVisualThreeContext`，使用 `Object.getOwnPropertyDescriptors` 与 `Object.defineProperties` 完整保留属性描述符与 getter 懒求值行为，并在 `resolveContext()` 内部提供安全错误兜底。
      3. 在 `tests/entities_subsystem.test.js` 中扩充第 7 项回归测试，严格断言主引擎声明顺序无 TDZ 违背，并验证上下文注入的懒求值安全性。
-6. 下一步拆分计划（⏳ Step 3）：
-   - 拆分 `ArenaWorld`（原 `ow`，球场主场景、球门边界、环境光照与赛车底盘悬挂动画）。
+6. 模块化抽取球场主场景与赛车世界至 `src/entities/ArenaWorld.js`（✅ Step 3 已落地）：
+   - `src/entities/ArenaWorld.js`（原 `class ow` 及相关周边几何、材质与着色器）：
+     - 球场规范常量：`ARENA_WIDTH` (8192 uu), `ARENA_LENGTH` (10240 uu), `ARENA_GOAL_DEPTH` (5120 uu), `TURF_TEXTURE_WIDTH` (2048), `TURF_TEXTURE_HEIGHT` (2560), `OCTANE_HITBOX_PRESET`。
+     - 程序化草皮纹理生成器（原 `Tp`）：草叶条纹噪波、外场划线、禁区与中心圆、球门前磨损纹理。
+     - 竞技场草皮主网格（原 `GS`）：双主题材质切换（emerald / natural），集成 34 颗补给垫动态投影印章（原 `OS`, `HS`）。
+     - 连续球场边界与定制着色器（原 `VS`, `zS`, `Rp`, `Pp`, `WS`）：六角石板斜坡材质、带阵营高光的单通道半透明玻璃网格着色器、弧形球门立柱与门框光带。
+     - 球场建筑与天空穹顶（原 `JS`, `KS`）：球场 3D GLB 建筑模型材质分流与视锥裁剪，天顶/中间/地平线渐变程序化天空球。
+     - 车辆悬挂底盘与控制喷口（原 `QS`, `mg`, `gg`, `vg`, `aw`, `jg`）：悬挂螺旋弹簧、越野轮胎与轮毂、转向节、姿态控制反作用力微型喷火口。
+     - 场景协调器 `ArenaWorld`（原 `class ow`）：物理坐标与渲染坐标映射（`unrealToThreeCoords`）、四元数解包（`unpackBufferQuaternion`）、120Hz 赛车与足球物理插值、车轮自转与转向倾斜、动态定向追踪阳光阴影与多级辉光联动。
+   - `src/entities/index.js`：统一导出 `ArenaWorld` 与向后兼容别名（`ow`, `RS`, `GS`, `OS`, `mg`, `gg`, `vg`, `jg`）。
+7. 单元测试验收 `tests/arena_world.test.js`：
+   - 包含 5 项核心测试用例，覆盖球场尺寸规格、Hitbox 白盒与草皮生成、悬挂轮毂与喷口组件、场景世界生命周期与 120Hz 插值更新、向后兼容别名映射，100% 验收通过（全量 10 大测试套件共 35 项测试全部绿色通过）。
+8. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
+   - 移除内联混淆类、草皮纹理生成器与着色器约 926 行代码。
+   - 引入三维上下文注入（`setArenaWorldThreeContext`）与车辆模型资产加载器注入（`setArenaWorldCarLoaders`）。
+   - 保持 0 TDZ、0 白屏崩溃、0 功能倒退，`node --check` 语法校验通过。
 
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。
