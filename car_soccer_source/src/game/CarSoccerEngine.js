@@ -29150,20 +29150,19 @@ async function dB(){
     for(const W of E)W.reset()
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
-<<<<<<< HEAD
-    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(n.state))
-=======
     if (a.state.mode !== "match") {
       if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
         parallelManager.resetActiveSlot();
-        w();
-        s.sync();
-        typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity);
       } else {
-        n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity);
+        n.resetKickoff();
+      }
+      w();
+      s.sync();
+      const currentSim = (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) ? parallelManager.arenas[parallelManager.activeSlot] : n;
+      if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
+        trajectoryPredictor.notifyKickoffReset(currentSim ? currentSim.state : null);
       }
     }
->>>>>>> multiplayer
   }
   ;
   x.onReset = T;
@@ -29174,11 +29173,15 @@ async function dB(){
   const N = new ow(n.ballRadius,i);
   await Promise.all([N.loadArena(),N.loadBall(),N.loadCarAndPadAssets()]),N.addCar(0),N.addPads(n.getPads());
   const X = W=>{
-<<<<<<< HEAD
-    a.state.mode !== "match" && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyBallControl(n.state))
-=======
-    a.state.mode !== "match" && (!parallelManager || !parallelManager.isActive) && n.controlBall(r,W) && (s.syncBall(),N.resetBallTrail())
->>>>>>> multiplayer
+    if (a.state.mode !== "match" && (!parallelManager || !parallelManager.isActive)) {
+      if (n.controlBall(r, W)) {
+        s.syncBall();
+        N.resetBallTrail();
+        if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
+          trajectoryPredictor.notifyBallControl(n.state);
+        }
+      }
+    }
   }
   ;
   x.onBallControl = X,R.onBallControl = X,D.onBallControl = X;
@@ -29238,6 +29241,7 @@ const parallelManager = new ParallelTrainingManager({
   inputManager: x,
   padInputManager: R,
   physicsClass: yC,
+  primaryPhysicsSim: n,
   createCarMesh: (asset, color) => z0(asset, color),
   createBallMesh: (color) => iS(color),
   recolorCar: (mesh, color) => {
@@ -29262,19 +29266,24 @@ const parallelManager = new ParallelTrainingManager({
       Y.previousResetSerial = targetCurr[ht.CARS + ye.FLIP_RESET_SERIAL];
       Y.stopVisual();
     }
+    if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
+      trajectoryPredictor.notifyKickoffReset(targetArena ? targetArena.state : targetCurr);
+    }
   },
   ht, ye, ln
 });
 const hudTools = an.querySelector(".hud-tools");
+let pBtn = null;
 if (hudTools) {
-  const pBtn = document.createElement("button");
+  pBtn = document.createElement("button");
   pBtn.id = "parallel-training-btn";
   pBtn.className = "hud-tool";
   pBtn.type = "button";
-  pBtn.setAttribute("aria-label", "Multiplayer Parallel Training");
-  pBtn.setAttribute("title", "Multiplayer Parallel Training (Tab)");
-  pBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>';
+  pBtn.setAttribute("aria-label", "Multiplayer Mode");
+  pBtn.setAttribute("title", "Multiplayer Mode / 多人模式 (Tab)");
+  pBtn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
   pBtn.addEventListener("click", () => {
+    if (a.state.mode === "match") return;
     if (parallelManager.isActive) {
       parallelManager.toggleMenu();
     } else {
@@ -29310,7 +29319,7 @@ const st = ()=>{
 }
 ;
 x.onSettingsToggle = ue,ct.addEventListener("click",ue),an.querySelector(".hud-tools").appendChild(ct),an.querySelector("#settings-button").setAttribute("title","Settings"),an.addEventListener("pointerdown",W=>{
-  W.pointerType !== "mouse" || !(W.target instanceof Element) || W.target.closest("#settings-button, #car-button, #match-button, #trajectory-button, #trajectory-panel") && (ne = !0,ge())
+  W.pointerType !== "mouse" || !(W.target instanceof Element) || W.target.closest("#settings-button, #car-button, #match-button, #trajectory-button, #trajectory-panel, #parallel-training-btn, #parallel-training-overlay, #parallel-training-menu-btn") && (ne = !0,ge())
 }
 ,!0),R.onActivity = ()=>{
   ml("gamepad"),D.hideForExternalInput(),ne && (ne = !1,ge())
@@ -29548,7 +29557,6 @@ finally{
   )
 }
 $e.clear(),te.shadowMap.needsUpdate = !0,I.render(0),ze = performance.now(),s.sync(ze),nd.remove();
-await parallelManager.enter(n);
 let Je = !0;
 function wt(W){
   var ar;
@@ -29560,11 +29568,7 @@ function wt(W){
     return;
   }
   const fe = Math.min((W - ze) / 1e3,.1);
-<<<<<<< HEAD
-  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0;
-  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(n.state)),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
-=======
-  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0);
+  ze = W, a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p), a.state.paused || a.state.mode === "match" && a.state.phase === "ended" ? (he(), s.sync(W)) : s.update(W, he, a.state.mode === "match" ? me : void 0);
   if (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive) {
     parallelManager.stepBackgroundArenas(s.lastTicks, s.alpha);
   }
@@ -29572,10 +29576,9 @@ function wt(W){
   const goalScored = activeSimInstance.pollGoal() !== 0;
   a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (
     (typeof parallelManager !== "undefined" && parallelManager && parallelManager.isActive ? parallelManager.resetActiveSlot() : n.resetKickoff()),
-    w(),s.sync(W),N.resetBallTrail(),
-    typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity)
-  ),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
->>>>>>> multiplayer
+    w(), s.sync(W), N.resetBallTrail(),
+    typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.notifyKickoffReset(activeSimInstance ? activeSimInstance.state : null)
+  ), pe.update(a.state), an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode, D.setMatchActive(a.state.mode === "match"), pBtn && (pBtn.style.display = a.state.mode === "match" ? "none" : "")), He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
   const activeCar = r;
@@ -29611,10 +29614,10 @@ function wt(W){
       if (N.cars[ci]) activeCarObjects.push(N.cars[ci]);
     }
     trajectoryPredictor.update({
-      active: a.state.mode === "freeplay",
+      active: a.state.mode === "freeplay" || a.state.mode === "match",
       ballPosition: N.ball.position,
       ballVelocity: N.ballVelocity,
-      ballState: n.state,
+      ballState: activeSimInstance ? activeSimInstance.state : n.state,
       ballHitSerial: Rn,
       carHitSerials: allCarHitSerials,
       cars: activeCarObjects,

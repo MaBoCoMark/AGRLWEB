@@ -955,7 +955,7 @@ export class BallTrajectoryPredictor {
             <circle cx="21" cy="5" r="2.5" fill="#00f0ff"/>
           </svg>
           <span>Trajectory Prediction</span>
-          <span class="trajectory-badge">Free Play</span>
+          <span class="trajectory-badge">Active</span>
         </div>
         <button type="button" class="trajectory-panel__close" data-action="close" title="Close Panel">✕</button>
       </div>
@@ -1133,7 +1133,7 @@ export class BallTrajectoryPredictor {
     btn.className = 'hud-tool';
     btn.type = 'button';
     btn.setAttribute('aria-label', 'Trajectory Prediction');
-    btn.setAttribute('title', 'Trajectory Prediction / 轨迹预测 (Free Play)');
+    btn.setAttribute('title', 'Trajectory Prediction / 轨迹预测');
     btn.innerHTML = `
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 20 C 6 20, 10 6, 20 6"/>

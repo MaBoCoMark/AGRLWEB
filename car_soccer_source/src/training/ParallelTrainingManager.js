@@ -111,6 +111,7 @@ export class ParallelTrainingManager {
     this.inputManager = options.inputManager;
     this.padInputManager = options.padInputManager;
     this.physicsClass = options.physicsClass;
+    this.primaryPhysicsSim = options.primaryPhysicsSim || null;
     this.createCarMesh = options.createCarMesh;
     this.createBallMesh = options.createBallMesh;
     this.recolorCar = options.recolorCar;
@@ -172,10 +173,15 @@ export class ParallelTrainingManager {
    */
   _onKeyDown(e) {
     if (e.code === 'Tab') {
+      const isMatch = this.container && this.container.dataset && this.container.dataset.gameMode === 'match';
+      if (isMatch) return;
+      e.preventDefault();
+      e.stopPropagation();
       if (this.isActive) {
-        e.preventDefault();
-        e.stopPropagation();
         this.toggleMenu();
+      } else {
+        this.enter(this.primaryPhysicsSim || this.arenas[0]);
+        this.openMenu();
       }
     }
   }
@@ -192,8 +198,10 @@ export class ParallelTrainingManager {
       this._disableFreeplayConflicts();
 
       // 2. Setup Slot 0 arena (using existing primary arena or fresh)
-      if (primaryPhysicsSim) {
-        this.arenas[0] = primaryPhysicsSim;
+      const primarySim = primaryPhysicsSim || this.primaryPhysicsSim || this.arenas[0];
+      if (primarySim) {
+        this.arenas[0] = primarySim;
+        this.primaryPhysicsSim = primarySim;
       } else if (!this.arenas[0]) {
         this.arenas[0] = new this.physicsClass();
         await this.arenas[0].init();
@@ -774,6 +782,12 @@ export class ParallelTrainingManager {
           background: rgba(255, 255, 255, 0.15);
           border-radius: 4px;
           border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+        #parallel-training-btn.is-active {
+          background: var(--mark) !important;
+          color: var(--outline) !important;
+          border-color: var(--outline) !important;
+          box-shadow: inset 0 2px #fff6, 0 1px var(--outline) !important;
         }
 
         /* Frosted Glass Management Overlay */
