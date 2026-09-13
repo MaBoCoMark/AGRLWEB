@@ -181,8 +181,25 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 5. 重构 `src/game/CarSoccerEngine.js`：精简移除 835 行内联混淆实现，以干净别名桥接，消除 TDZ 风险。
 6. **缺陷修复与别名补齐 (Bugfix)**：修复启动实例化比赛面板 `pe = new $M(an, ...)` 时因 `CarSoccerEngine.js` 导入遗漏 `$M` 别名导致的 `ReferenceError: Can't find variable: $M` 运行时白屏崩溃问题；在 `CarSoccerEngine.js` 头部补齐 `$M` 导入并在 `tests/match_and_rlbot.test.js` 中扩充别名防漏与实例化校验。
 
-### 阶段六：车库与全局设置面板抽离
-- 目标：解耦 `SettingsSheet` (`BM`)、`GarageTurntable` (`HM`) 与 `GarageDialog` (`UM`)。
+### 阶段六：全局设置面板与主题管理器解耦（✅ 已落地 Part 1）
+1. 创建 `src/ui/ThemeManager.js`：
+   - 抽离视觉主题管理器：支持 Realistic（写实物理材质、微光车漆与现代 HUD）与 Arcade（卡通街机高饱和材质与活泼 UI）双模式流转。
+   - 收敛主题存储器 `themeSettingsStore`（原 `I0`，存储键 `car-soccer.theme.v1`）与主题列表 `THEMES`（原 `dl`）、默认值 `DEFAULT_THEME`（原 `Gh`）。
+   - 提供响应式主题订阅机制 `onThemeChange(callback)`（原 `uo`）、主题设置器 `setTheme(theme, options)`（原 `qs`）、当前主题检索器 `getTheme()`（原 `tr`）以及 DOM 数据属性同步器 `applyThemeToDocument()`（原 `L0`）。
+2. 创建 `src/ui/SettingsSheet.js`：
+   - 抽离游戏全局综合设置抽屉弹窗 `SettingsSheet`（原 `BM`），统一管理 6 大功能模块（Camera / Controls / Graphics / Audio / Training / Diagnostics）。
+   - 相机系统调谐（Camera）：解耦视野 `fov`、跟随距离 `distance`、高度 `height`、俯仰仰角 `angleDeg`、刚度 `stiffness`、旋转速度 `swivelSpeed`、过渡速度 `transitionSpeed`、冲击镜头震动 `cameraShake` 与反向旋转 `invertSwivel`。
+   - 控制系统调谐（Controls）：整合按键映射捕捉、手柄死区与触发器阈值微调、摇杆轴反转、TouchControls 触控布局设计器 `TouchLayoutEditor` 与输入设备热插拔适配。
+   - 画面系统调谐（Graphics）：集成主题切换、帧率上限锁定（`limitFps`, `maxFps` 60~240 FPS）、动态分辨率内插比例缩放（`renderScale` 25%~100%）、球场外围建筑细节剔除（`showStadium`）以及后台低功耗挂起模式（`Stop Rendering`）。
+   - 音频系统调谐（Audio）：无缝对接 `GameAudioSubsystem`，提供主音量、引擎声浪与推进爆发音量实时映射。
+   - 练习规则调谐（Training）：提供进球重置关闭 `disableGoalReset`、无限气量 `boostOption`、车体物理包围盒碰撞箱轮廓 `showCarHitbox` 与足球轨迹线预测器面板呼出。
+   - 性能诊断监控（Diagnostics）：对接 PerformanceProfiler，控制 FPS 帧率计数器、帧耗时统计（p50/p95/p99）、时间细分消耗（Sim/Scene/Camera/Render）以及物理仿真降频丢步监控。
+   - 完备的跨平台手柄（Xbox/PlayStation）菜单 D-Pad 与肩键平滑穿梭导航（`startPadNav`, `pollPadNav`, `stepTab`）。
+3. 补充 Phase 6 完整单元测试套件 `tests/settings_and_theme.test.js`：覆盖主题变更订阅、全量配置项校验、范围限制与默认值恢复、UI 生命周期及别名兼容性，测试集 100% 通过。
+4. 重构 `src/game/CarSoccerEngine.js`：移除 1,132 行内联混淆实现，以规范别名无损接入，消除 TDZ 风险。
+
+### 阶段六（续）：车库展示台与车辆选择弹窗解耦（规划中 Part 2）
+- 目标：解耦 `GarageTurntable` (`HM`)、`createWhiteboxCarModel`、车辆碰撞盒标准规格表 `HITBOX_PRESETS` 与 `GarageDialog` (`UM`)。
 
 ### 阶段七：相机控制器与三维球场解耦
 - 目标：解耦跟随相机 `cw`（Ball Cam 球心锁定、镜头震动与穿墙防穿刺）与球场世界实体 `ow`。
