@@ -94,7 +94,7 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ✅ **已完成** *(阶段六 Part 1)* | 键位映射、手柄配置、图像与音效配置弹窗 |
 | **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ✅ **已完成** *(阶段七 Part 1)* | 32位 RocketSim 视图内核同步、跟随相机、Ball Cam 球心锁定、动态 FOV、多平台 Swivel 视角偏移 |
 | **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `class Yw` | `src/effects/index.js`<br>`src/effects/BoostBloom.js`<br>`src/effects/FlipResetVisual.js`<br>`src/effects/SupersonicSpeedLinesPass.js` | ✅ **已完成** *(阶段七 Part 2)* | BoostBloom 渐进辉光、FlipResetVisual 翻滚重置环/粒子、SupersonicSpeedLinesPass 超音速全屏流线 |
-| **16** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七 Part 3* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
+| **16** | **三维球场与视觉实体**| `class ow`, `class bS`, `class nS`, `BoostPadSystem` | `src/entities/BallLocatorArrow.js`<br>`src/entities/DemolitionEffect.js`<br>`src/entities/BoostPadSystem.js` | 🔄 **进行中 (Step 1 落地)** | 球心指示箭头、车辆自毁粒子烟雾、34 颗喷气补给垫系统与状态轮询 |
 | **17** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
@@ -245,11 +245,20 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 移除内联约 500 行混淆着色器与类定义，补齐 `SpeedLinesEffectPass` 的 `setSize` / `dispose` 规范接口，并在 `EffectComposer` 处增加防御性调用。
    - `node --check` 与全量 8 大测试套件 23 项测试 100% 验收通过。
 
-### 阶段七（Part 3）：三维球场世界与车辆实体解耦（⏳ 待实施）
-- 目标：解耦约 4,800 行的 `ArenaWorld`（原 `ow`），拆分为：
-  1. `stadium.glb` 与 `ball.gltf` 资源加载调度。
-  2. 34 个大/小喷气充能垫的实体与动效管理（`BoostPadSystem`）。
-  3. 赛车悬挂解算、车轮旋转、车身俯仰翻滚动画以及喷气火焰粒子发射器。
+### 阶段七（Part 3）：三维球场世界与车辆实体解耦（🔄 进行中）
+1. 模块化抽取球场周边实体与特效通道至 `src/entities/`（✅ Step 1 已落地）：
+   - `src/entities/BallLocatorArrow.js`（原 `bS`）：非球心锁定相机（Ball Cam 关闭）下的 3D 箭头导航系统，支持与球体动态测距（100~10000 码）、缓动平移插值、四元数姿态对齐与软阴影清晰光晕（`yS`）。
+   - `src/entities/DemolitionEffect.js`（原 `nS`）：车辆被撞毁（Demoed）时的瞬态爆炸与烟雾粒子系统，包含双层 Shader（烟雾羽流与中心闪爆）、真实/街机双主题湍流噪声、高光内衬与黄金角散射分布。
+   - `src/entities/BoostPadSystem.js`：解耦 34 颗 RocketSim 喷气补给垫（6 大 28 小）的实体拓扑、模型加载挂载、网格克隆与双缓冲材质替换，以及离线物理状态缓冲区（偏移量 `ro`）同步。
+   - `src/entities/index.js`：统一导出模块与全部向后兼容别名。
+2. 单元测试验收 `tests/entities_subsystem.test.js`：
+   - 包含 4 项测试用例，覆盖指示箭头测距更新、自毁烟雾生命周期与状态切换、补给垫几何体生成与状态轮询，100% 通过（全量 9 大测试套件 27 项测试全部通过）。
+3. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
+   - 引入三维上下文注入接口（`setBallLocatorThreeContext`, `setDemolitionThreeContext`, `setBoostPadThreeContext`）。
+   - 移除内联约 300 行混淆类与着色器，`node --check` 语法校验通过。
+4. 下一步拆分计划（⏳ Step 2）：
+   - 拆分 `SpeedTrail`（原 `pS`，足球超速拖尾粒子带）。
+   - 拆分 `ArenaWorld`（原 `ow`，球场主场景与赛车悬挂动画）。
 
 ### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
 - 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。
