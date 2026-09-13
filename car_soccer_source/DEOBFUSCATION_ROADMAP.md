@@ -91,10 +91,11 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 | **10** | **比赛与模式状态机** | `class VM`, `class $M`, `qM`, `sm` | `src/game/MatchStateMachine.js`<br>`src/ui/MatchDialog.js` | ✅ **已完成** | Kickoff 开球、321 倒计时、进球判定、加时赛判定、实时记分牌与手柄导航 |
 | **11** | **RL Bot 强化学习代理**| `class QM`, `JM`, `KM`, `ZM`, `pl`, `JA`, `Am`, `XM`, `dm` | `src/ai/RLBotAgent.js` | ✅ **已完成** | ONNX Runtime Web Worker 推理策略 (Nexto, Necto, Seer)、Nexto 离散动作表与开球例程、智能启发式保底 AI |
 | **12** | **车库与 3D 展台** | `class UM`, `class HM` | `src/ui/GarageDialog.js` | ✅ *阶段六 (Part 2)* | 车身切换 (Octane/Dominus)、涂装、独立离屏渲染展台 |
-| **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ⏳ *阶段六* | 键位映射、手柄配置、图像与音效配置弹窗 |
-| **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ⏳ *阶段七* | 跟随相机、Ball Cam 球心锁定、穿墙防穿刺、镜头震动 |
-| **15** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
-| **16** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
+| **13** | **全局设置面板** | `class BM` | `src/ui/SettingsSheet.js` | ✅ **已完成** *(阶段六 Part 1)* | 键位映射、手柄配置、图像与音效配置弹窗 |
+| **14** | **动态追踪相机系统** | `class cw` | `src/camera/CameraController.js` | ✅ **已完成** *(阶段七 Part 1)* | 32位 RocketSim 视图内核同步、跟随相机、Ball Cam 球心锁定、动态 FOV、多平台 Swivel 视角偏移 |
+| **15** | **特效与渲染通道** | `class fw`, `class xw`, `class Zw`, `pS`, `bS` | `src/effects/` | ⏳ *阶段七 Part 2* | BoostBloom 辉光、FlipResetVisual 翻滚指示环、超音速速度线、球速拖尾与寻球指示器 |
+| **16** | **三维球场与赛车世界**| `class ow` | `src/entities/ArenaWorld.js` | ⏳ *阶段七 Part 3* | Three.js GLTF 载入、充能垫动效、悬挂车轮矩阵解算 |
+| **17** | **Three.js 内核外部化**| 前 17,824 行混淆库代码 | `import * as THREE from 'three'` | ⏳ *阶段八* | 消除 60% 文件冗余，全面恢复标准 API 命名 |
 
 ---
 
@@ -217,8 +218,33 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - 移除 460 余行内联混淆实现，通过解耦模块无损接入。
    - 通过 `node --check` 语法校验与全部 6 大测试套件 100% 验收。
 
-### 阶段七：相机控制器与三维球场解耦
-- 目标：解耦跟随相机 `cw`（Ball Cam 球心锁定、镜头震动与穿墙防穿刺）与球场世界实体 `ow`。
+### 阶段七（Part 1）：动态追踪相机系统解耦（✅ 已落地）
+1. 模块化重构 `src/camera/CameraController.js`：
+   - 深入逆向与还原 RocketSim C++ 视图步进内核（`stepView` / `resetView`）的 32 槽位 Float64 状态输入结构（`CAMERA_INPUT_INDICES`），涵盖帧间隔 `dt`、`ballCam` 开关、赛车位置四元数（`carPos`/`carQuat`）、球体世界坐标（`ballPos`）、状态位掩码 `flags`（`onGround` / `groundNormal` / `velocity` / `supersonic`）、动态相机参数（`fov`, `distance`, `height`, `angleDeg`, `stiffness`, `transitionSpeed`）以及手柄/键鼠视线偏转（`lookX`, `lookY`, `swivelSpeed`, `invertSwivel`）。
+   - 严格映射 42 维全局缓冲区输出字段：相机位置 `CAMERA_POS_OFFSET` (32..34)、观察朝向单位向量 `CAMERA_DIR_OFFSET` (35..37)、相机上向量 `CAMERA_UP_OFFSET` (38..40) 以及动态超音速/冲刺视野缩放 `CAMERA_FOV_OFFSET` (41)。
+   - 实现无 WASM 环境下的优雅纯 JS 几何兜底（`stepFallbackView`），确保在单元测试与降级模式下平稳运行。
+   - 提供优雅的三维上下文依赖注入机制 `setCameraThreeContext`，支持无缝桥接内联 Three.js 实例与独立 `THREE` 实例。
+   - 导出全套向后兼容别名：`export { CameraController as cw, CAMERA_INPUT_SIZE as Aw, CAMERA_POS_OFFSET as Sc, CAMERA_DIR_OFFSET as wc, CAMERA_UP_OFFSET as Mc, CAMERA_FOV_OFFSET as lw }`。
+2. 单元测试验收 `tests/camera_subsystem.test.js`：
+   - 验证 6 项核心测试集（缓冲区布局、生命周期与 Ball Cam 切换、32 槽位输入序列化与内核调用、几何兜底解算、窗口重置、向后兼容别名），100% 通过。
+3. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
+   - 引入 `CameraController` 及别名，注入 `PerspectiveCamera` 与 `Vector3` 上下文。
+   - 移除内联的混淆 `class cw` 与 `const Aw = 32, Sc = 32, wc = 35, Mc = 38, lw = 41;`。
+   - 达成零性能损耗、零回归（`node --check` 与 7 大测试套件 17 项测试 100% PASS）。
 
-### 阶段八：Three.js 内核外部化
-- 目标：将内联的 1.7 万行 Three.js 替换为外部 `import * as THREE from 'three'`，彻底完成整个项目的现代工程化转型。
+### 阶段七（Part 2）：视觉特效与后处理渲染通道解耦（⏳ 待实施）
+- 目标：将混杂在 `CarSoccerEngine.js` 中的五大独立视觉效果剥离至 `src/effects/`：
+  1. `FlipResetVisual`（原 `xw`）：四轮触球重置涟漪光环与粒子爆发特效。
+  2. `SupersonicSpeedLinesPass`（原 `Zw` / `Yw`）：超音速边缘运动残影与全屏加速流线 Pass。
+  3. `BoostBloom`（原 `fw`）：四重双线性降采样/升采样喷气发光通道。
+  4. `BallSpeedTrail`（原 `pS`）：足球高速移动轨迹拖尾线。
+  5. `BallLocatorArrow`（原 `bS`）：地面球心指示与指引光标。
+
+### 阶段七（Part 3）：三维球场世界与车辆实体解耦（⏳ 待实施）
+- 目标：解耦约 4,800 行的 `ArenaWorld`（原 `ow`），拆分为：
+  1. `stadium.glb` 与 `ball.gltf` 资源加载调度。
+  2. 34 个大/小喷气充能垫的实体与动效管理（`BoostPadSystem`）。
+  3. 赛车悬挂解算、车轮旋转、车身俯仰翻滚动画以及喷气火焰粒子发射器。
+
+### 阶段八：Three.js 内核外部化与启动主循环现代化（⏳ 待实施）
+- 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。

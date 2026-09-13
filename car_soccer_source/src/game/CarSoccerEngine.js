@@ -232,6 +232,21 @@ import {
   im
 } from "../ui/SettingsSheet.js";
 import {
+  CameraController,
+  setCameraThreeContext,
+  CAMERA_INPUT_SIZE,
+  CAMERA_POS_OFFSET,
+  CAMERA_DIR_OFFSET,
+  CAMERA_UP_OFFSET,
+  CAMERA_FOV_OFFSET,
+  cw,
+  Aw,
+  Sc,
+  wc,
+  Mc,
+  lw
+} from "../camera/CameraController.js";
+import {
   HITBOX_PRESETS,
   createWhiteboxCarModel,
   CAR_VISUAL_IDS,
@@ -18141,6 +18156,10 @@ setGarageThreeContext({
   Box3: xr,
   Vector3: F
 });
+setCameraThreeContext({
+  PerspectiveCamera: fn,
+  Vector3: F
+});
 const Fh = computeTouchLayoutBounds;
 const Hf = normalizeTouchLayoutRect;
 const k0 = isExtraActionEnabled;
@@ -22964,41 +22983,7 @@ class ow{
   }
 
 }
-// Camera Constants (Phase 6 Deobfuscation -> Ps imported from SettingsSheet.js)
-const Aw = 32,Sc = 32,wc = 35,Mc = 38,lw = 41;
-class cw{
-  constructor(e,t){
-    _(this,"camera");
-    _(this,"settings",{
-      ...Ps
-    }
-    );
-    _(this,"_ballCam",!0);
-    _(this,"input",new Float64Array(Aw));
-    _(this,"direction",new F);
-    _(this,"target",new F);
-    _(this,"kernel");
-    this.kernel = t,this.camera = new fn(Ps.fov,e,4,4e4),this.kernel.resetView()
-  }
-  get ballCam(){
-    return this._ballCam
-  }
-  set ballCam(e){
-    this._ballCam = e
-  }
-  update(e,t,n,r){
-    var l,c,h,d,u,p;
-    const s = this.input;
-    s[0] = n,s[1] = this._ballCam?1:0,s[2] = e.position.x,s[3] = e.position.y,s[4] = e.position.z,s[5] = e.quaternion.x,s[6] = e.quaternion.y,s[7] = e.quaternion.z,s[8] = e.quaternion.w,s[9] = t.position.x,s[10] = t.position.y,s[11] = t.position.z;
-    let a = 0;
-    (r == null?void 0:r.onGround) !== void 0 && (a|=1),r != null && r.groundNormal && (a|=2),r != null && r.velocity && (a|=4),(r == null?void 0:r.supersonic) !== void 0 && (a|=8),s[12] = a,s[13] = r != null && r.onGround?1:0,s[14] = ((l = r == null?void 0:r.groundNormal) == null?void 0:l.x) ?? 0,s[15] = ((c = r == null?void 0:r.groundNormal) == null?void 0:c.y) ?? 0,s[16] = ((h = r == null?void 0:r.groundNormal) == null?void 0:h.z) ?? 0,s[17] = ((d = r == null?void 0:r.velocity) == null?void 0:d.x) ?? 0,s[18] = ((u = r == null?void 0:r.velocity) == null?void 0:u.y) ?? 0,s[19] = ((p = r == null?void 0:r.velocity) == null?void 0:p.z) ?? 0,s[20] = r != null && r.supersonic?1:0,s[21] = this.settings.fov,s[22] = this.settings.distance,s[23] = this.settings.height,s[24] = this.settings.angleDeg,s[25] = this.settings.stiffness,s[26] = this.settings.transitionSpeed,s[27] = this.camera.aspect,s[28] = (r == null?void 0:r.lookX) ?? 0,s[29] = (r == null?void 0:r.lookY) ?? 0,s[30] = this.settings.swivelSpeed,s[31] = this.settings.invertSwivel?1:0;
-    const o = this.kernel.stepView(s);
-    this.camera.position.set(o[Sc],o[Sc + 1],o[Sc + 2]),this.direction.set(o[wc],o[wc + 1],o[wc + 2]),this.camera.up.set(o[Mc],o[Mc + 1],o[Mc + 2]),this.target.copy(this.camera.position).add(this.direction),this.camera.lookAt(this.target);
-    const A = o[lw];
-    Math.abs(this.camera.fov - A) > .001 && (this.camera.fov = A,this.camera.updateProjectionMatrix())
-  }
-
-}
+// CameraController (cw) modularized into src/camera/CameraController.js
 const Jn = 4,Up = .5,hw = 1.2,dw = .01,uw = .275 * 3,qp = [.76,.68,.6,.52 + .44],$p =`
   varying vec2 vUv;
   void main() {
