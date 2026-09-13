@@ -17933,10 +17933,10 @@ class uC{
     this.readBuffer = this.writeBuffer,this.writeBuffer = e
   }
   addPass(e){
-    this.passes.push(e),e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
+    this.passes.push(e),e.setSize && e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
   }
   insertPass(e,t){
-    this.passes.splice(t,0,e),e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
+    this.passes.splice(t,0,e),e.setSize && e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
   }
   removePass(e){
     const t = this.passes.indexOf(e);
@@ -17977,7 +17977,7 @@ class uC{
     this._width = e,this._height = t;
     const n = this._width * this._pixelRatio,r = this._height * this._pixelRatio;
     this.renderTarget1.setSize(n,r),this.renderTarget2.setSize(n,r);
-    for(let s = 0;s < this.passes.length;s++)this.passes[s].setSize(n,r)
+    for(let s = 0;s < this.passes.length;s++)this.passes[s].setSize && this.passes[s].setSize(n,r)
   }
   setPixelRatio(e){
     this._pixelRatio = e,this.setSize(this._width,this._height)

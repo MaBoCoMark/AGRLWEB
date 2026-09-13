@@ -193,3 +193,40 @@ test('5. SupersonicSpeedLinesPass and SpeedLinesEffectPass behavior', () => {
   assert.ok(speedLines.strength < 0.01, 'Strength should decay when subsonic');
   assert.equal(speedLines.pass.enabled, false);
 });
+
+test('6. SpeedLinesEffectPass conforms to Three.js Pass contract (setSize, render, dispose)', () => {
+  const speedLines = new SupersonicSpeedLinesPass();
+  const pass = speedLines.pass;
+
+  assert.equal(typeof pass.setSize, 'function', 'pass.setSize must be a callable function');
+  assert.equal(typeof pass.render, 'function', 'pass.render must be a callable function');
+  assert.equal(typeof pass.dispose, 'function', 'pass.dispose must be a callable function');
+
+  // Should execute without throwing
+  assert.doesNotThrow(() => {
+    pass.setSize(1920, 1080);
+  });
+
+  // Mock EffectComposer pass addition
+  const mockComposer = {
+    passes: [],
+    _width: 1920,
+    _height: 1080,
+    _pixelRatio: 2,
+    addPass(p) {
+      this.passes.push(p);
+      p.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
+    }
+  };
+
+  assert.doesNotThrow(() => {
+    mockComposer.addPass(pass);
+  });
+  assert.equal(mockComposer.passes.length, 1);
+  assert.equal(mockComposer.passes[0], pass);
+
+  // Disposal
+  assert.doesNotThrow(() => {
+    pass.dispose();
+  });
+});

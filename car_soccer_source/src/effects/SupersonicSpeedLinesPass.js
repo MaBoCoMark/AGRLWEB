@@ -195,8 +195,16 @@ export class SpeedLinesEffectPass {
       CopyShader
     } = ctx;
 
-    // Inherit from Pass
-    Object.assign(this, new Pass());
+    // Inherit from Pass instance & fulfill Pass contract
+    if (Pass) {
+      Object.assign(this, new Pass());
+    }
+
+    this.isPass = true;
+    this.enabled = false;
+    this.needsSwap = true;
+    this.clear = false;
+    this.renderToScreen = false;
 
     const copyUniforms = {
       tDiffuse: { value: null },
@@ -232,18 +240,36 @@ export class SpeedLinesEffectPass {
     const mesh = new Mesh(geometry, material);
     mesh.frustumCulled = false;
     this.scene.add(mesh);
-    this.enabled = false;
+  }
+
+  /**
+   * Called by EffectComposer on pass addition and viewport resize.
+   * @param {number} width
+   * @param {number} height
+   */
+  setSize(width, height) {
+    // Pass contract method required by EffectComposer.addPass / EffectComposer.setSize
   }
 
   render(renderer, writeBuffer, readBuffer) {
     if (!renderer) return;
-    this.copy.material.uniforms.tDiffuse.value = readBuffer.texture;
+    if (this.copy?.material?.uniforms?.tDiffuse) {
+      this.copy.material.uniforms.tDiffuse.value = readBuffer ? readBuffer.texture : null;
+    }
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
-    this.copy.render(renderer);
+    this.copy?.render?.(renderer);
     const autoClear = renderer.autoClear;
     renderer.autoClear = false;
-    renderer.render(this.scene, this.camera);
+    if (this.scene && this.camera) {
+      renderer.render(this.scene, this.camera);
+    }
     renderer.autoClear = autoClear;
+  }
+
+  dispose() {
+    if (this.copy && typeof this.copy.dispose === 'function') {
+      this.copy.dispose();
+    }
   }
 }
 

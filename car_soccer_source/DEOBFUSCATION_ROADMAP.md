@@ -239,10 +239,11 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
    - `src/effects/SupersonicSpeedLinesPass.js`（原 `Zw` 与 `Yw`）：基于 80 实例线段几何体的全屏后处理流线通道，结合视锥投影矩阵、摄像机姿态四元数取逆与车速矢量解算动态空间拉伸流线。
    - `src/effects/index.js`：统一导出模块与全套向后兼容别名（`fw`, `Bc`, `Jn`, `Up`, `hw`, `dw`, `uw`, `qp`, `xw`, `_w`, `Ew`, `yw`, `Jp`, `mw`, `Vp`, `gw`, `Wp`, `ys`, `Yw`, `Zw`）。
 2. 单元测试验收 `tests/effects_subsystem.test.js`：
-   - 验证 5 项测试集（BoostBloom 常量/生命周期/尺寸自适应/销毁、FlipResetVisual 常量/星形几何体生成/火花粒子更新/序列号重置触发、SupersonicSpeedLinesPass 亚音速与超音速平滑阻尼插值切换），100% 通过。
+   - 验证 6 项测试集（BoostBloom 常量/生命周期/尺寸自适应/销毁、FlipResetVisual 常量/星形几何体生成/火花粒子更新/序列号重置触发、SupersonicSpeedLinesPass 亚音速与超音速平滑阻尼插值切换、EffectComposer Pass 协议适配与生命周期验证），100% 通过。
 3. 主引擎解耦接入 `src/game/CarSoccerEngine.js`：
    - 引入三维上下文注入接口（`setBoostBloomThreeContext`, `setFlipResetThreeContext`, `setSpeedLinesThreeContext`），实现零循环依赖。
-   - 移除内联约 500 行混淆着色器与类定义，`node --check` 与全量 8 大测试套件 22 项测试 100% 验收通过。
+   - 移除内联约 500 行混淆着色器与类定义，补齐 `SpeedLinesEffectPass` 的 `setSize` / `dispose` 规范接口，并在 `EffectComposer` 处增加防御性调用。
+   - `node --check` 与全量 8 大测试套件 23 项测试 100% 验收通过。
 
 ### 阶段七（Part 3）：三维球场世界与车辆实体解耦（⏳ 待实施）
 - 目标：解耦约 4,800 行的 `ArenaWorld`（原 `ow`），拆分为：
