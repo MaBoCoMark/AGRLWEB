@@ -2,7 +2,7 @@ import { auditRequiredAssets, formatMissingAssetsHtml, validateAssetResponse } f
 import jC from '../physics/RocketSimWasm.js';
 import { EMotorSynth } from '../audio/EMotorSynth.js';
 import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
-import { MultiplayerManager } from './MultiplayerManager.js';
+import { BallTrajectoryPredictor } from './BallTrajectoryPredictor.js';
 var xg = Object.defineProperty;
 var Cg = (i,e,t)=>e in i?xg(i,e,{
   enumerable:!0,configurable:!0,writable:!0,value:t
@@ -17889,12 +17889,7 @@ class yC{
 addCar(e,t = "default"){
   return this.module._physics_addCar(e,t === "flat"?1:0)
 }
-configureMultiplayer(e = "default"){
-  if(this.module._physics_createArena() !== 1)throw new Error("Arena creation failed");
-  if(this.addCar(0, e) !== _C)throw new Error("Car 0 creation failed");
-  if(this.addCar(1, "default") !== no)throw new Error("Car 1 creation failed");
-  this.resetKickoff(),this.resetView()
-}
+
 configureCars(e,t,n = 0){
   const{
     playerTeam:r,botTeam:s
@@ -17992,22 +17987,13 @@ class CC{
       }
       if(s > 1){
         this.sim.step(s - 1);
-        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-          multiplayerManager.stepPhysics2(s - 1);
-        }
         this.prevState.set(this.sim.state);
         this.sim.step(1);
-        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-          multiplayerManager.stepPhysics2(1);
-        }
       }else{
         const a = this.prevState;
         this.prevState = this.currState;
         this.currState = a;
         this.sim.step(1);
-        if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-          multiplayerManager.stepPhysics2(1);
-        }
       }
       this.currState.set(this.sim.state),this.alpha = this.accumulator / da
     }
@@ -24873,7 +24859,7 @@ class ow{
   updateBoostVisuals(e,t,n,r = 0,s = !0){
     for(let a = 0;a < this.cars.length;a++){
       const o = s && e[ht.CARS + a * ln + ye.IS_BOOSTING] === 1;
-      const isAudibleActive = typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer ? a === multiplayerManager.activeCarIndex : a === 0;
+      const isAudibleActive = a === 0;
       for(const A of this.carBoosts[a]){
         A.setSpatial(!isAudibleActive);
         A.update(o,s && (isAudibleActive?t:r) > .01,this.cars[a].visible,n,s);
@@ -26092,18 +26078,7 @@ moveDrag(e){
 }
 }
 function getDefaultRenderScale() {
-  if (typeof window !== "undefined") {
-    const sw = (window.screen && window.screen.width) || 0;
-    const sh = (window.screen && window.screen.height) || 0;
-    const iw = window.innerWidth || 0;
-    const ih = window.innerHeight || 0;
-    const w = Math.max(sw, iw);
-    const h = Math.max(sh, ih);
-    if (w > 2560 && h > 1600) {
-      return 50;
-    }
-  }
-  return 100;
+  return 50;
 }
 const _g = [{
   key:"fps",label:"FPS Counter",note:"Current frames per second and screen refresh rate."
@@ -26554,7 +26529,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                       <input id="graphics-renderScale" class="dim__line" type="range"
                              min="25" max="100" step="0.1" data-graphics-setting="renderScale" />
                     </span>
-                    <output class="figure" data-graphics-value-for="renderScale" for="graphics-renderScale">100.0%</output>
+                    <output class="figure" data-graphics-value-for="renderScale" for="graphics-renderScale">50.0%</output>
                   </div>
                 </div>
               </section>
@@ -26662,6 +26637,13 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
                     </span>
                   </div>
                   ${Pr("showCarHitbox","Show Car Hitbox","Draws the collision box around the car.","training")}
+                  <div class="dim">
+                    <label class="dim__label" for="open-trajectory-panel-btn">Ball Trajectory</label>
+                    <span class="dim__leader" aria-hidden="true"></span>
+                    <span class="dim__control">
+                      <button class="act" type="button" id="open-trajectory-panel-btn">Configure Trajectory...</button>
+                    </span>
+                  </div>
                 </div>
               </section>
             </section>
@@ -26708,7 +26690,7 @@ this.target = t,this.trainingTarget = n,this.bindings = r,this.onOpenChange = s,
   }
   )
 }
-),this.overlay.querySelectorAll("[data-audio-setting]").forEach(c=>{
+),(()=>{const tb=this.overlay.querySelector("#open-trajectory-panel-btn");if(tb)tb.addEventListener("click",()=>{this.hide();if(typeof trajectoryPredictor!=="undefined"&&trajectoryPredictor)trajectoryPredictor.togglePanel(!0)})})(),this.overlay.querySelectorAll("[data-audio-setting]").forEach(c=>{
   const h = ()=>{
     this.setAside(!1,!1),this.updateAudioSetting(c)
   }
@@ -27077,7 +27059,7 @@ syncGraphicsControls(){
     if(t === "showStadium" || t === "limitFps")e.checked = this.graphics[t];
     else if(t === "maxFps")(e.value = String(this.graphics.maxFps),e.disabled = !this.graphics.limitFps,e.setAttribute("aria-valuetext",`${this.graphics.maxFps} frames per second`),e.style.setProperty("--dim-progress",`${(this.graphics.maxFps - Ma) / (SA - Ma) * 100}%`),(n = e.closest(".dim")) == null || n.classList.toggle("is-disabled",!this.graphics.limitFps));
     else if(t === "renderScale"){
-      const rVal = Number(this.graphics.renderScale ?? 100);
+      const rVal = Number(this.graphics.renderScale ?? 50);
       e.value = rVal.toFixed(1),e.setAttribute("aria-valuetext",`${rVal.toFixed(1)}%`),e.style.setProperty("--dim-progress",`${(rVal - 25) / (100 - 25) * 100}%`)
     }
 }
@@ -27085,7 +27067,7 @@ syncGraphicsControls(){
   const maxFpsEl = this.overlay.querySelector('[data-graphics-value-for="maxFps"]');
   if(maxFpsEl) maxFpsEl.value = String(this.graphics.maxFps);
   const scaleEl = this.overlay.querySelector('[data-graphics-value-for="renderScale"]');
-  if(scaleEl) scaleEl.value = `${Number(this.graphics.renderScale ?? 100).toFixed(1)}%`
+  if(scaleEl) scaleEl.value = `${Number(this.graphics.renderScale ?? 50).toFixed(1)}%`
 }
 attachStatus(e,t){
   return this.onStatusChange = e,this.onStatusDetails = t ?? null,this.syncStatusControls(),this.status
@@ -28801,11 +28783,12 @@ class aB{
         <p class="status__empty" data-el="statusEmpty" hidden>No readouts selected. Choose them in Settings.</p>
         <div class="status__section" data-section="fps" hidden>
           <div class="status__hero">
-            <span class="status__pair" title="Current frames per second and screen refresh rate.">
+            <span class="status__pair" title="Current frames per second, screen refresh rate, and render scale.">
               <span class="status__value" data-el="statFpsSimple">—</span>
               <span class="status__sep" style="color:rgba(255,255,255,0.4);margin:0 4px;font-weight:300;">/</span>
               <span class="status__hz" data-el="statHzSimple" style="color:rgba(255,255,255,0.45);font-weight:400;font-size:0.85em;">—</span>
               <span class="status__unit" style="margin-left:6px;">fps</span>
+              <span class="status__scale" data-el="statScaleSimple" style="color:rgba(255,255,255,0.75);margin-left:8px;font-weight:500;font-size:0.9em;">—</span>
             </span>
           </div>
         </div>
@@ -28912,7 +28895,12 @@ stop(){
 }
 set(e,t){
   const n = this.root.querySelector(`[data-el="${e}"]`);
-n && n.textContent !== t && (n.textContent = t)
+  if(!n) return;
+  if(typeof t === "string" && t.includes("<")){
+    n.innerHTML !== t && (n.innerHTML = t);
+  }else{
+    n.textContent !== t && (n.textContent = t);
+  }
 }
 rows(e,t){
   const n = this.root.querySelector(`[data-el="${e}"]`);
@@ -28927,8 +28915,22 @@ draw(){
   const e = this.profiler.snapshot(ya / 2,xa);
   if(e.count === 0)return;
   const t = this.settings;
-  if(t.fps){this.set("statFpsSimple",e.frame.fps.toFixed(0)),this.set("statHzSimple",String(Math.round(e.refreshHz || 60)));}
-  if(t.fps && !t.frame){this.set("summaryFps",`${e.frame.fps.toFixed(0)} <span style="color:rgba(255,255,255,0.45);font-weight:400;font-size:0.85em;">/ ${Math.round(e.refreshHz || 60)}</span>`);const msSpan=this.root.querySelector('[data-el="summaryMs"]');if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!0;}else if(t.frame){this.set("summaryFps",e.frame.fps.toFixed(0)),this.set("summaryMs",e.frame.avgMs.toFixed(1));const msSpan=this.root.querySelector('[data-el="summaryMs"]');if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!1;}
+  const currentScale = Math.round((typeof Xe !== "undefined" && Xe?.graphics?.renderScale) ?? (typeof We !== "undefined" && We?.renderScale) ?? 50);
+  if(t.fps){
+    this.set("statFpsSimple",e.frame.fps.toFixed(0));
+    this.set("statHzSimple",String(Math.round(e.refreshHz || 60)));
+    this.set("statScaleSimple",`${currentScale}%`);
+  }
+  if(t.fps && !t.frame){
+    this.set("summaryFps",`${e.frame.fps.toFixed(0)} <span style="color:rgba(255,255,255,0.45);font-weight:400;font-size:0.85em;">/ ${Math.round(e.refreshHz || 60)}</span> <span style="color:rgba(255,255,255,0.75);margin-left:6px;font-weight:500;font-size:0.85em;">${currentScale}%</span>`);
+    const msSpan=this.root.querySelector('[data-el="summaryMs"]');
+    if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!0;
+  }else if(t.frame){
+    this.set("summaryFps",`${e.frame.fps.toFixed(0)} <span style="color:rgba(255,255,255,0.75);margin-left:4px;font-size:0.85em;">${currentScale}%</span>`);
+    this.set("summaryMs",e.frame.avgMs.toFixed(1));
+    const msSpan=this.root.querySelector('[data-el="summaryMs"]');
+    if(msSpan&&msSpan.parentElement)msSpan.parentElement.hidden=!1;
+  }
   if(!(this.compact.matches && !this.expanded)){
     if(t.frame && (this.set("statFps",e.frame.fps.toFixed(0)),this.set("statFrame",e.frame.avgMs.toFixed(2)),this.set("statP50",e.frame.p50.toFixed(2)),this.set("statP95",e.frame.p95.toFixed(2)),this.set("statP99",e.frame.p99.toFixed(2)),this.set("statWorst",e.frame.worstMs.toFixed(1))),t.chart && this.drawChart(e),t.phases && !t.phasesCollapsed && this.rows("statPhases",[...e.phases.filter(r=>r.phase !== "other" || r.avgMs >= .02).map(r=>[r.phase,`${r.avgMs.toFixed(2)} ms`]),["cpu total",`${e.cpu.avgMs.toFixed(2)} ms`]]),t.sim){
   const{
@@ -29095,7 +29097,7 @@ async function dB(){
     for(const W of E)W.reset()
   }
   ,S = new Zw,k = UC(),x = new SC(k),T = ()=>{
-    a.state.mode !== "match" && (n.resetKickoff(),(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.resetKickoff()),w(),s.sync())
+    a.state.mode !== "match" && (n.resetKickoff(),w(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity))
   }
   ;
   x.onReset = T;
@@ -29154,59 +29156,8 @@ We = Xe.attachGraphics(W=>{
 }
 );
 const speedometerHUD = new SpeedometerHUD(an);
-const multiplayerManager = new MultiplayerManager({
-  container: an,
-  physics: n,
-  createPhysicsInstance: () => new yC(),
-  carVisual: i,
-  arena: N,
-  cameraRig: H,
-  ballRadius: n.ballRadius,
-  createIndicatorRings: (ballRadius) => {
-    const r = ballRadius * 1.15;
-    const s = new Ya(r * 0.92, r, 48);
-    const a = new cn({
-      color: 16777215,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false
-    });
-    const ring = new Ee(s, a);
-    const heightRing = new Ee(s, a);
-    ring.rotation.x = -Math.PI / 2;
-    ring.renderOrder = 2;
-    heightRing.rotation.x = -Math.PI / 2;
-    heightRing.renderOrder = 2;
-    return { ring, heightRing };
-  },
-  onEnterMultiplayer: () => {
-    n.configureMultiplayer(i === "flat-car" ? "flat" : "default");
-    N.ensureOpponent();
-    if (N.cars && N.cars[1]) {
-      N.cars[1].visible = true;
-      fl(N.cars[1], ul(xn[1]));
-    }
-    if (N.opponentSun) N.opponentSun.visible = true;
-    s.sync();
-  },
-  onLeaveMultiplayer: () => {
-    n.configureCars(i === "flat-car" ? "flat" : "default", false, 0);
-    _e();
-  },
-  createBall: (col, name) => {
-    const mesh = new Ee(rS(col),Nr({
-      name: name,
-      vertexColors: !0
-    }));
-    mesh.name = name;
-    mesh.castShadow = !0;
-    mesh.receiveShadow = !0;
-    const g = new dt;
-    g.name = name;
-    g.add(mesh);
-    return g;
-  }
-});
+const trajectoryPredictor = new BallTrajectoryPredictor(an);
+N.scene.add(trajectoryPredictor.object);
 const ft = ()=>{
   if(Se != null && Se.isDetailsOpen){
     Se.hideDetails();
@@ -29247,7 +29198,7 @@ const _e = ()=>{
   ),m.update({
     carSerial:W[fe + ye.BALL_HIT_SERIAL] + (W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0),carSpeed:0,worldSerial:W[fe + ye.BALL_WORLD_IMPACT_SERIAL],worldSpeed:0,worldSurface:0,worldPan:0,audible:!1
   }
-  ),y[0] = W[fe + ye.BALL_HIT_SERIAL],y[1] = W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0,N.resetBallTrail(),n.resetView(),s.sync()
+  ),y[0] = W[fe + ye.BALL_HIT_SERIAL],y[1] = W[ht.NUM_CARS] > 1?W[fe + ln + ye.BALL_HIT_SERIAL]:0,N.resetBallTrail(),n.resetView(),s.sync(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position,N.ballVelocity)
 }
 ;
 pe = new $M(an,{
@@ -29305,7 +29256,7 @@ Se = new aB(an,He,te,Ge,W=>qe("status",W));
 function qeRenderViewport(graphics) {
   if (!te || !$e || !I) return;
   const currentGraphics = graphics ?? We ?? (typeof Xe !== "undefined" && Xe ? Xe.graphics : null);
-  const scale = ((currentGraphics == null ? void 0 : currentGraphics.renderScale) ?? 100) / 100;
+  const scale = ((currentGraphics == null ? void 0 : currentGraphics.renderScale) ?? 50) / 100;
   const basePixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const effectivePixelRatio = basePixelRatio * scale;
   H.camera.aspect = window.innerWidth / window.innerHeight;
@@ -29405,19 +29356,7 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
   ),je && (Rn = A));
   const zn = D.read(),Sr = x.read(),Pn = R.active()?"gamepad":D.active()?"touch":"keyboard",on = Pn === "gamepad"?Rn:Pn === "touch"?zn:Sr,Mt = !document.hidden && document.hasFocus();
   be.lookX = Mt?Gt.clamp(x.cameraLook.x + (je?0:R.cameraLook.x), - 1,1):0,be.lookY = Mt?Gt.clamp(x.cameraLook.y + (je?0:R.cameraLook.y), - 1,1):0,Fe = on.throttle,ke = on;
-  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-    const neutral = {throttle:0,steer:0,pitch:0,yaw:0,roll:0,jump:!1,boost:!1,handbrake:!1};
-    const c0 = multiplayerManager.activeCarIndex === 0 ? on : neutral;
-    const c1 = multiplayerManager.activeCarIndex === 1 ? on : neutral;
-    n.setControls(0, c0);
-    n.setControls(1, c1);
-    if (multiplayerManager.physics2) {
-      multiplayerManager.physics2.setControls(0, c0);
-      multiplayerManager.physics2.setControls(1, c1);
-    }
-  } else {
-    n.setControls(r, on);
-  }
+  n.setControls(r, on);
 }
 ,Le = n.getPads(),Ie = ()=>{
   if(h)return;
@@ -29433,14 +29372,6 @@ const nt = new F,Te = new F,pt = new F,$ = new F,be = {
 }
 ,me = ()=>{
   if(a.state.paused || a.state.phase === "ended" || p)return!1;
-  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-    n.step(1),u++;
-    const fe = n.state;
-    a.tick({
-      goal:n.pollGoal(),ballOnGround:n.ballOnGround,kickoffTouched:Math.abs(fe[ht.BALL]) + Math.abs(fe[ht.BALL + 1]) > 1 || Math.hypot(fe[ht.BALL + 12],fe[ht.BALL + 13]) > 1
-    });
-    return !0;
-  }
   if(a.state.phase === "playing"){
     const W = o.getKickoffControls(n.state,u);
     if(W)l = W,o.overrideControls(W);
@@ -29497,11 +29428,11 @@ function wt(W){
     return;
   }
   const fe = Math.min((W - ze) / 1e3,.1);
-  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0 || (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer && multiplayerManager.physics2 && multiplayerManager.physics2.pollGoal() !== 0);
-  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.resetKickoff()),w(),s.sync(W),N.resetBallTrail()),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
+  ze = W,a.state.paused = a.state.mode === "match" && (ne || J.size > 0 || document.hidden || !document.hasFocus() || p),a.state.paused || a.state.mode === "match" && a.state.phase === "ended"?(he(),s.sync(W)):s.update(W,he,a.state.mode === "match"?me:void 0); const goalScored = n.pollGoal() !== 0;
+  a.state.mode === "freeplay" && goalScored && !V.disableGoalReset && (n.resetKickoff(),w(),s.sync(W),N.resetBallTrail(),typeof trajectoryPredictor !== "undefined" && trajectoryPredictor && trajectoryPredictor.recalculate(N.ball.position, N.ballVelocity)),pe.update(a.state),an.dataset.gameMode !== a.state.mode && (an.dataset.gameMode = a.state.mode,D.setMatchActive(a.state.mode === "match")),He.mark();
   const Ft = a.state.mode === "freeplay" || !a.state.paused && a.state.phase === "playing";
   N.update(s.prevState,s.currState,s.alpha,fe,Fe,ke,l,Ft);
-  const activeCar = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
+  const activeCar = r;
   const Nt = ht.CARS + activeCar * ln;
   Y.update(fe,s.currState[Nt + ye.FLIP_RESET_SERIAL],s.currState[Nt + ye.DEMOED] !== 1),g.update({
     jumpSerial:s.currState[Nt + ye.JUMP_SERIAL],dodgeSerial:s.currState[Nt + ye.DODGE_SERIAL],doubleJumpSerial:s.currState[Nt + ye.DOUBLE_JUMP_SERIAL],wheelImpactSerial:s.currState[Nt + ye.WHEEL_IMPACT_SERIAL],wheelImpactSpeed:s.currState[Nt + ye.WHEEL_IMPACT_SPEED],audible:s.currState[Nt + ye.DEMOED] !== 1
@@ -29514,32 +29445,30 @@ function wt(W){
   ),y[0] = Rn,y[1] = zn,He.mark();
   const on = ht.CARS + activeCar * ln,Mt = s.currState;
   be.onGround = Mt[on + ye.ON_GROUND] === 1,be.supersonic = Mt[on + ye.SUPERSONIC] === 1,nt.set(Mt[on + ye.GROUND_NORMAL],Mt[on + ye.GROUND_NORMAL + 2],Mt[on + ye.GROUND_NORMAL + 1]),Te.set(Mt[on + ye.VEL],Mt[on + ye.VEL + 2],Mt[on + ye.VEL + 1]);
-  if(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer){
-    multiplayerManager.updateVisuals(s.alpha);
-    const activeCarIdx = multiplayerManager.activeCarIndex;
-    const activeBall = activeCarIdx === 0 ? N.ball : (multiplayerManager.ball1Mesh || N.ball);
-    H.update(N.cars[activeCarIdx], activeBall, fe, be);
-    N.updateBallLocatorArrow(H.ballCam, activeCarIdx, activeBall);
-  } else {
-    H.update(N.cars[r], N.ball, fe, be);
-    N.updateBallLocatorArrow(H.ballCam, r, N.ball);
-  }
+  H.update(N.cars[r], N.ball, fe, be);
+  N.updateBallLocatorArrow(H.ballCam, r, N.ball);
   He.mark(),Ze.hidden === H.ballCam && (Ze.hidden = !H.ballCam),_1(H.camera);
   for(let bn = 0;bn < E.length;bn++){
-    if (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) {
-      E[bn].setSpatial(bn !== activeCar);
-    }
-    const B = ht.CARS + bn * ln,pi = bn === activeCar?ke:(typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer?{throttle:0,handbrake:!1}:l),In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
+    const B = ht.CARS + bn * ln,pi = bn === activeCar?ke:l,In = bn < Mt[ht.NUM_CARS],Ys = Mt[B + ye.VEL] * Mt[B + ye.FWD] + Mt[B + ye.VEL + 1] * Mt[B + ye.FWD + 1] + Mt[B + ye.VEL + 2] * Mt[B + ye.FWD + 2];
     E[bn].update({
       forwardSpeed:Ys,throttle:pi.throttle,handbrake:pi.handbrake,boosting:In && Mt[B + ye.IS_BOOSTING] === 1,onGround:In && Mt[B + ye.ON_GROUND] === 1,alive:In && Mt[B + ye.DEMOED] !== 1,audible:x.enabled && Ft,controllerActive:R.active() || D.active(),position:(ar = N.cars[bn]) == null?void 0:ar.position
     }
     ,fe)
   }
   N.prepareBallSpeedTrail(H.camera);
+  if (typeof trajectoryPredictor !== "undefined" && trajectoryPredictor) {
+    trajectoryPredictor.update({
+      active: a.state.mode === "freeplay",
+      ballPosition: N.ball.position,
+      ballVelocity: N.ballVelocity,
+      ballHitSerial: Rn,
+      kickoffReset: goalScored,
+    });
+    trajectoryPredictor.prepare(H.camera);
+  }
   const nn = ht.CARS + activeCar * ln,ir = s.currState[nn + ye.SUPERSONIC] === 1 && s.currState[nn + ye.DEMOED] !== 1;
   Te.set(s.currState[nn + ye.VEL],s.currState[nn + ye.VEL + 2],s.currState[nn + ye.VEL + 1]),S.update(fe,ir && x.enabled && Ft,Te,H.camera),C.update(ir,R.active(),x.enabled && Ft);
-  const activeControlledIdx = (typeof multiplayerManager !== "undefined" && multiplayerManager && multiplayerManager.isMultiplayer) ? multiplayerManager.activeCarIndex : r;
-  const activeCarPos = ht.CARS + activeControlledIdx * ln;
+  const activeCarPos = ht.CARS + r * ln;
   Te.set(s.currState[activeCarPos + ye.VEL],s.currState[activeCarPos + ye.VEL + 2],s.currState[activeCarPos + ye.VEL + 1]);
   if (typeof speedometerHUD !== "undefined" && speedometerHUD) {
     speedometerHUD.update(Te.length());
