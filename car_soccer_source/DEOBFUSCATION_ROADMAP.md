@@ -434,18 +434,36 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
     - **测试验收**：
       - 全量 15 个测试套件、80 项单元测试全部绿色通过（100% 通过率）。
 
+19. **后处理管线与离屏展台环境解耦（✅ Phase 7.8 Part 2 已落地）**：
+    - **抽离内容**：
+      - 将 `CarSoccerEngine.js` 第 17920~18265 行的 ~345 行后处理模块完整抽离为 `src/effects/PostprocessingPipeline.js`，并通过 `src/effects/index.js` 统一导出：
+        - `Pass`（原 `Js`）：基类通道接口，标准化 `setSize`、`render`、`dispose` 与 `needsSwap` 状态。
+        - `FullScreenGeometry`（原 `cC`）：[-1, 3] 视口填充单三角形几何体。
+        - `FullScreenQuad`（原 `ll`）：正交相机全屏渲染 Quad。
+        - `ShaderPass`（原 `h0`）：着色器通道，支持材质参数克隆与 readBuffer/writeBuffer 绑定。
+        - `MaskPass`（原 `Mf`）与 `ClearMaskPass`（原 `dC`）：WebGL Stencil 模板缓冲测试蒙版通道。
+        - `CopyShader`（原 `_A`）：基础复制着色器。
+        - `OutputShader`（原 `Ko`）：包含色彩空间转换与动态色调映射宏定义的输出着色器。
+        - `OutputPass`（原 `fC`）：根据渲染器色调映射和色彩空间动态重构 defines 的终末输出通道。
+        - `RenderPass`（原 `pC`）：场景与相机直出通道，具备 autoClear、clearColor/clearAlpha/overrideMaterial 的保护与还原机制。
+        - `EffectComposer`（原 `uC`）：双目标 ping-pong 后期管线调度器。
+        - `RoomEnvironment`（原 `c0`）与 `createRoomEnvironmentMaterial`（原 `gs`）：车库离屏 PMREM 烘焙环境。
+    - **解耦与兼容设计**：
+      - 设计 `setPostprocessingThreeContext` 依赖注入机制，支持运行时动态绑定内联或外部 Three.js，通过原型链重定向解决 ES6 继承与 TDZ 冲突，并提供自闭合的纯 JS fallback 以支持 Headless/Node 测试。
+      - `src/effects/index.js` 星号重导出无任何重名冲突（通过 `tests/module_integrity.test.js` 验证）。
+      - 导出所有 13 个原始混淆符号别名（`Js`, `cC`, `ll`, `h0`, `Mf`, `dC`, `_A`, `Ko`, `fC`, `pC`, `uC`, `c0`, `gs`），保证引擎其余部分 100% 向后兼容。
+    - **测试验收**：
+      - 新增 `tests/postprocessing_pipeline.test.js` 涵盖 11 个独立单元测试。
+      - 全量 16 个测试套件、91 项单元测试全部通过（100% 通过率）。
+
 ---
 
 ## 5. 后续反混淆与现代化演进路线（Roadmap）
 
-### 阶段 7.8（Part 2）：后处理管线与离屏展台环境解耦（⏳ 下一步）
-- **目标**：将 `CarSoccerEngine.js` 第 17900~18480 行的 ~580 行后处理模块抽离为 `src/effects/PostprocessingPipeline.js`：
-  - `EffectComposer`（原 `uC`）、`RenderPass`（原 `fC`）、`ShaderPass`（原 `dC`）、`OutputPass`（原 `pC`）
-  - `FullScreenQuad`（原 `cC`）、`Pass`（原 `Js`）、`CopyShader`（原 `_A`）
-  - `RoomEnvironment`（原 `c0`）与 `PMREMGenerator`
-- **收益**：彻底解耦主画面的多级后期与车库离屏 PMREM 渲染管线。
+### 阶段 7.8（Part 2）：后处理管线与离屏展台环境解耦（✅ 已完成）
+- 已抽离为 `src/effects/PostprocessingPipeline.js`，解耦主画面后期（EffectComposer, RenderPass, ShaderPass, OutputPass, MaskPass, FullScreenQuad）与车库 PMREM 环境（RoomEnvironment）。
 
-### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（⏳ 待实施）
+### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（⏳ 下一步）
 - **目标**：将 `CarSoccerEngine.js` 第 18955~20426 行的 ~1,470 行 `GLTFLoader` 抽离为独立模块 `src/loaders/GLTFLoader.js`：
   - 核心解析器 `GLTFParser`（原 `$b`）与 `GLTFLoader`（原 `ho`）
   - 插件扩展集：Draco、Meshopt、KTX2、PBR Specular/Glossiness 等解析器。

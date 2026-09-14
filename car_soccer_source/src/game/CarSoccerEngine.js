@@ -306,7 +306,33 @@ import {
   SupersonicSpeedLinesPass,
   setSpeedLinesThreeContext,
   Yw,
-  Zw
+  Zw,
+  Pass,
+  Pass as Js,
+  FullScreenGeometry,
+  FullScreenGeometry as cC,
+  FullScreenQuad,
+  FullScreenQuad as ll,
+  ShaderPass,
+  ShaderPass as h0,
+  MaskPass,
+  MaskPass as Mf,
+  ClearMaskPass,
+  ClearMaskPass as dC,
+  CopyShader,
+  CopyShader as _A,
+  OutputShader,
+  OutputShader as Ko,
+  OutputPass,
+  OutputPass as fC,
+  RenderPass,
+  RenderPass as pC,
+  EffectComposer,
+  EffectComposer as uC,
+  RoomEnvironment,
+  RoomEnvironment as c0,
+  createRoomEnvironmentMaterial as gs,
+  setPostprocessingThreeContext
 } from "../effects/index.js";
 import {
   CameraController,
@@ -17919,349 +17945,12 @@ set outputColorSpace(e){
   t.drawingBufferColorSpace = bt._getDrawingBufferColorSpace(e),t.unpackColorSpace = bt._getUnpackColorSpace()
 }
 }
-class c0 extends el{
-  constructor(){
-    super(),this.name = "RoomEnvironment",this.position.y = - 3.5;
-    const e = new Tn;
-    e.deleteAttribute("uv");
-    const t = new lt({
-      side:pn
-    }
-    ),n = new lt,r = new Fd(16777215,900,28,2);
-    r.position.set(.418,16.199,.3),this.add(r);
-    const s = new Ee(e,t);
-    s.position.set(- .757,13.219,.717),s.scale.set(31.713,28.305,28.591),this.add(s);
-    const a = new Lm(e,n,6),o = new It;
-    o.position.set(- 10.906,2.009,1.846),o.rotation.set(0, - .195,0),o.scale.set(2.328,7.905,4.651),o.updateMatrix(),a.setMatrixAt(0,o.matrix),o.position.set(- 5.607, - .754, - .758),o.rotation.set(0,.994,0),o.scale.set(1.97,1.534,3.955),o.updateMatrix(),a.setMatrixAt(1,o.matrix),o.position.set(6.167,.857,7.803),o.rotation.set(0,.561,0),o.scale.set(3.927,6.285,3.687),o.updateMatrix(),a.setMatrixAt(2,o.matrix),o.position.set(- 2.017,.018,6.124),o.rotation.set(0,.333,0),o.scale.set(2.002,4.566,2.064),o.updateMatrix(),a.setMatrixAt(3,o.matrix),o.position.set(2.291, - .756, - 2.621),o.rotation.set(0, - .286,0),o.scale.set(1.546,1.552,1.496),o.updateMatrix(),a.setMatrixAt(4,o.matrix),o.position.set(- 2.193, - .369, - 5.547),o.rotation.set(0,.516,0),o.scale.set(3.875,3.487,2.986),o.updateMatrix(),a.setMatrixAt(5,o.matrix),this.add(a);
-    const A = new Ee(e,gs(50));
-    A.position.set(- 16.116,14.37,8.208),A.scale.set(.1,2.428,2.739),this.add(A);
-    const l = new Ee(e,gs(50));
-    l.position.set(- 16.109,18.021, - 8.207),l.scale.set(.1,2.425,2.751),this.add(l);
-    const c = new Ee(e,gs(17));
-    c.position.set(14.904,12.198, - 1.832),c.scale.set(.15,4.265,6.331),this.add(c);
-    const h = new Ee(e,gs(43));
-    h.position.set(- .462,8.89,14.52),h.scale.set(4.38,5.441,.088),this.add(h);
-    const d = new Ee(e,gs(20));
-    d.position.set(3.235,11.486, - 12.541),d.scale.set(2.5,2,.1),this.add(d);
-    const u = new Ee(e,gs(100));
-    u.position.set(0,20,0),u.scale.set(1,.1,1),this.add(u)
-  }
-  dispose(){
-    const e = new Set;
-    this.traverse(t=>{
-      t.isMesh && (e.add(t.geometry),e.add(t.material))
-    }
-    );
-    for(const t of e)t.dispose()
-  }
-
-}
-function gs(i){
-  return new Zm({
-    color:0,emissive:16777215,emissiveIntensity:i
-  }
-  )
-}
-const _A = {
-  name:"CopyShader",uniforms:{
-    tDiffuse:{
-      value:null
-    }
-    ,opacity:{
-      value:1
-    }
-
-  }
-  ,vertexShader:`
-
-		varying vec2 vUv;
-
-		void main() {
-
-			vUv = uv;
-			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-
-		}`,fragmentShader:`
-
-		uniform float opacity;
-
-		uniform sampler2D tDiffuse;
-
-		varying vec2 vUv;
-
-		void main() {
-
-			vec4 texel = texture2D( tDiffuse, vUv );
-			gl_FragColor = opacity * texel;
-
-		}`
-}
-;
-class Js{
-  constructor(){
-    this.isPass = !0,this.enabled = !0,this.needsSwap = !0,this.clear = !1,this.renderToScreen = !1
-  }
-  setSize(){
-
-  }
-  render(){
-    console.error("THREE.Pass: .render() must be implemented in derived pass.")
-  }
-  dispose(){
-
-  }
-
-}
-const lC = new lo(- 1,1,1, - 1,0,1);
-class cC extends Ct{
-  constructor(){
-    super(),this.setAttribute("position",new Ke([- 1,3,0, - 1, - 1,0,3, - 1,0],3)),this.setAttribute("uv",new Ke([0,2,0,0,2,0],2))
-  }
-
-}
-const hC = new cC;
-class ll{
-  constructor(e){
-    this._mesh = new Ee(hC,e)
-  }
-  dispose(){
-    this._mesh.geometry.dispose()
-  }
-  render(e){
-    e.render(this._mesh,lC)
-  }
-  get material(){
-    return this._mesh.material
-  }
-  set material(e){
-    this._mesh.material = e
-  }
-
-}
-class h0 extends Js{
-  constructor(e,t = "tDiffuse"){
-    super(),this.textureID = t,this.uniforms = null,this.material = null,e instanceof Lt?(this.uniforms = e.uniforms,this.material = e):e && (this.uniforms = sl.clone(e.uniforms),this.material = new Lt({
-      name:e.name !== void 0?e.name:"unspecified",defines:Object.assign({
-
-      }
-      ,e.defines),uniforms:this.uniforms,vertexShader:e.vertexShader,fragmentShader:e.fragmentShader
-    }
-    )),this._fsQuad = new ll(this.material)
-  }
-  render(e,t,n){
-    this.uniforms[this.textureID] && (this.uniforms[this.textureID].value = n.texture),this._fsQuad.material = this.material,this.renderToScreen?(e.setRenderTarget(null),this._fsQuad.render(e)):(e.setRenderTarget(t),this.clear && e.clear(e.autoClearColor,e.autoClearDepth,e.autoClearStencil),this._fsQuad.render(e))
-  }
-  dispose(){
-    this.material.dispose(),this._fsQuad.dispose()
-  }
-
-}
-class Mf extends Js{
-  constructor(e,t){
-    super(),this.scene = e,this.camera = t,this.clear = !0,this.needsSwap = !1,this.inverse = !1
-  }
-  render(e,t,n){
-    const r = e.getContext(),s = e.state;
-    s.buffers.color.setMask(!1),s.buffers.depth.setMask(!1),s.buffers.color.setLocked(!0),s.buffers.depth.setLocked(!0);
-    let a,o;
-    this.inverse?(a = 0,o = 1):(a = 1,o = 0),s.buffers.stencil.setTest(!0),s.buffers.stencil.setOp(r.REPLACE,r.REPLACE,r.REPLACE),s.buffers.stencil.setFunc(r.ALWAYS,a,4294967295),s.buffers.stencil.setClear(o),s.buffers.stencil.setLocked(!0),e.setRenderTarget(n),this.clear && e.clear(),e.render(this.scene,this.camera),e.setRenderTarget(t),this.clear && e.clear(),e.render(this.scene,this.camera),s.buffers.color.setLocked(!1),s.buffers.depth.setLocked(!1),s.buffers.color.setMask(!0),s.buffers.depth.setMask(!0),s.buffers.stencil.setLocked(!1),s.buffers.stencil.setFunc(r.EQUAL,1,4294967295),s.buffers.stencil.setOp(r.KEEP,r.KEEP,r.KEEP),s.buffers.stencil.setLocked(!0)
-  }
-
-}
-class dC extends Js{
-  constructor(){
-    super(),this.needsSwap = !1
-  }
-  render(e){
-    e.state.buffers.stencil.setLocked(!1),e.state.buffers.stencil.setTest(!1)
-  }
-
-}
-class uC{
-  constructor(e,t){
-    if(this.renderer = e,this._pixelRatio = e.getPixelRatio(),t === void 0){
-      const n = e.getSize(new Ae);
-      this._width = n.width,this._height = n.height,t = new qn(this._width * this._pixelRatio,this._height * this._pixelRatio,{
-        type:er
-      }
-      ),t.texture.name = "EffectComposer.rt1"
-    }
-    else this._width = t.width,this._height = t.height;
-    this.renderTarget1 = t,this.renderTarget2 = t.clone(),this.renderTarget2.texture.name = "EffectComposer.rt2",this.writeBuffer = this.renderTarget1,this.readBuffer = this.renderTarget2,this.renderToScreen = !0,this.passes = [],this.copyPass = new h0(_A),this.copyPass.material.blending = gr,this.timer = new r6
-  }
-  swapBuffers(){
-    const e = this.readBuffer;
-    this.readBuffer = this.writeBuffer,this.writeBuffer = e
-  }
-  addPass(e){
-    this.passes.push(e),e.setSize && e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
-  }
-  insertPass(e,t){
-    this.passes.splice(t,0,e),e.setSize && e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
-  }
-  removePass(e){
-    const t = this.passes.indexOf(e);
-    t !== - 1 && this.passes.splice(t,1)
-  }
-  isLastEnabledPass(e){
-    for(let t = e + 1;t < this.passes.length;t++)if(this.passes[t].enabled)return!1;
-    return!0
-  }
-  render(e){
-    this.timer.update(),e === void 0 && (e = this.timer.getDelta());
-    const t = this.renderer.getRenderTarget();
-    let n = !1;
-    for(let r = 0,s = this.passes.length;r < s;r++){
-      const a = this.passes[r];
-      if(a.enabled !== !1){
-        if(a.renderToScreen = this.renderToScreen && this.isLastEnabledPass(r),a.render(this.renderer,this.writeBuffer,this.readBuffer,e,n),a.needsSwap){
-          if(n){
-            const o = this.renderer.getContext(),A = this.renderer.state.buffers.stencil;
-            A.setFunc(o.NOTEQUAL,1,4294967295),this.copyPass.render(this.renderer,this.writeBuffer,this.readBuffer,e),A.setFunc(o.EQUAL,1,4294967295)
-          }
-          this.swapBuffers()
-        }
-        Mf !== void 0 && (a instanceof Mf?n = !0:a instanceof dC && (n = !1))
-      }
-
-    }
-    this.renderer.setRenderTarget(t)
-  }
-  reset(e){
-    if(e === void 0){
-      const t = this.renderer.getSize(new Ae);
-      this._pixelRatio = this.renderer.getPixelRatio(),this._width = t.width,this._height = t.height,e = this.renderTarget1.clone(),e.setSize(this._width * this._pixelRatio,this._height * this._pixelRatio)
-    }
-    this.renderTarget1.dispose(),this.renderTarget2.dispose(),this.renderTarget1 = e,this.renderTarget2 = e.clone(),this.writeBuffer = this.renderTarget1,this.readBuffer = this.renderTarget2
-  }
-  setSize(e,t){
-    this._width = e,this._height = t;
-    const n = this._width * this._pixelRatio,r = this._height * this._pixelRatio;
-    this.renderTarget1.setSize(n,r),this.renderTarget2.setSize(n,r);
-    for(let s = 0;s < this.passes.length;s++)this.passes[s].setSize && this.passes[s].setSize(n,r)
-  }
-  setPixelRatio(e){
-    this._pixelRatio = e,this.setSize(this._width,this._height)
-  }
-  dispose(){
-    this.renderTarget1.dispose(),this.renderTarget2.dispose(),this.copyPass.dispose()
-  }
-
-}
-const Ko = {
-  name:"OutputShader",uniforms:{
-    tDiffuse:{
-      value:null
-    }
-    ,toneMappingExposure:{
-      value:1
-    }
-
-  }
-  ,vertexShader:`
-		precision highp float;
-
-		uniform mat4 modelViewMatrix;
-		uniform mat4 projectionMatrix;
-
-		attribute vec3 position;
-		attribute vec2 uv;
-
-		varying vec2 vUv;
-
-		void main() {
-
-			vUv = uv;
-			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-
-		}`,fragmentShader:`
-
-		precision highp float;
-
-		uniform sampler2D tDiffuse;
-
-		#include <tonemapping_pars_fragment>
-		#include <colorspace_pars_fragment>
-
-		varying vec2 vUv;
-
-		void main() {
-
-			gl_FragColor = texture2D( tDiffuse, vUv );
-
-			// tone mapping
-
-			#ifdef LINEAR_TONE_MAPPING
-
-				gl_FragColor.rgb = LinearToneMapping( gl_FragColor.rgb );
-
-			#elif defined( REINHARD_TONE_MAPPING )
-
-				gl_FragColor.rgb = ReinhardToneMapping( gl_FragColor.rgb );
-
-			#elif defined( CINEON_TONE_MAPPING )
-
-				gl_FragColor.rgb = CineonToneMapping( gl_FragColor.rgb );
-
-			#elif defined( ACES_FILMIC_TONE_MAPPING )
-
-				gl_FragColor.rgb = ACESFilmicToneMapping( gl_FragColor.rgb );
-
-			#elif defined( AGX_TONE_MAPPING )
-
-				gl_FragColor.rgb = AgXToneMapping( gl_FragColor.rgb );
-
-			#elif defined( NEUTRAL_TONE_MAPPING )
-
-				gl_FragColor.rgb = NeutralToneMapping( gl_FragColor.rgb );
-
-			#elif defined( CUSTOM_TONE_MAPPING )
-
-				gl_FragColor.rgb = CustomToneMapping( gl_FragColor.rgb );
-
-			#endif
-
-			// color space
-
-			#ifdef SRGB_TRANSFER
-
-				gl_FragColor = sRGBTransferOETF( gl_FragColor );
-
-			#endif
-
-		}`
-}
-;
-class fC extends Js{
-  constructor(){
-    super(),this.isOutputPass = !0,this.uniforms = sl.clone(Ko.uniforms),this.material = new Ym({
-      name:Ko.name,uniforms:this.uniforms,vertexShader:Ko.vertexShader,fragmentShader:Ko.fragmentShader
-    }
-    ),this._fsQuad = new ll(this.material),this._outputColorSpace = null,this._toneMapping = null
-  }
-  render(e,t,n){
-    this.uniforms.tDiffuse.value = n.texture,this.uniforms.toneMappingExposure.value = e.toneMappingExposure,(this._outputColorSpace !== e.outputColorSpace || this._toneMapping !== e.toneMapping) && (this._outputColorSpace = e.outputColorSpace,this._toneMapping = e.toneMapping,this.material.defines = {
-
-    }
-    ,bt.getTransfer(this._outputColorSpace) === kt && (this.material.defines.SRGB_TRANSFER = ""),this._toneMapping === sd?this.material.defines.LINEAR_TONE_MAPPING = "":this._toneMapping === ad?this.material.defines.REINHARD_TONE_MAPPING = "":this._toneMapping === od?this.material.defines.CINEON_TONE_MAPPING = "":this._toneMapping === oo?this.material.defines.ACES_FILMIC_TONE_MAPPING = "":this._toneMapping === ld?this.material.defines.AGX_TONE_MAPPING = "":this._toneMapping === cd?this.material.defines.NEUTRAL_TONE_MAPPING = "":this._toneMapping === Ad && (this.material.defines.CUSTOM_TONE_MAPPING = ""),this.material.needsUpdate = !0),this.renderToScreen === !0?(e.setRenderTarget(null),this._fsQuad.render(e)):(e.setRenderTarget(t),this.clear && e.clear(e.autoClearColor,e.autoClearDepth,e.autoClearStencil),this._fsQuad.render(e))
-  }
-  dispose(){
-    this.material.dispose(),this._fsQuad.dispose()
-  }
-
-}
-class pC extends Js{
-  constructor(e,t,n = null,r = null,s = null){
-    super(),this.scene = e,this.camera = t,this.overrideMaterial = n,this.clearColor = r,this.clearAlpha = s,this.clear = !0,this.clearDepth = !1,this.needsSwap = !1,this.isRenderPass = !0,this._oldClearColor = new Ne
-  }
-  render(e,t,n){
-    const r = e.autoClear;
-    e.autoClear = !1;
-    let s,a;
-    this.overrideMaterial !== null && (a = this.scene.overrideMaterial,this.scene.overrideMaterial = this.overrideMaterial),this.clearColor !== null && (e.getClearColor(this._oldClearColor),e.setClearColor(this.clearColor,e.getClearAlpha())),this.clearAlpha !== null && (s = e.getClearAlpha(),e.setClearAlpha(this.clearAlpha)),this.clearDepth == !0 && e.clearDepth(),e.setRenderTarget(this.renderToScreen?null:n),this.clear === !0 && e.clear(e.autoClearColor,e.autoClearDepth,e.autoClearStencil),e.render(this.scene,this.camera),this.clearColor !== null && e.setClearColor(this._oldClearColor),this.clearAlpha !== null && e.setClearAlpha(s),this.overrideMaterial !== null && (this.scene.overrideMaterial = a),e.autoClear = r
-  }
-
-}
+// --- Postprocessing Pipeline & RoomEnvironment (Phase 7.8 Part 2 Deobfuscation -> src/effects/PostprocessingPipeline.js) ---
+// Extracted classes and shaders:
+// - Pass (Js), FullScreenGeometry (cC), FullScreenQuad (ll), ShaderPass (h0)
+// - MaskPass (Mf), ClearMaskPass (dC), CopyShader (_A), OutputShader (Ko)
+// - OutputPass (fC), RenderPass (pC), EffectComposer (uC)
+// - RoomEnvironment (c0), createRoomEnvironmentMaterial (gs)
 const mC = "/assets/app-icon-512-DPODCpjJ.png",gC = "modulepreload",vC = function(i){
   return"/" + i
 }
@@ -18345,6 +18034,37 @@ const yA = applyTouchLayoutToDom;
 const Lh = getScreenSafeArea;
 
 // Phase 6 Part 2: Wire inlined Three.js classes to decoupled Garage system
+setPostprocessingThreeContext({
+  Scene: el,
+  BoxGeometry: Tn,
+  MeshStandardMaterial: lt,
+  BackSide: pn,
+  PointLight: Fd,
+  Mesh: Ee,
+  InstancedMesh: Lm,
+  Object3D: It,
+  MeshBasicMaterial: Zm,
+  BufferGeometry: Ct,
+  Float32BufferAttribute: Ke,
+  OrthographicCamera: lo,
+  ShaderMaterial: Lt,
+  UniformsUtils: sl,
+  Vector2: Ae,
+  WebGLRenderTarget: qn,
+  HalfFloatType: er,
+  NoBlending: gr,
+  Timer: r6,
+  Color: Ne,
+  ColorManagement: bt,
+  SRGBTransfer: kt,
+  LinearToneMapping: sd,
+  ReinhardToneMapping: ad,
+  CineonToneMapping: od,
+  ACESFilmicToneMapping: oo,
+  AgXToneMapping: ld,
+  NeutralToneMapping: cd,
+  CustomToneMapping: Ad
+});
 setGarageThreeContext({
   Group: dt,
   BoxGeometry: Tn,
