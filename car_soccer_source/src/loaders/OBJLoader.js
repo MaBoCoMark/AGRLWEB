@@ -56,6 +56,11 @@ export function resolveOBJContext() {
     setPath(path) { this.path = path; return this; }
     setRequestHeader(header) { this.requestHeader = header; return this; }
     setWithCredentials(val) { this.withCredentials = val; return this; }
+    loadAsync(url, onProgress) {
+      return new Promise((resolve, reject) => {
+        this.load(url, resolve, onProgress, reject);
+      });
+    }
   }
 
   class FallbackFileLoader extends FallbackLoader {
@@ -503,6 +508,12 @@ export class OBJLoader {
   setMaterials(materials) {
     this.materials = materials;
     return this;
+  }
+
+  loadAsync(url, onProgress) {
+    return new Promise((resolve, reject) => {
+      this.load(url, resolve, onProgress, reject);
+    });
   }
 
   load(url, onLoad, onProgress, onError) {

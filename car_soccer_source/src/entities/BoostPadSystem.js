@@ -16,7 +16,10 @@ let boostPadThreeContext = {
   Mesh: null,
   CylinderGeometry: null,
   MeshBasicMaterial: null,
-  MeshStandardMaterial: null
+  MeshStandardMaterial: null,
+  multiThemeMaterial: null,
+  cloneMaterial: null,
+  markMatrixDirty: null
 };
 
 export function setBoostPadThreeContext(context) {
@@ -49,33 +52,55 @@ function resolveContext() {
     }),
     MeshStandardMaterial: G.MeshStandardMaterial || (typeof THREE !== 'undefined' ? THREE.MeshStandardMaterial : class {
       constructor(opt = {}) { Object.assign(this, opt); }
-    })
+    }),
+    multiThemeMaterial: G.multiThemeMaterial || null,
+    cloneMaterial: G.cloneMaterial || null,
+    markMatrixDirty: G.markMatrixDirty || null
   };
 }
 
 export function createFallbackPadMeshes(isBig) {
-  const { Mesh, CylinderGeometry, MeshStandardMaterial } = resolveContext();
+  const { Mesh, CylinderGeometry, MeshStandardMaterial, multiThemeMaterial, cloneMaterial } = resolveContext();
   const radius = isBig ? BOOST_PAD_BIG_RADIUS : BOOST_PAD_SMALL_RADIUS;
   const height = isBig ? BOOST_PAD_BIG_HEIGHT : BOOST_PAD_SMALL_HEIGHT;
 
-  const fullMesh = new Mesh(
-    new CylinderGeometry(radius, radius, height, 12),
+  const fullMat = (typeof multiThemeMaterial === "function") ? multiThemeMaterial(
+    cloneMaterial ? cloneMaterial({ color: 16750126, emissive: 5579776 }) : new MeshStandardMaterial({ color: 16750126, emissive: 5579776 }),
     new MeshStandardMaterial({
       color: 16750126,
       emissive: 5579776,
       roughness: 0.55,
       metalness: 0.25
     })
+  ) : new MeshStandardMaterial({
+    color: 16750126,
+    emissive: 5579776,
+    roughness: 0.55,
+    metalness: 0.25
+  });
+
+  const fullMesh = new Mesh(
+    new CylinderGeometry(radius, radius, height, 12),
+    fullMat
   );
   fullMesh.position.y = height / 2;
 
-  const baseMesh = new Mesh(
-    new CylinderGeometry(radius, radius, BOOST_PAD_BASE_HEIGHT, 12),
+  const baseMat = (typeof multiThemeMaterial === "function") ? multiThemeMaterial(
+    cloneMaterial ? cloneMaterial({ color: 2111056 }) : new MeshStandardMaterial({ color: 2111056 }),
     new MeshStandardMaterial({
       color: 2111056,
       roughness: 0.5,
       metalness: 0.5
     })
+  ) : new MeshStandardMaterial({
+    color: 2111056,
+    roughness: 0.5,
+    metalness: 0.5
+  });
+
+  const baseMesh = new Mesh(
+    new CylinderGeometry(radius, radius, BOOST_PAD_BASE_HEIGHT, 12),
+    baseMat
   );
   baseMesh.position.y = 2;
 
@@ -101,8 +126,10 @@ export class BoostPadSystem {
     for (const data of padsData) {
       let fullMesh, baseMesh;
       if (padTemplates) {
-        fullMesh = (data.isBig ? padTemplates.bigFull : padTemplates.smallFull).clone();
-        baseMesh = (data.isBig ? padTemplates.bigBase : padTemplates.smallBase).clone();
+        const srcFull = data.isBig ? padTemplates.bigFull : padTemplates.smallFull;
+        const srcBase = data.isBig ? padTemplates.bigBase : padTemplates.smallBase;
+        fullMesh = (typeof srcFull?.clone === "function") ? srcFull.clone() : srcFull;
+        baseMesh = (typeof srcBase?.clone === "function") ? srcBase.clone() : srcBase;
       } else {
         const fallbacks = createFallbackPadMeshes(data.isBig);
         fullMesh = fallbacks.full;
@@ -116,6 +143,11 @@ export class BoostPadSystem {
 
       if (typeof onPadMeshAdded === 'function') {
         onPadMeshAdded(padGroup);
+      } else {
+        const { markMatrixDirty } = resolveContext();
+        if (typeof markMatrixDirty === 'function') {
+          markMatrixDirty(padGroup);
+        }
       }
 
       this.pads.push({

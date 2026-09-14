@@ -16,6 +16,7 @@ import {
   createCarHitboxWireframe,
   RS,
   createStadiumTurfTexture,
+  resolveAssetPath,
   createCompetitionTurfMesh,
   GS,
   updateTurfPadDecals,
@@ -320,4 +321,40 @@ test('10. ArenaWorld.addCar builds game-car and flat-car wheels with teamColor w
   assert.equal(worldFlat.cars.length, 1);
   assert.equal(worldFlat.carWheels.length, 1);
   assert.equal(worldFlat.carWheels[0].length, 4, 'Flat car must have 4 wheels');
+});
+
+test("11. Boost pad asset path resolution, turf decals, and padTemplates binding", async () => {
+  // 1. resolveAssetPath tests
+  assert.equal(resolveAssetPath("/assets/arena/pads/large-active.obj"), "/assets/arena/pads/large-active.obj");
+  assert.equal(resolveAssetPath("assets/arena/pads/small-idle.obj"), "/assets/arena/pads/small-idle.obj");
+  assert.equal(resolveAssetPath("https://cdn.example.com/pad.obj"), "https://cdn.example.com/pad.obj");
+
+  // 2. ArenaWorld with mock pad templates
+  const { Group, Mesh, CylinderGeometry, MeshStandardMaterial } = resolveContext();
+  const world = new ArenaWorld(91.25);
+
+  const mockTemplates = {
+    bigFull: new Mesh(new CylinderGeometry(80, 80, 30), new MeshStandardMaterial({ name: "big-full" })),
+    bigBase: new Mesh(new CylinderGeometry(80, 80, 4), new MeshStandardMaterial({ name: "big-base" })),
+    smallFull: new Mesh(new CylinderGeometry(40, 40, 15), new MeshStandardMaterial({ name: "small-full" })),
+    smallBase: new Mesh(new CylinderGeometry(40, 40, 4), new MeshStandardMaterial({ name: "small-base" }))
+  };
+  world.padTemplates = mockTemplates;
+
+  const padDefs = [
+    { pos: [0, -3000], isBig: true },
+    { pos: [3000, -4000], isBig: true },
+    { pos: [-3000, -4000], isBig: true },
+    { pos: [1000, -1500], isBig: false }
+  ];
+
+  world.addPads(padDefs);
+  assert.equal(world.pads.length, 4, "Must register all 4 pads");
+  assert.equal(world.pads[0].isBig, true);
+  assert.equal(world.pads[3].isBig, false);
+  assert.equal(world.pads[0].full.material.name, "big-full");
+  assert.equal(world.pads[3].full.material.name, "small-full");
+
+  // Turf decals signature
+  updateTurfPadDecals(world.turf, padDefs);
 });

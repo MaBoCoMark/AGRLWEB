@@ -18443,7 +18443,10 @@ setBoostPadThreeContext({
   Mesh: Ee,
   CylinderGeometry: Xt,
   MeshBasicMaterial: cn,
-  MeshStandardMaterial: lt
+  MeshStandardMaterial: lt,
+  multiThemeMaterial: vn,
+  cloneMaterial: Nr,
+  markMatrixDirty: Ji
 });
 setSpeedTrailThreeContext({
   Group: dt,

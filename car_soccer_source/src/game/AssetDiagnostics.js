@@ -37,7 +37,14 @@ export const ASSET_INVENTORY = [
   // 5. Bot AI System
   { path: "/assets/worker-iFqqV1m9.js", desc: "Bot ONNX WebWorker script", category: "Bot AI", critical: false },
   { path: "/assets/ort-wasm-simd-threaded-CxTQ5xH-.wasm", desc: "ONNX Runtime WebAssembly binary", category: "Bot AI", critical: false },
-  { path: "/assets/bot/policy.onnx", desc: "Default bot ONNX neural network policy", category: "Bot AI", critical: false }
+  { path: "/assets/bot/policy.onnx", desc: "Default bot ONNX neural network policy", category: "Bot AI", critical: false },
+
+  // 6. Boost Pad 3D Models & Albedo Texture
+  { path: "/assets/arena/pads/large-active.obj", desc: "Boost pad (large) active 3D model", category: "3D Models", critical: false },
+  { path: "/assets/arena/pads/large-idle.obj", desc: "Boost pad (large) base ground 3D model", category: "3D Models", critical: false },
+  { path: "/assets/arena/pads/small-active.obj", desc: "Boost pad (small dot) active 3D model", category: "3D Models", critical: false },
+  { path: "/assets/arena/pads/small-idle.obj", desc: "Boost pad (small dot) base ground 3D model", category: "3D Models", critical: false },
+  { path: "/assets/arena/pads/albedo.png", desc: "Boost pad multi-theme albedo texture", category: "3D Models", critical: false }
 ];
 
 /**

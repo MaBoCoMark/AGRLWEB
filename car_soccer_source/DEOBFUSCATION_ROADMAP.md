@@ -401,9 +401,25 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
       - `OBJParser`（原 `lb`）：高效流式解析 Wavefront .obj 顶点、法线、纹理坐标、面与平滑组。
       - `OBJLoader`（原 `cb`）：支持按物料分组划分、材质继承与网格实例化，集成 `setOBJLoaderThreeContext` 上下文注入与向后兼容别名。
     - **测试验收与主引擎瘦身**：
-      - 新增专用单元测试套件 `tests/loaders_and_geometry.test.js`（6 项测试 100% 通过）。
+      - 新增专用单元测试套件 `tests/loaders_and_geometry.test.js`。
       - 主引擎通过 ES Module 引入两子系统并配置上下文依赖注入，从 `CarSoccerEngine.js` 彻底剥离 425 行混淆代码。
-      - 全量 15 个测试套件、73 项单元测试全部通过（100% 通过率）。
+
+17. **场地氮气垫 3D 模型与地面贴花完整修复（✅ Boost Pad Models & Decals Fix 已落地）**：
+    - **问题溯源**：
+      - `OBJLoader.js` 缺失 `loadAsync(url, onProgress)` 方法，导致 `ArenaWorld.loadCarAndPadAssets()` 调用抛出 `TypeError: objLoader.loadAsync is not a function`，触发 catch 降级为圆柱体原语。
+      - 资产路径硬编码为绝对根路径 `/assets/arena/pads/...`，在非根路径部署下无法命中。
+      - 地面草皮贴花 `updateTurfPadDecals` 简化成了简单描边圆圈，缺失了 ground truth 中的完整 S 型双弯加速道、大氮气垫底板填充（半圆 R=338）、双层同心指示圆弧（338 与 363）、朝向中心箭羽指示线等。
+      - `ASSET_INVENTORY` 中遗漏了 5 个氮气垫模型与贴图资源项。
+    - **重构与修复实现**：
+      - 在 `OBJLoader` 与 `FallbackLoader` 中规范实现 `loadAsync` Promise 方法。
+      - 实现了 `resolveAssetPath` 动态路径解析函数，并在加载失败时平滑降级至相对路径 `./assets/arena/pads/...`。
+      - 完整还原了场地草皮贴花绘制逻辑（S-curve 双弯引导道、多边形角旗区填充、同心环与方向指示箭头），草皮贴花效果 1:1 对齐生产打包产物。
+      - 在 `AssetDiagnostics.js` 中补全了 5 项氮气垫模型资产清单。
+      - `addPads` 注入 `markMatrixDirty` 优化静态网格矩阵。
+    - **测试验收**：
+      - 扩展 `tests/loaders_and_geometry.test.js` 验证 `OBJLoader.loadAsync`。
+      - 扩展 `tests/arena_world.test.js` 验证 `resolveAssetPath`、贴花绘制与 `padTemplates` 绑定。
+      - 全量 15 个测试套件、75 项单元测试全部通过（100% 通过率）。
 
 ---
 

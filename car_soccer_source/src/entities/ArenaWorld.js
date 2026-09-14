@@ -61,7 +61,20 @@ export const ARENA_WIDTH = 8192;           // Fi
 export const ARENA_LENGTH = 10240;         // Di
 export const ARENA_GOAL_DEPTH = 5120;      // US
 export const TURF_TEXTURE_WIDTH = 2048;    // dr
-export const TURF_TEXTURE_HEIGHT = 2560;   // Ri
+export const TURF_TEXTURE_HEIGHT = 2560;
+
+/**
+ * Resolves an asset path against base URL or window configuration.
+ */
+export function resolveAssetPath(path) {
+  if (!path) return "";
+  if (/^(?:https?:|\/\/|blob:|data:)/.test(path)) return path;
+  const base = (typeof window !== "undefined" && (window.__CAR_SOCCER_ASSET_BASE__ || window.__ASSET_BASE__)) || (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL) || "";
+  const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
+  const cleanPath = path.startsWith("/") ? path : "/" + path;
+  return cleanBase + cleanPath;
+}
+
 export const ARENA_BOUNDARY_SPLIT_Y = 280; // ja
 
 export const TEAM_BLUE_HEX = 2844350;      // hi
@@ -231,6 +244,7 @@ export function resolveContext() {
         this.castShadow = false;
         this.receiveShadow = false;
       }
+      clone() { return new (resolveContext().Mesh)(this.geometry, this.material); }
       add(...items) { this.children.push(...items); }
       traverse(fn) { fn(this); this.children.forEach(c => c.traverse?.(fn)); }
     }),
@@ -787,7 +801,7 @@ export function createCompetitionTurfMesh() {
 }
 
 /**
- * Stamps boost pad boundary rings directly onto the procedural pitch texture.
+ * Stamps boost pad boundary rings, chevrons, backing plates, and speed lanes directly onto the pitch texture.
  */
 export function updateTurfPadDecals(turfGroup, padDefs) {
   const cached = turfDecalCache.get(turfGroup);
@@ -796,7 +810,7 @@ export function updateTurfPadDecals(turfGroup, padDefs) {
   const signature = padDefs.map(d => `${d.pos[0]},${d.pos[1]},${d.isBig}`).join(";");
   for (const item of cached) {
     if (item.padSignature === signature) continue;
-    if (typeof document === 'undefined') return;
+    if (typeof document === "undefined") return;
 
     const canvas = document.createElement("canvas");
     canvas.width = TURF_TEXTURE_WIDTH;
@@ -810,16 +824,109 @@ export function updateTurfPadDecals(turfGroup, padDefs) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    for (const pad of padDefs) {
-      const [px, py] = pad.pos;
-      const radius = pad.isBig ? 163 : 69;
-      const teamColor = py < -50 ? "43, 85, 235" : py > 50 ? "255, 120, 30" : "201, 221, 195";
-
-      ctx.strokeStyle = `rgba(${teamColor}, ${pad.isBig ? 0.82 : 0.64})`;
-      ctx.lineWidth = pad.isBig ? 18 : 8;
+    const toRgb = hex => `${(hex >> 16) & 255}, ${(hex >> 8) & 255}, ${hex & 255}`;
+    const blueStr = toRgb(TEAM_BLUE_HEX);
+    const orangeStr = toRgb(TEAM_ORANGE_HEX);
+    const midStr = "201, 221, 195";
+    const getPadColor = y => y < -50 ? blueStr : y > 50 ? orangeStr : midStr;
+    const bigPads = padDefs.filter(d => d.isBig);
+    const drawArc = (x, y, r, start, end) => {
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.arc(x, y, r, start, end);
       ctx.stroke();
+    };
+
+    // 1. S-curve boost lanes connecting corner pads to midfield
+    for (const d of [-1, 1]) {
+      const colorStr = d < 0 ? blueStr : orangeStr;
+      for (const p of [-1, 1]) {
+        const cornerPad = bigPads
+          .filter(s => s.pos[0] * p > 1000 && s.pos[1] * d > 1000)
+          .sort((a, b) => Math.abs(b.pos[1]) - Math.abs(a.pos[1]))[0];
+        if (!cornerPad) continue;
+
+        const midPad = bigPads.find(s => s.pos[0] * p > 1000 && Math.abs(s.pos[1]) < 800);
+        const mx = midPad?.pos[0] ?? p * 3550;
+        const my = midPad?.pos[1] ?? 0;
+        const [cx, cy] = cornerPad.pos;
+
+        const tracePath = () => {
+          ctx.beginPath();
+          ctx.moveTo(mx, my + d * 245);
+          ctx.bezierCurveTo(mx - p * 110, d * 1780, cx - p * 260, cy - d * 760, cx, cy);
+          ctx.quadraticCurveTo(cx - p * 360, cy + d * 370, p * 1470, d * 4560);
+        };
+
+        ctx.lineWidth = 160;
+        ctx.strokeStyle = `rgba(${colorStr}, 0.10)`;
+        tracePath();
+        ctx.stroke();
+
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = `rgba(${colorStr}, 0.49)`;
+        tracePath();
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(${colorStr}, 0.075)`;
+        ctx.beginPath();
+        ctx.moveTo(p * 1020, d * 4780);
+        ctx.lineTo(p * 2220, d * 4780);
+        ctx.lineTo(p * 1900, d * 4060);
+        ctx.lineTo(p * 1510, d * 4240);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // 2. Pad ground markings
+    for (const pad of padDefs) {
+      const [u, p] = pad.pos;
+      const v = getPadColor(p);
+      const g = pad.isBig ? 163 : 69;
+      const m = Math.atan2(-p, -u);
+
+      if (pad.isBig) {
+        ctx.fillStyle = `rgba(${v}, 0.12)`;
+        ctx.beginPath();
+        ctx.arc(u, p, 338, m - Math.PI / 2, m + Math.PI / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(${v}, 0.62)`;
+        ctx.lineWidth = 13;
+        drawArc(u, p, 338, m - 1.27, m + 1.27);
+
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(${v}, 0.34)`;
+        drawArc(u, p, 363, m - 1.12, m + 1.12);
+      }
+
+      ctx.strokeStyle = `rgba(${midStr}, ${pad.isBig ? 0.68 : 0.56})`;
+      ctx.lineWidth = pad.isBig ? 11 : 8;
+      drawArc(u, p, g, 0, Math.PI * 2);
+
+      ctx.strokeStyle = `rgba(${v}, ${pad.isBig ? 0.82 : 0.64})`;
+      ctx.lineWidth = pad.isBig ? 18 : 8;
+
+      const y = g + (pad.isBig ? 43 : 28);
+      for (const offset of [0, Math.PI]) {
+        drawArc(u, p, y, m + offset - 0.74, m + offset + 0.74);
+      }
+
+      ctx.save();
+      ctx.translate(u, p);
+      ctx.rotate(m);
+      ctx.lineWidth = pad.isBig ? 9 : 6;
+      ctx.strokeStyle = `rgba(${v}, 0.45)`;
+
+      const cDist = y + (pad.isBig ? 160 : 28);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cDist, side * (pad.isBig ? 38 : 22));
+        ctx.lineTo(cDist + (pad.isBig ? 155 : 70), side * (pad.isBig ? 38 : 22));
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     item.texture.image = canvas;
@@ -1156,27 +1263,49 @@ export class ArenaWorld {
       try {
         const objLoader = new OBJLoader();
         const texLoader = new TextureLoader();
-        const loadTex = async (path) => {
-          const tex = await texLoader.loadAsync(path);
+
+        const loadObj = async (primaryPath, fallbackPath) => {
+          try {
+            return await objLoader.loadAsync(primaryPath);
+          } catch (e) {
+            if (fallbackPath && fallbackPath !== primaryPath) {
+              return await objLoader.loadAsync(fallbackPath);
+            }
+            throw e;
+          }
+        };
+
+        const loadTex = async (primaryPath, fallbackPath) => {
+          let tex;
+          try {
+            tex = await texLoader.loadAsync(primaryPath);
+          } catch (e) {
+            if (fallbackPath && fallbackPath !== primaryPath) {
+              tex = await texLoader.loadAsync(fallbackPath);
+            } else {
+              throw e;
+            }
+          }
           if (tex && SRGBColorSpace) tex.colorSpace = SRGBColorSpace;
           return tex;
         };
+
         const [bigActive, bigIdle, smallActive, smallIdle, albedo] = await Promise.all([
-          objLoader.loadAsync("/assets/arena/pads/large-active.obj"),
-          objLoader.loadAsync("/assets/arena/pads/large-idle.obj"),
-          objLoader.loadAsync("/assets/arena/pads/small-active.obj"),
-          objLoader.loadAsync("/assets/arena/pads/small-idle.obj"),
-          loadTex("/assets/arena/pads/albedo.png")
+          loadObj(resolveAssetPath("/assets/arena/pads/large-active.obj"), "./assets/arena/pads/large-active.obj"),
+          loadObj(resolveAssetPath("/assets/arena/pads/large-idle.obj"), "./assets/arena/pads/large-idle.obj"),
+          loadObj(resolveAssetPath("/assets/arena/pads/small-active.obj"), "./assets/arena/pads/small-active.obj"),
+          loadObj(resolveAssetPath("/assets/arena/pads/small-idle.obj"), "./assets/arena/pads/small-idle.obj"),
+          loadTex(resolveAssetPath("/assets/arena/pads/albedo.png"), "./assets/arena/pads/albedo.png")
         ]);
 
-        const padMat = (typeof multiThemeMaterial === 'function') ? multiThemeMaterial(
+        const padMat = (typeof multiThemeMaterial === "function") ? multiThemeMaterial(
           cloneMaterial ? cloneMaterial({ map: albedo }) : new MeshStandardMaterial({ map: albedo }),
           new MeshStandardMaterial({ map: albedo, roughness: 0.6, metalness: 0.2 })
         ) : new MeshStandardMaterial({ map: albedo, roughness: 0.6, metalness: 0.2 });
 
         for (const obj of [bigActive, bigIdle, smallActive, smallIdle]) {
           if (obj) {
-            if (obj.rotation && typeof obj.rotation.x === 'number') {
+            if (obj.rotation && typeof obj.rotation.x === "number") {
               obj.rotation.x = -Math.PI / 2;
             }
             obj.traverse?.(child => {
@@ -1438,7 +1567,8 @@ export class ArenaWorld {
 
   addPads(padDefs) {
     updateTurfPadDecals(this.turf, padDefs);
-    this.boostPadSystem.addPads(padDefs, this.padTemplates, this.scene);
+    const { markMatrixDirty } = resolveContext();
+    this.boostPadSystem.addPads(padDefs, this.padTemplates, this.scene, markMatrixDirty);
     this.pads = this.boostPadSystem.pads;
     this.markRenderTreeChanged();
   }

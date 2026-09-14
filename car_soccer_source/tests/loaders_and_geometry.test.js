@@ -226,3 +226,18 @@ f 1/1/1 2/2/1 3/3/1
   assert.ok(mesh.geometry.attributes.normal, 'Must have normal attribute');
   assert.ok(mesh.geometry.attributes.uv, 'Must have uv attribute');
 });
+
+test("7. OBJLoader.loadAsync returns a Promise and loads successfully", async () => {
+  const loader = new OBJLoader();
+  assert.equal(typeof loader.loadAsync, "function", "OBJLoader must have loadAsync method");
+
+  // Mock loader.load to resolve with parsed object
+  const origLoad = loader.load.bind(loader);
+  loader.load = function(url, onLoad, onProgress, onError) {
+    onLoad({ name: "mock-pad-mesh", isGroup: true, children: [] });
+  };
+
+  const loaded = await loader.loadAsync("/assets/arena/pads/large-active.obj");
+  assert.ok(loaded, "loadAsync must resolve with loaded object");
+  assert.equal(loaded.name, "mock-pad-mesh");
+});
