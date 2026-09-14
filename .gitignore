@@ -6,6 +6,9 @@ node_modules/
 dist/
 build/
 
+# Agent Key
+AntigravityWebManager.ipynb
+
 # Big Assets
 /public/*.wasm
 /public/assets
