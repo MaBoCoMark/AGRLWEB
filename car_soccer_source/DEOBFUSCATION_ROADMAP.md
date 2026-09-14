@@ -568,7 +568,16 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
   - 运行时阶段：物理插值步进、平行训练场多线程同步、AI 策略推理、3D 空间音频触发器阵列（进球、倒计时、超音速、撞击、无气提示）、后期后处理管线与性能监控。
   - 消除所有剩余的局部混淆变量（`W`, `fe`, `Ft`, `Nt`, `Mt`, `be`, `nt`, `Te` 等），恢复为自解释的领域语言。
 
-### 阶段 8.2：Three.js 内核外部化与完全现代化（⏳ 终局）
-- **目标**：将内联的 1.7 万行 Three.js r185 替换为标准的 `import * as THREE from 'three'`，彻底消除剩余的大体积内联库，完成整个引擎的全面解耦与现代化。
+### 阶段 8.2：Three.js 内核独立为 Vendor 模块（✅ 已完成）
+- **核心成果**：
+  1. 将内联在 `CarSoccerEngine.js` 中长达 17,445 行的混淆版 Three.js r185 整体剥离到独立模块 `src/vendor/three.js`。
+  2. 在 `src/vendor/three.js` 中同时导出语义化的标准 Three.js 核心 API（如 `Vector3`, `Matrix4`, `Mesh`, `Color`, `BufferGeometry`, `Scene` 等）及全部历史混淆别名（`F`, `mt`, `Ee`, `Ne`, `Ct`, `el` 等），并导出默认 `THREE` 命名空间。
+  3. 修复 Node.js headless 环境下 `document` 未定义的 polyfill 兼容问题，使三维库在服务端单元测试与浏览器端均可无缝安全加载。
+  4. `CarSoccerEngine.js` 体积从 18,666 行骤降至 1,220 行（削减 17,445 行冗余混淆代码，缩减幅度高达 93.4%），使游戏引擎业务逻辑与第三方渲染库实现物理级完全解耦。
+  5. 新增专用单元测试套件 `tests/vendor_three.test.js`（6 项用例覆盖语义导出、混淆别名等价性、默认命名空间、三维向量与四元数变换、材质与几何体层级）。
+  6. 全工程 19 个测试套件、115 项单元测试 100% 绿色通过。
 
-- 目标：将内联的 1.7 万行 Three.js r185 替换为外部 `import * as THREE from 'three'`，彻底消除 60% 文件冗余，并将 `dB()` 启动器与 `wt()` 渲染循环现代化封装为 `GameEngine.js`。
+### 阶段 8.3：统一上下文总线与清理废弃 Mock（⏳ 下一步）
+- **目标**：
+  1. 建立集中的 `ThreeProvider.js` 统一上下文分发总线，消除各子模块分散的手工 `set*ThreeContext` 样板代码。
+  2. 淘汰早期粗糙的占位 Mock（`src/game/GameEngine.js`、`ArenaEntity.js` 等），并将 `GameRuntime.js` 正式收束为主引擎核心。
