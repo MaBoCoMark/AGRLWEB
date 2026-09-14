@@ -4,7 +4,7 @@
  * field markings, goal posts, translucent boundary walls, and interactive Boost Pads.
  */
 
-import * as THREE from 'three';
+import THREE from '../vendor/three.js';
 import { ARENA, BOOST_PADS } from '../constants/GameConstants.js';
 
 export class ArenaEntity {

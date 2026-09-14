@@ -4,7 +4,7 @@
  * procedural Octane-style chassis, suspension wheels, boost fire, and animations.
  */
 
-import * as THREE from 'three';
+import THREE from '../vendor/three.js';
 import { OCTANE, TEAMS, TEAM_COLORS } from '../constants/GameConstants.js';
 
 export class CarEntity {

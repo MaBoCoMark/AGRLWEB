@@ -4,7 +4,7 @@
  * ground projection indicator ring, and speed trails.
  */
 
-import * as THREE from 'three';
+import THREE from '../vendor/three.js';
 import { BALL } from '../constants/GameConstants.js';
 
 export class BallEntity {

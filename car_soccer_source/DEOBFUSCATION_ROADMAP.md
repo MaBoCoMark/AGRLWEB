@@ -577,7 +577,21 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
   5. 新增专用单元测试套件 `tests/vendor_three.test.js`（6 项用例覆盖语义导出、混淆别名等价性、默认命名空间、三维向量与四元数变换、材质与几何体层级）。
   6. 全工程 19 个测试套件、115 项单元测试 100% 绿色通过。
 
-### 阶段 8.3：统一上下文总线与清理废弃 Mock（⏳ 下一步）
+### 阶段 8.3：统一上下文总线与清理废弃 Mock（✅ 已完成）
+- **核心成果**：
+  1. 构建集中的 Three.js 上下文分发总线 `src/providers/ThreeProvider.js`，统一纳管全引擎 21 个解耦子系统的 `set*ThreeContext` 依赖注入（后处理、车库、摄像机、泛光、翻转重置、超音速尾线、小球指示、爆破、蓄能充能垫、速度拖尾、主题材质、着色器预热、几何工具、OBJ 加载器、小球弹道预测、GLTF 加载器、尾焰发射器、小球视觉、车辆装配、球场世界、主游戏运行时）。
+  2. 修复 `ThreeProvider.js` 上下文映射中的关键隐患与缺失：
+     - 修复 `OBJLoader` 依赖解析（从 `src/loaders/OBJLoader.js` 导入实体类，消除 `T.OBJLoader` 为 `undefined` 的隐患）。
+     - 补齐 `ArenaWorld` 上下文所需光源与特效构造器（`DirectionalLight`, `HemisphereLight`, `VehicleBoostEmitter`）。
+     - 补齐 `ArenaWorld` 缺失的几何体类（`RingGeometry`, `TubeGeometry`, `CatmullRomCurve3`, `CurvePath`, `LineCurve3`, `LatheGeometry`, `TorusGeometry` 等），根除无头测试环境因降级 mock 缺少 `morphAttributes` 导致的 `Mesh` 实例化 `TypeError`。
+     - 补全车辆与球场装配中的卡通材质管线双向别名（`markMatrixDirty`, `cloneMaterial`, `setShadowFlags`）。
+     - 在 `CarSoccerEngine.js` 中接入 `ThreeProvider.js`，并彻底清除 Vite 编译残余的无用预加载死代码（`d0`, `Bf`, `gC`, `vC`, `s`）。
+  3. 彻底从 `src/entities/index.js` 导出点剔除早期逆向工程占位 Mock（`ArenaEntity.js`、`BallEntity.js`、`CarEntity.js`），消除星号导出命名冲突隐患并纯净化实体层 API 边界。
+  4. 为早期占位文件（`GameEngine.js`, `ArenaEntity.js`, `BallEntity.js`, `CarEntity.js`）添加 `@deprecated` 废弃注解与重定向指引，并将未解耦的 bare `import 'three'` 统一改为本地 `../vendor/three.js`，根除服务端环境无法解析外部 npm 包的崩溃风险。
+  5. 新增专用单元测试套件 `tests/three_provider.test.js`（4 项用例覆盖 21 个子系统上下文自动激活状态、全局 `THREE` 命名空间可用性、解耦子系统平滑实例化、自定义上下文动态注入与重置机制）。
+  6. 全工程 20 个测试套件、119 项单元测试 100% 绿色无损通过。
+
+### 阶段 8.4：主引擎入口收束与语义化规范（⏳ 下一步）
 - **目标**：
-  1. 建立集中的 `ThreeProvider.js` 统一上下文分发总线，消除各子模块分散的手工 `set*ThreeContext` 样板代码。
-  2. 淘汰早期粗糙的占位 Mock（`src/game/GameEngine.js`、`ArenaEntity.js` 等），并将 `GameRuntime.js` 正式收束为主引擎核心。
+  1. 进一步重构 `CarSoccerEngine.js`，将顶层启动流程（`dB`, `wt`, loading DOM 注入）收束为标准生命周期类或工厂函数。
+  2. 梳理清理残余的历史混淆变量缩写（`yC`, `CC`, `bC`, `Gd`, `_C`, `no`, `EC`, `ro` 等），与 `RocketSimConstants` 及 `GameRuntime` 统一语义。

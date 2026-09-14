@@ -28,11 +28,11 @@ import { setSpeedTrailThreeContext } from '../entities/SpeedTrail.js';
 import { setBallVisualThreeContext } from '../entities/BallVisual.js';
 import { setVehicleAssemblyThreeContext } from '../entities/VehicleAssembly.js';
 import { setArenaWorldThreeContext } from '../entities/ArenaWorld.js';
-import { setVehicleBoostEmitterThreeContext } from '../entities/VehicleBoostEmitter.js';
+import { setVehicleBoostEmitterThreeContext, VehicleBoostEmitter } from '../entities/VehicleBoostEmitter.js';
 
 // Loaders & Utils
 import { setBufferGeometryUtilsThreeContext } from '../utils/BufferGeometryUtils.js';
-import { setOBJLoaderThreeContext } from '../loaders/OBJLoader.js';
+import { setOBJLoaderThreeContext, OBJLoader } from '../loaders/OBJLoader.js';
 import { setGLTFLoaderThreeContext, GLTFLoader, GLTFParser } from '../loaders/GLTFLoader.js';
 
 // Game Runtime & Trajectory
@@ -66,8 +66,36 @@ import {
 } from '../utils/BufferGeometryUtils.js';
 
 /**
+ * Registry map recording whether each subsystem context has been initialized.
+ */
+export const subsystemInitializationStatus = {
+  postprocessing: false,
+  garage: false,
+  camera: false,
+  boostBloom: false,
+  flipReset: false,
+  speedLines: false,
+  ballLocator: false,
+  demolition: false,
+  boostPad: false,
+  speedTrail: false,
+  themeMaterial: false,
+  shaderPrewarmer: false,
+  bufferGeometryUtils: false,
+  objLoader: false,
+  ballTrajectoryPredictor: false,
+  gltfLoader: false,
+  vehicleBoostEmitter: false,
+  ballVisual: false,
+  vehicleAssembly: false,
+  arenaWorld: false,
+  gameRuntime: false
+};
+
+/**
  * Initializes and wires Three.js classes and constants to all 21 decoupled game subsystems.
  * @param {object} [customContext] Optional custom Three.js context (defaults to src/vendor/three.js)
+ * @returns {object} The resolved Three.js context object
  */
 export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
   const T = customContext;
@@ -105,6 +133,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     NeutralToneMapping: T.NeutralToneMapping,
     CustomToneMapping: T.CustomToneMapping
   });
+  subsystemInitializationStatus.postprocessing = true;
 
   // 2. Garage Turntable & Preview
   setGarageThreeContext({
@@ -125,12 +154,14 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     Box3: T.Box3,
     Vector3: T.Vector3
   });
+  subsystemInitializationStatus.garage = true;
 
   // 3. Camera Controller
   setCameraThreeContext({
     PerspectiveCamera: T.PerspectiveCamera,
     Vector3: T.Vector3
   });
+  subsystemInitializationStatus.camera = true;
 
   // 4. Boost Bloom & Speed Lines
   setBoostBloomThreeContext({
@@ -142,6 +173,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     HalfFloatType: T.HalfFloatType,
     LinearFilter: T.LinearFilter
   });
+  subsystemInitializationStatus.boostBloom = true;
 
   setFlipResetThreeContext({
     Group: T.Group,
@@ -162,6 +194,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     AdditiveBlending: T.AdditiveBlending,
     DoubleSide: T.DoubleSide
   });
+  subsystemInitializationStatus.flipReset = true;
 
   setSpeedLinesThreeContext({
     Pass: Pass,
@@ -180,6 +213,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     CopyShader: CopyShader,
     MathUtils: T.MathUtils
   });
+  subsystemInitializationStatus.speedLines = true;
 
   // 5. Entities (Ball Locator, Demolition, Boost Pads, Speed Trail)
   setBallLocatorThreeContext({
@@ -196,6 +230,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     SRGBColorSpace: T.SRGBColorSpace,
     LinearFilter: T.LinearFilter
   });
+  subsystemInitializationStatus.ballLocator = true;
 
   setDemolitionThreeContext({
     Group: T.Group,
@@ -209,6 +244,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     MathUtils: T.MathUtils,
     DynamicDrawUsage: T.DynamicDrawUsage
   });
+  subsystemInitializationStatus.demolition = true;
 
   setBoostPadThreeContext({
     Group: T.Group,
@@ -220,6 +256,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     cloneMaterial: cloneMaterial,
     markMatrixDirty: registerThemeSubtree
   });
+  subsystemInitializationStatus.boostPad = true;
 
   setSpeedTrailThreeContext({
     Group: T.Group,
@@ -239,6 +276,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     NormalBlending: T.NormalBlending,
     SRGBColorSpace: T.SRGBColorSpace
   });
+  subsystemInitializationStatus.speedTrail = true;
 
   // 6. Themes & Shader Prewarmer
   setThemeMaterialThreeContext({
@@ -251,6 +289,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     RGBAFormat: T.RGBAFormat,
     NearestFilter: T.NearestFilter
   });
+  subsystemInitializationStatus.themeMaterial = true;
 
   setShaderPrewarmerThreeContext({
     Light: T.Light,
@@ -258,6 +297,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     Points: T.Points,
     Line: T.Line
   });
+  subsystemInitializationStatus.shaderPrewarmer = true;
 
   // 7. Geometry & Loaders
   setBufferGeometryUtilsThreeContext({
@@ -267,6 +307,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     TriangleStripDrawMode: T.TriangleStripDrawMode,
     TriangleFanDrawMode: T.TriangleFanDrawMode
   });
+  subsystemInitializationStatus.bufferGeometryUtils = true;
 
   setOBJLoaderThreeContext({
     Loader: T.Loader,
@@ -285,6 +326,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     Color: T.Color,
     SRGBColorSpace: T.SRGBColorSpace
   });
+  subsystemInitializationStatus.objLoader = true;
 
   setBallTrajectoryPredictorThreeContext({
     Group: T.Group,
@@ -298,6 +340,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     NormalBlending: T.NormalBlending,
     DoubleSide: T.DoubleSide
   });
+  subsystemInitializationStatus.ballTrajectoryPredictor = true;
 
   setGLTFLoaderThreeContext({
     Object3D: T.Object3D,
@@ -367,6 +410,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     TriangleStripDrawMode: T.TriangleStripDrawMode,
     TriangleFanDrawMode: T.TriangleFanDrawMode
   });
+  subsystemInitializationStatus.gltfLoader = true;
 
   // 8. Vehicle & Arena Visuals
   setVehicleBoostEmitterThreeContext({
@@ -390,6 +434,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     SRGBColorSpace: T.SRGBColorSpace,
     TextureLoader: T.TextureLoader
   });
+  subsystemInitializationStatus.vehicleBoostEmitter = true;
 
   setBallVisualThreeContext({
     Group: T.Group,
@@ -405,6 +450,7 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     TextureLoader: T.TextureLoader,
     SRGBColorSpace: T.SRGBColorSpace
   });
+  subsystemInitializationStatus.ballVisual = true;
 
   setVehicleAssemblyThreeContext({
     Object3D: T.Object3D,
@@ -440,9 +486,14 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     MathUtils: T.MathUtils,
     UniformsUtils: T.UniformsUtils,
     DoubleSide: T.DoubleSide,
+    BackSide: T.BackSide,
+    FrontSide: T.FrontSide,
     NormalBlending: T.NormalBlending,
     AdditiveBlending: T.AdditiveBlending,
     SRGBColorSpace: T.SRGBColorSpace,
+    Scene: T.Scene,
+    TextureLoader: T.TextureLoader,
+    OBJLoader: OBJLoader,
     get GLTFLoader() { return GLTFLoader; },
     mergeVertices: mergeVertices,
     mergeGeometries: mergeGeometries,
@@ -450,8 +501,14 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     getThemeMaterial: getThemeMaterial,
     isMultiThemeMaterial: isMultiThemeMaterial,
     resolveThemeMaterial: resolveThemeMaterial,
-    registerThemeSubtree: registerThemeSubtree
+    registerThemeSubtree: registerThemeSubtree,
+    markMatrixDirty: registerThemeSubtree,
+    cloneMaterial: createCelShadedToonMaterial,
+    createCelShadedToonMaterial: createCelShadedToonMaterial,
+    setShadowFlags: applyArcadeCelShading,
+    applyArcadeCelShading: applyArcadeCelShading
   });
+  subsystemInitializationStatus.vehicleAssembly = true;
 
   setArenaWorldThreeContext({
     Object3D: T.Object3D,
@@ -463,22 +520,35 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     LineSegments: T.LineSegments,
     LineBasicMaterial: T.LineBasicMaterial,
     CylinderGeometry: T.CylinderGeometry,
+    SphereGeometry: T.SphereGeometry,
     PlaneGeometry: T.PlaneGeometry,
     BufferGeometry: T.BufferGeometry,
     BufferAttribute: T.Float32BufferAttribute,
+    TubeGeometry: T.TubeGeometry,
+    CatmullRomCurve3: T.CatmullRomCurve3,
+    CurvePath: T.CurvePath,
+    LineCurve3: T.LineCurve3,
+    LatheGeometry: T.LatheGeometry,
+    TorusGeometry: T.TorusGeometry,
+    RingGeometry: T.RingGeometry,
+    CanvasTexture: T.CanvasTexture,
     MeshStandardMaterial: T.MeshStandardMaterial,
+    MeshPhysicalMaterial: T.MeshPhysicalMaterial,
     MeshBasicMaterial: T.MeshBasicMaterial,
     ShaderMaterial: T.ShaderMaterial,
-    CanvasTexture: T.CanvasTexture,
     Vector2: T.Vector2,
     Vector3: T.Vector3,
     Color: T.Color,
     Quaternion: T.Quaternion,
     Matrix4: T.Matrix4,
+    Matrix3: T.Matrix3,
     MathUtils: T.MathUtils,
+    Scene: T.Scene,
     DoubleSide: T.DoubleSide,
     BackSide: T.BackSide,
     FrontSide: T.FrontSide,
+    DirectionalLight: T.DirectionalLight,
+    HemisphereLight: T.HemisphereLight,
     AdditiveBlending: T.AdditiveBlending,
     RepeatWrapping: T.RepeatWrapping,
     LinearFilter: T.LinearFilter,
@@ -488,13 +558,18 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     mergeGeometries: mergeGeometries,
     GLTFLoader: GLTFLoader,
     TextureLoader: T.TextureLoader,
-    OBJLoader: T.OBJLoader,
+    OBJLoader: OBJLoader,
+    VehicleBoostEmitter: VehicleBoostEmitter,
     multiThemeMaterial: createMultiThemeMaterial,
     getThemeMaterial: getThemeMaterial,
-    cloneMaterial: cloneMaterial,
+    cloneMaterial: createCelShadedToonMaterial,
+    createCelShadedToonMaterial: createCelShadedToonMaterial,
     markMatrixDirty: registerThemeSubtree,
-    setShadowFlags: setShadowFlags
+    registerThemeSubtree: registerThemeSubtree,
+    setShadowFlags: applyArcadeCelShading,
+    applyArcadeCelShading: applyArcadeCelShading
   });
+  subsystemInitializationStatus.arenaWorld = true;
 
   // 9. Game Runtime Orchestrator
   setGameRuntimeThreeContext({
@@ -509,11 +584,24 @@ export function initializeSubsystemThreeContexts(customContext = ThreeNamed) {
     DoubleSide: T.DoubleSide,
     RoomEnvironment: RoomEnvironment
   });
+  subsystemInitializationStatus.gameRuntime = true;
+
+  return T;
+}
+
+/**
+ * Returns the default Three.js instance.
+ */
+export function getThree() {
+  return THREE;
 }
 
 // Auto-initialize default subsystem contexts upon module import
 initializeSubsystemThreeContexts();
 
 export default {
-  initializeSubsystemThreeContexts
+  initializeSubsystemThreeContexts,
+  getThree,
+  subsystemInitializationStatus,
+  THREE
 };

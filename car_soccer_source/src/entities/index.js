@@ -11,9 +11,6 @@ export * from "./BallVisual.js";
 export * from "./ArenaWorld.js";
 export * from "./StadiumArena.js";
 export * from "./VehicleAssembly.js";
-export * from "./ArenaEntity.js";
-export * from "./BallEntity.js";
-export * from "./CarEntity.js";
 export * from "./VehicleBoostEmitter.js";
 
 // Explicit disambiguation for star-exported symbols shared across submodules

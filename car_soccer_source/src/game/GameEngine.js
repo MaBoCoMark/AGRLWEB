@@ -5,7 +5,7 @@
  * camera tracking, audio synthesis, and match state management.
  */
 
-import * as THREE from 'three';
+import THREE from '../vendor/three.js';
 import { PhysicsManager } from '../physics/PhysicsManager.js';
 import { ArenaEntity } from '../entities/ArenaEntity.js';
 import { BallEntity } from '../entities/BallEntity.js';
