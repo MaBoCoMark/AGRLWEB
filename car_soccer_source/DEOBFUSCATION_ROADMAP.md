@@ -388,6 +388,47 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 
 ---
 
+20. **GLTF 3D 加载器与插件扩展解耦（✅ Phase 7.8 Part 3 已落地）**：
+    - **抽离内容**：
+      - 将 `CarSoccerEngine.js` 第 18255~19726 行的 ~1,472 行 GLTF 2.0 加载模块完整抽离为独立模块 `src/loaders/GLTFLoader.js`，并通过 `src/loaders/index.js` 统一导出：
+        - `GLTFLoader`（原 `ho`）：标准 Three.js 异步模型加载器，管理 DRACO / KTX2 / Meshopt 解码器与插件系统。
+        - `GLTFParser`（原 `$b`）：GLTF 2.0 JSON / 二进制核心状态机解析器，解析 Accessor、BufferView、Buffer、Camera、Mesh、Node、Skin、Material、Texture 与 AnimationClip。
+        - 完整 22 项 GLTF 插件扩展集：
+          - `GLTFBinaryExtension`（原 `Tb`，`KHR_binary_glTF`）
+          - `GLTFLightsExtension`（原 `fb`，`KHR_lights_punctual`）
+          - `GLTFMaterialsUnlitExtension`（原 `pb`，`KHR_materials_unlit`）
+          - `GLTFMaterialsEmissiveStrengthExtension`（原 `mb`，`KHR_materials_emissive_strength`）
+          - `GLTFMaterialsClearcoatExtension`（原 `gb`，`KHR_materials_clearcoat`）
+          - `GLTFMaterialsDispersionExtension`（原 `vb`，`KHR_materials_dispersion`）
+          - `GLTFMaterialsIridescenceExtension`（原 `jb`，`KHR_materials_iridescence`）
+          - `GLTFMaterialsSheenExtension`（原 `_b`，`KHR_materials_sheen`）
+          - `GLTFMaterialsTransmissionExtension`（原 `Eb`，`KHR_materials_transmission`）
+          - `GLTFMaterialsVolumeExtension`（原 `yb`，`KHR_materials_volume`）
+          - `GLTFMaterialsIorExtension`（原 `xb`，`KHR_materials_ior`）
+          - `GLTFMaterialsSpecularExtension`（原 `Cb`，`KHR_materials_specular`）
+          - `GLTFMaterialsBumpExtension`（原 `bb`，`EXT_materials_bump`）
+          - `GLTFMaterialsAnisotropyExtension`（原 `Sb`，`KHR_materials_anisotropy`）
+          - `GLTFTextureBasisUExtension`（原 `wb`，`KHR_texture_basisu`）
+          - `GLTFTextureWebPExtension`（原 `Mb`，`EXT_texture_webp`）
+          - `GLTFTextureAVIFExtension`（原 `Bb`，`EXT_texture_avif`）
+          - `GLTFMeshoptCompressionExtension`（原 `Kf`，`EXT_meshopt_compression` / `KHR_meshopt_compression`）
+          - `GLTFMeshGpuInstancing`（原 `kb`，`EXT_mesh_gpu_instancing`）
+          - `GLTFDracoMeshCompressionExtension`（原 `Rb`，`KHR_draco_mesh_compression`）
+          - `GLTFTextureTransformExtension`（原 `Pb`，`KHR_texture_transform`）
+          - `GLTFMeshQuantizationExtension`（原 `Ib`，`KHR_mesh_quantization`）
+        - 骨骼与变形目标三次样条插值器：`GLTFCubicSplineInterpolant`（原 `P0`）与 `GLTFCubicSplineQuaternionInterpolant`（原 `Fb`）。
+        - 几何属性与包围盒辅助函数：`assignExtras`（`hr`）、`assignExtensions`（`_i`）、`createMorphTargets`（`Ob`）、`buildMorphTargetAttributes`（`Gb`）、`computeBoundingBoxSphere`（`zb`）、`initGeometryAttributes`（`ep`）、`getMaterialExtension`（`Jt`）、`extractUrlMimeType`（`Ub`）、`getNormalizedComponentScale`（`Nh`）、`createPrimitiveKey`（`Hb`）、`hashAttributes`（`uc`）、`createCache`（`ub`）。
+    - **依赖注入与健壮性保障**：
+      - 建立 `setGLTFLoaderThreeContext` 依赖注入机制，支持运行时注入主引擎内联的 Three.js 类体系（包括 `ImageBitmapLoader: e6`, `PropertyBinding: Rt`, `InstancedBufferAttribute: un` 等），同时自动重设原型链继承。
+      - 构建自闭合的纯 JS fallback 体系（支持 Headless Node 环境下的 `FallbackFileLoader` base64 data URI 解码），确保无 WebGL/浏览器 DOM 时测试与静态加载均不崩溃。
+      - 主引擎保留 `class ho extends GLTFLoader {}` 兼容别名，杜绝 TDZ 风险与打破任何既有测试契约。
+    - **测试验收与主引擎瘦身**：
+      - 新增专用单元测试套件 `tests/gltf_loader.test.js`（7 项用例覆盖别名、扩展常量、加载器与解析器实例化、最小 GLTF 2.0 树解析、复合模型材质与 base64 缓冲解析、辅助工具与上下文注入）。
+      - 全量 17 个测试套件、99 项单元测试全部绿色通过（100% 通过率）。
+      - `CarSoccerEngine.js` 削减 1,470 行复杂冗余代码，体积进一步骤降。
+
+---
+
 ## 5. 后续反混淆与现代化演进路线（Roadmap）
 
 16. **几何后处理与模型加载工具解耦（✅ Phase 7.8 Part 1 已落地）**：
@@ -466,16 +507,54 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 
 ---
 
+20. **GLTF 3D 加载器与插件扩展解耦（✅ Phase 7.8 Part 3 已落地）**：
+    - **抽离内容**：
+      - 将 `CarSoccerEngine.js` 第 18255~19726 行的 ~1,472 行 GLTF 2.0 加载模块完整抽离为独立模块 `src/loaders/GLTFLoader.js`，并通过 `src/loaders/index.js` 统一导出：
+        - `GLTFLoader`（原 `ho`）：标准 Three.js 异步模型加载器，管理 DRACO / KTX2 / Meshopt 解码器与插件系统。
+        - `GLTFParser`（原 `$b`）：GLTF 2.0 JSON / 二进制核心状态机解析器，解析 Accessor、BufferView、Buffer、Camera、Mesh、Node、Skin、Material、Texture 与 AnimationClip。
+        - 完整 22 项 GLTF 插件扩展集：
+          - `GLTFBinaryExtension`（原 `Tb`，`KHR_binary_glTF`）
+          - `GLTFLightsExtension`（原 `fb`，`KHR_lights_punctual`）
+          - `GLTFMaterialsUnlitExtension`（原 `pb`，`KHR_materials_unlit`）
+          - `GLTFMaterialsEmissiveStrengthExtension`（原 `mb`，`KHR_materials_emissive_strength`）
+          - `GLTFMaterialsClearcoatExtension`（原 `gb`，`KHR_materials_clearcoat`）
+          - `GLTFMaterialsDispersionExtension`（原 `vb`，`KHR_materials_dispersion`）
+          - `GLTFMaterialsIridescenceExtension`（原 `jb`，`KHR_materials_iridescence`）
+          - `GLTFMaterialsSheenExtension`（原 `_b`，`KHR_materials_sheen`）
+          - `GLTFMaterialsTransmissionExtension`（原 `Eb`，`KHR_materials_transmission`）
+          - `GLTFMaterialsVolumeExtension`（原 `yb`，`KHR_materials_volume`）
+          - `GLTFMaterialsIorExtension`（原 `xb`，`KHR_materials_ior`）
+          - `GLTFMaterialsSpecularExtension`（原 `Cb`，`KHR_materials_specular`）
+          - `GLTFMaterialsBumpExtension`（原 `bb`，`EXT_materials_bump`）
+          - `GLTFMaterialsAnisotropyExtension`（原 `Sb`，`KHR_materials_anisotropy`）
+          - `GLTFTextureBasisUExtension`（原 `wb`，`KHR_texture_basisu`）
+          - `GLTFTextureWebPExtension`（原 `Mb`，`EXT_texture_webp`）
+          - `GLTFTextureAVIFExtension`（原 `Bb`，`EXT_texture_avif`）
+          - `GLTFMeshoptCompressionExtension`（原 `Kf`，`EXT_meshopt_compression` / `KHR_meshopt_compression`）
+          - `GLTFMeshGpuInstancing`（原 `kb`，`EXT_mesh_gpu_instancing`）
+          - `GLTFDracoMeshCompressionExtension`（原 `Rb`，`KHR_draco_mesh_compression`）
+          - `GLTFTextureTransformExtension`（原 `Pb`，`KHR_texture_transform`）
+          - `GLTFMeshQuantizationExtension`（原 `Ib`，`KHR_mesh_quantization`）
+        - 骨骼与变形目标三次样条插值器：`GLTFCubicSplineInterpolant`（原 `P0`）与 `GLTFCubicSplineQuaternionInterpolant`（原 `Fb`）。
+        - 几何属性与包围盒辅助函数：`assignExtras`（`hr`）、`assignExtensions`（`_i`）、`createMorphTargets`（`Ob`）、`buildMorphTargetAttributes`（`Gb`）、`computeBoundingBoxSphere`（`zb`）、`initGeometryAttributes`（`ep`）、`getMaterialExtension`（`Jt`）、`extractUrlMimeType`（`Ub`）、`getNormalizedComponentScale`（`Nh`）、`createPrimitiveKey`（`Hb`）、`hashAttributes`（`uc`）、`createCache`（`ub`）。
+    - **依赖注入与健壮性保障**：
+      - 建立 `setGLTFLoaderThreeContext` 依赖注入机制，支持运行时注入主引擎内联的 Three.js 类体系（包括 `ImageBitmapLoader: e6`, `PropertyBinding: Rt`, `InstancedBufferAttribute: un` 等），同时自动重设原型链继承。
+      - 构建自闭合的纯 JS fallback 体系（支持 Headless Node 环境下的 `FallbackFileLoader` base64 data URI 解码），确保无 WebGL/浏览器 DOM 时测试与静态加载均不崩溃。
+      - 主引擎保留 `class ho extends GLTFLoader {}` 兼容别名，杜绝 TDZ 风险与打破任何既有测试契约。
+    - **测试验收与主引擎瘦身**：
+      - 新增专用单元测试套件 `tests/gltf_loader.test.js`（7 项用例覆盖别名、扩展常量、加载器与解析器实例化、最小 GLTF 2.0 树解析、复合模型材质与 base64 缓冲解析、辅助工具与上下文注入）。
+      - 全量 17 个测试套件、99 项单元测试全部绿色通过（100% 通过率）。
+      - `CarSoccerEngine.js` 削减 1,470 行复杂冗余代码，体积进一步骤降。
+
+---
+
 ## 5. 后续反混淆与现代化演进路线（Roadmap）
 
 ### 阶段 7.8（Part 2）：后处理管线与离屏展台环境解耦（✅ 已完成）
 - 已抽离为 `src/effects/PostprocessingPipeline.js`，解耦主画面后期（EffectComposer, RenderPass, ShaderPass, OutputPass, MaskPass, FullScreenQuad）与车库 PMREM 环境（RoomEnvironment）。
 
-### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（⏳ 下一步）
-- **目标**：将 `CarSoccerEngine.js` 第 18955~20426 行的 ~1,470 行 `GLTFLoader` 抽离为独立模块 `src/loaders/GLTFLoader.js`：
-  - 核心解析器 `GLTFParser`（原 `$b`）与 `GLTFLoader`（原 `ho`）
-  - 插件扩展集：Draco、Meshopt、KTX2、PBR Specular/Glossiness 等解析器。
-- **收益**：从主引擎完全消除所有外部模型加载胶水，主引擎代码体积骤降至仅约 1,000 行。
+### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（✅ 已完成）
+- 已抽离为 `src/loaders/GLTFLoader.js`，包含核心解析器 `GLTFParser`（原 `$b`）与 `GLTFLoader`（原 `ho`）、全套 22 项扩展插件、三次样条插值器与网格工具，并通过 `src/loaders/index.js` 统一导出。主引擎削减 1,470 行代码，99 项单元测试全绿。
 
 ### 阶段 8.1：主引擎生命周期与 120Hz 渲染时钟解耦（⏳ 待实施）
 - **目标**：将 `CarSoccerEngine.js` 剩余的 `dB()` 初始化引导流与 `wt()` 120Hz 主时钟渲染循环重构并抽取为模块化运行时：
