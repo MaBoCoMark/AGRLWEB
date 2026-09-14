@@ -163,6 +163,22 @@ export function setVehicleAssemblyThreeContext(context) {
 function resolveContext() {
   const G = vehicleAssemblyThreeContext;
   return {
+    Object3D: G.Object3D || (typeof THREE !== "undefined" ? THREE.Object3D : (G.Group || class FallbackObject3D {
+      constructor() {
+        this.children = [];
+        this.name = "";
+        this.visible = true;
+        this.parent = null;
+      }
+      remove(c) {
+        const idx = this.children.indexOf(c);
+        if (idx !== -1) { c.parent = null; this.children.splice(idx, 1); }
+      }
+      removeFromParent() {
+        if (this.parent && typeof this.parent.remove === "function") this.parent.remove(this);
+        return this;
+      }
+    })),
     Group: G.Group || (typeof THREE !== 'undefined' ? THREE.Group : class {
       constructor() {
         this.children = [];
@@ -173,7 +189,32 @@ function resolveContext() {
         this.scale = new (resolveContext().Vector3)(1, 1, 1);
         this.rotation = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; } };
       }
-      add(...items) { this.children.push(...items); }
+      add(...items) {
+        for (const item of items) {
+          if (item && item !== this) {
+            if (item.parent && typeof item.parent.remove === "function") {
+              item.parent.remove(item);
+            }
+            item.parent = this;
+            this.children.push(item);
+          }
+        }
+      }
+      remove(...items) {
+        for (const item of items) {
+          const idx = this.children.indexOf(item);
+          if (idx !== -1) {
+            item.parent = null;
+            this.children.splice(idx, 1);
+          }
+        }
+      }
+      removeFromParent() {
+        if (this.parent && typeof this.parent.remove === "function") {
+          this.parent.remove(this);
+        }
+        return this;
+      }
       traverse(fn) { fn(this); this.children.forEach(c => c.traverse?.(fn)); }
       getObjectByName(name) {
         if (this.name === name) return this;

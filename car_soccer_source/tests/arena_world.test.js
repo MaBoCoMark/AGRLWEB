@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { BallTrajectoryPredictor, setBallTrajectoryPredictorThreeContext } from "../src/game/BallTrajectoryPredictor.js";
 import {
   ArenaWorld,
   resolveContext,
@@ -407,4 +408,64 @@ test("12. ArenaWorld.loadCarAndPadAssets loads pad models with OBJLoader without
   assert.ok(world.padTemplates.bigBase, "bigBase template must exist");
   assert.ok(world.padTemplates.smallFull, "smallFull template must exist");
   assert.ok(world.padTemplates.smallBase, "smallBase template must exist");
+});
+
+test("13. BallTrajectoryPredictor initializes using injected Three.js context", () => {
+  class MockGroup {
+    constructor() { this.name = ""; this.children = []; }
+    add(child) { this.children.push(child); }
+  }
+  class MockBufferGeometry {
+    constructor() { this.attributes = {}; }
+    setAttribute(name, attr) { this.attributes[name] = attr; }
+    setIndex(idx) { this.index = idx; }
+    setDrawRange() {}
+  }
+  class MockBufferAttribute {
+    constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; }
+    setUsage() { return this; }
+  }
+  class MockShaderMaterial {
+    constructor(params) { this.uniforms = params.uniforms; }
+  }
+  class MockMesh {
+    constructor(geo, mat) { this.geo = geo; this.mat = mat; this.visible = true; }
+  }
+  class MockColor {
+    constructor(c) { this.color = c; }
+    set(c) { this.color = c; }
+  }
+  class MockVector3 {
+    constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+    set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    subVectors() { return this; }
+    crossVectors() { return this; }
+    normalize() { return this; }
+    lengthSq() { return 1; }
+    multiplyScalar() { return this; }
+    copy() { return this; }
+  }
+  const MockThree = {
+    Group: MockGroup,
+    BufferGeometry: MockBufferGeometry,
+    BufferAttribute: MockBufferAttribute,
+    ShaderMaterial: MockShaderMaterial,
+    Mesh: MockMesh,
+    Color: MockColor,
+    Vector3: MockVector3,
+    DynamicDrawUsage: 35048,
+    NormalBlending: 1,
+    DoubleSide: 2
+  };
+
+  setBallTrajectoryPredictorThreeContext(MockThree);
+  const container = {
+    appendChild() {},
+    querySelector() { return null; }
+  };
+  const predictor = new BallTrajectoryPredictor(container, null);
+  assert.ok(predictor.object, "predictor group object must exist");
+  assert.equal(predictor.object.name, "BallTrajectoryPrediction");
+  assert.ok(predictor.mesh, "ribbon mesh must exist");
+  assert.equal(predictor.positions.length, 2400 * 3);
 });

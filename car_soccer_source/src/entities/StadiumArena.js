@@ -323,7 +323,20 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
 
     const geoList = batches.get(effectiveMat) ?? [];
     const transformedGeo = obj.geometry.clone();
-    if (obj.matrixWorld) transformedGeo.applyMatrix4(obj.matrixWorld);
+    if (typeof obj.updateWorldMatrix === "function") {
+      obj.updateWorldMatrix(true, false);
+    }
+    const elements = obj.matrixWorld?.elements;
+    const hasValidMatrix = elements && Array.from(elements).every(v => Number.isFinite(v));
+    if (hasValidMatrix) {
+      transformedGeo.applyMatrix4(obj.matrixWorld);
+    }
+    if (transformedGeo.boundingBox && !Number.isFinite(transformedGeo.boundingBox.min?.x)) {
+      transformedGeo.boundingBox = null;
+    }
+    if (transformedGeo.boundingSphere && !Number.isFinite(transformedGeo.boundingSphere.radius)) {
+      transformedGeo.boundingSphere = null;
+    }
     geoList.push(transformedGeo);
     batches.set(effectiveMat, geoList);
     geometriesToDispose.add(obj.geometry);

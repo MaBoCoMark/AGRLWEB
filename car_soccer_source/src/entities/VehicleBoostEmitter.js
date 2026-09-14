@@ -132,10 +132,29 @@ export function resolveContext() {
     }
     add(...objs) {
       for (const o of objs) {
-        if (o) {
+        if (o && o !== this) {
+          if (o.parent && typeof o.parent.remove === "function") {
+            o.parent.remove(o);
+          }
           this.children.push(o);
           o.parent = this;
         }
+      }
+      return this;
+    }
+    remove(...objs) {
+      for (const o of objs) {
+        const idx = this.children.indexOf(o);
+        if (idx !== -1) {
+          o.parent = null;
+          this.children.splice(idx, 1);
+        }
+      }
+      return this;
+    }
+    removeFromParent() {
+      if (this.parent && typeof this.parent.remove === "function") {
+        this.parent.remove(this);
       }
       return this;
     }

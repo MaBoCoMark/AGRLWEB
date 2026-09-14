@@ -6,7 +6,17 @@
  * Updates prediction state ONLY on car-ball impact, kickoff reset, or ball control actions (1/2/3/4).
  */
 
-import * as THREE from 'three';
+let predictorThreeContext = null;
+
+export function setBallTrajectoryPredictorThreeContext(ctx) {
+  predictorThreeContext = ctx;
+}
+
+function resolvePredictorContext() {
+  if (predictorThreeContext) return predictorThreeContext;
+  if (typeof THREE !== "undefined") return THREE;
+  return null;
+}
 import jC from '../physics/RocketSimWasm.js';
 
 export const DEFAULT_TRAJECTORY_SETTINGS = {
@@ -26,8 +36,14 @@ export class BallTrajectoryPredictor {
     this.physicsInstance = physicsInstance;
     this.settings = this.loadSettings();
 
+    const T = resolvePredictorContext();
+    if (!T) {
+      throw new Error('[BallTrajectoryPredictor] Three.js context not initialized. Call setBallTrajectoryPredictorThreeContext() first.');
+    }
+    this._T = T;
+
     // Scene visual objects
-    this.group = new THREE.Group();
+    this.group = new T.Group();
     this.group.name = 'BallTrajectoryPrediction';
 
     // Maximum ticks: 10.0 seconds at 120Hz = 1200 ticks
@@ -41,21 +57,24 @@ export class BallTrajectoryPredictor {
     this.colors = new Float32Array(this.maxVertices * 3);
     this.indices = new Uint16Array(this.maxIndices);
 
-    this.geometry = new THREE.BufferGeometry();
-    this.positionAttr = new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage);
-    this.alphaAttr = new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage);
-    this.colorAttr = new THREE.BufferAttribute(this.colors, 3).setUsage(THREE.DynamicDrawUsage);
+    this.geometry = new T.BufferGeometry();
+    this.positionAttr = new T.BufferAttribute(this.positions, 3);
+    if (this.positionAttr.setUsage) this.positionAttr.setUsage(T.DynamicDrawUsage ?? 35048);
+    this.alphaAttr = new T.BufferAttribute(this.alphas, 1);
+    if (this.alphaAttr.setUsage) this.alphaAttr.setUsage(T.DynamicDrawUsage ?? 35048);
+    this.colorAttr = new T.BufferAttribute(this.colors, 3);
+    if (this.colorAttr.setUsage) this.colorAttr.setUsage(T.DynamicDrawUsage ?? 35048);
 
     this.geometry.setAttribute('position', this.positionAttr);
     this.geometry.setAttribute('aAlpha', this.alphaAttr);
     this.geometry.setAttribute('color', this.colorAttr);
-    this.geometry.setIndex(new THREE.BufferAttribute(this.indices, 1));
+    this.geometry.setIndex(new T.BufferAttribute(this.indices, 1));
     this.geometry.setDrawRange(0, 0);
 
     // Custom shader material for vibrant glowing neon ribbon
-    this.material = new THREE.ShaderMaterial({
+    this.material = new T.ShaderMaterial({
       uniforms: {
-        uColor: { value: new THREE.Color(this.settings.color) },
+        uColor: { value: new T.Color(this.settings.color) },
       },
       vertexColors: true,
       vertexShader: `
@@ -84,11 +103,11 @@ export class BallTrajectoryPredictor {
       transparent: true,
       depthWrite: false,
       depthTest: true,
-      blending: THREE.NormalBlending,
-      side: THREE.DoubleSide,
+      blending: T.NormalBlending ?? 1,
+      side: T.DoubleSide ?? 2,
     });
 
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh = new T.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.visible = this.settings.enabled;
     this.group.add(this.mesh);
@@ -112,14 +131,14 @@ export class BallTrajectoryPredictor {
     this.isActive = false;
 
     // Scratch vector instances to avoid per-frame allocations
-    this.camPos = new THREE.Vector3();
-    this.curP = new THREE.Vector3();
-    this.tangent = new THREE.Vector3();
-    this.viewDir = new THREE.Vector3();
-    this.side = new THREE.Vector3();
-    this.prevP = new THREE.Vector3();
-    this.nextP = new THREE.Vector3();
-    this.fallbackAxis = new THREE.Vector3(0, 1, 0);
+    this.camPos = new T.Vector3();
+    this.curP = new T.Vector3();
+    this.tangent = new T.Vector3();
+    this.viewDir = new T.Vector3();
+    this.side = new T.Vector3();
+    this.prevP = new T.Vector3();
+    this.nextP = new T.Vector3();
+    this.fallbackAxis = new T.Vector3(0, 1, 0);
 
     // Physics constants (fallback / reference)
     this.BALL_RADIUS = 91.25;
@@ -665,7 +684,7 @@ export class BallTrajectoryPredictor {
     }
 
     camera.getWorldPosition(this.camPos);
-    this.lastCameraPos = (this.lastCameraPos || new THREE.Vector3()).copy(camera.position);
+    this.lastCameraPos = (this.lastCameraPos || new this._T.Vector3()).copy(camera.position);
 
     let vertCount = 0;
     let indexCount = 0;
@@ -766,6 +785,7 @@ export class BallTrajectoryPredictor {
    * Independent UI settings panel & HUD button.
    */
   createUI() {
+    if (typeof document === 'undefined') return;
     const styleId = 'trajectory-predictor-styles';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');

@@ -359,3 +359,63 @@ test('7. Context resolution and setGLTFLoaderThreeContext dynamic injection', ()
   const updatedCtx = resolveGLTFContext();
   assert.equal(updatedCtx.Vector3, CustomVector3);
 });
+
+test("8. FallbackObject3D and FallbackMatrix4 provide full hierarchy lifecycle (removeFromParent, updateMatrixWorld, applyMatrix4)", () => {
+  const ctx = resolveGLTFContext();
+  const objA = new ctx.Object3D();
+  const objB = new ctx.Object3D();
+
+  objA.name = "parent";
+  objB.name = "child";
+  objA.add(objB);
+
+  assert.equal(objB.parent, objA);
+  assert.equal(objA.children.length, 1);
+
+  // Test removeFromParent
+  objB.removeFromParent();
+  assert.equal(objB.parent, null);
+  assert.equal(objA.children.length, 0);
+
+  // Re-add and test matrix transformations
+  objA.add(objB);
+  objA.position.x = 10;
+  objB.position.y = 5;
+  objA.updateMatrixWorld(true);
+
+  assert.equal(objA.matrixWorld.elements[12], 10);
+  assert.equal(objB.matrixWorld.elements[12], 10);
+  assert.equal(objB.matrixWorld.elements[13], 5);
+
+  // Test applyMatrix4
+  const m = new ctx.Matrix4();
+  m.elements[14] = 20; // z translation
+  objB.applyMatrix4(m);
+  assert.equal(objB.position.z, 20);
+});
+
+test("9. Node without mesh instantiates Object3D with removeFromParent support", async () => {
+  const ctx = resolveGLTFContext();
+  const loader = new GLTFLoader();
+  const minimalGLTF = {
+    asset: { version: "2.0" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [
+      { name: "empty_transform_node" }
+    ]
+  };
+
+  const gltf = await loader.parseAsync(JSON.stringify(minimalGLTF), "");
+  assert.ok(gltf.scene);
+  const emptyNode = gltf.scene.children[0];
+  assert.ok(emptyNode);
+  assert.equal(typeof emptyNode.removeFromParent, "function", "empty node must have removeFromParent");
+
+  // Adding to a group/scene must not throw TypeError: e.removeFromParent is not a function
+  const group = new ctx.Group();
+  assert.doesNotThrow(() => {
+    group.add(emptyNode);
+  });
+  assert.equal(emptyNode.parent, group);
+});

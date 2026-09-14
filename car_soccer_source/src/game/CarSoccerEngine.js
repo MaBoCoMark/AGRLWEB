@@ -33,7 +33,7 @@ import {
 import jC from '../physics/RocketSimWasm.js';
 import { EMotorSynth } from '../audio/EMotorSynth.js';
 import { SpeedometerHUD } from '../ui/SpeedometerHUD.js';
-import { BallTrajectoryPredictor } from './BallTrajectoryPredictor.js';
+import { BallTrajectoryPredictor, setBallTrajectoryPredictorThreeContext } from './BallTrajectoryPredictor.js';
 import { ParallelTrainingManager, PARALLEL_SLOTS } from '../training/ParallelTrainingManager.js';
 import {
   RocketSimPhysicsEngine,
@@ -2496,7 +2496,7 @@ class It extends Wi{
       for(let t = 0;t < arguments.length;t++)this.add(arguments[t]);
       return this
     }
-    return e === this?(ut("Object3D.add: object can't be added as a child of itself.",e),this):(e && e.isObject3D?(e.removeFromParent(),e.parent = this,this.children.push(e),e.dispatchEvent(xu),ts.child = e,this.dispatchEvent(ts),ts.child = null):ut("Object3D.add: object not an instance of THREE.Object3D.",e),this)
+    return e === this?(ut("Object3D.add: object can't be added as a child of itself.",e),this):(e && e.isObject3D?((typeof e.removeFromParent === "function" ? e.removeFromParent() : (e.parent && typeof e.parent.remove === "function" && e.parent.remove(e))),e.parent = this,this.children.push(e),e.dispatchEvent(xu),ts.child = e,this.dispatchEvent(ts),ts.child = null):ut("Object3D.add: object not an instance of THREE.Object3D.",e),this)
   }
   remove(e){
     if(arguments.length > 1){
@@ -2514,7 +2514,7 @@ class It extends Wi{
     return this.remove(...this.children)
   }
   attach(e){
-    return this.updateWorldMatrix(!0,!1),wr.copy(this.matrixWorld).invert(),e.parent !== null && (e.parent.updateWorldMatrix(!0,!1),wr.multiply(e.parent.matrixWorld)),e.applyMatrix4(wr),e.removeFromParent(),e.parent = this,this.children.push(e),e.updateWorldMatrix(!1,!0),e.dispatchEvent(xu),ts.child = e,this.dispatchEvent(ts),ts.child = null,this
+    return this.updateWorldMatrix(!0,!1),wr.copy(this.matrixWorld).invert(),e.parent !== null && (e.parent.updateWorldMatrix(!0,!1),wr.multiply(e.parent.matrixWorld)),e.applyMatrix4(wr),(typeof e.removeFromParent === "function" ? e.removeFromParent() : (e.parent && typeof e.parent.remove === "function" && e.parent.remove(e))),e.parent = this,this.children.push(e),e.updateWorldMatrix(!1,!0),e.dispatchEvent(xu),ts.child = e,this.dispatchEvent(ts),ts.child = null,this
   }
   getObjectById(e){
     return this.getObjectByProperty("id",e)
@@ -18258,8 +18258,22 @@ setOBJLoaderThreeContext({
 });
 
 
+setBallTrajectoryPredictorThreeContext({
+  Group: dt,
+  BufferGeometry: Ct,
+  BufferAttribute: zt,
+  ShaderMaterial: Lt,
+  Mesh: Ee,
+  Color: Ne,
+  Vector3: F,
+  DynamicDrawUsage: 35048,
+  NormalBlending: 1,
+  DoubleSide: Ut
+});
+
 // --- Phase 7.8 Part 3 Deobfuscation: GLTFLoader (ho) & GLTFParser ($b) decoupled to src/loaders/GLTFLoader.js ---
 setGLTFLoaderThreeContext({
+  Object3D: It,
   Loader: Xi,
   LoaderUtils: Ia,
   FileLoader: Pd,
@@ -18397,6 +18411,7 @@ setBallVisualThreeContext({
 // --- Phase 7 Part 3 Deobfuscation: SpeedTrail (pS, fS) extracted to src/entities/SpeedTrail.js ---
 // --- Phase 7 Part 3 (Step 3) Deobfuscation: ArenaWorld (ow), Stadium Arena, & Suspension extracted to src/entities/ArenaWorld.js ---
 setVehicleAssemblyThreeContext({
+  Object3D: It,
   Group: dt,
   Mesh: Ee,
   BoxGeometry: Tn,
@@ -18442,6 +18457,7 @@ setVehicleAssemblyThreeContext({
 });
 
 setArenaWorldThreeContext({
+  Object3D: It,
   Group: dt,
   Mesh: Ee,
   BoxGeometry: Tn,
