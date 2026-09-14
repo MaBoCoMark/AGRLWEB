@@ -23,6 +23,7 @@ export const SRGBColorSpace = 'srgb';
 let objThreeContext = {
   Loader: null,
   FileLoader: null,
+  DefaultLoadingManager: null,
   Group: null,
   Mesh: null,
   LineSegments: null,
@@ -43,17 +44,56 @@ export function setOBJLoaderThreeContext(context) {
   Object.defineProperties(objThreeContext, descriptors);
 }
 
+/**
+ * Creates a default loading manager conforming to Three.js LoadingManager interface.
+ */
+export function createDefaultLoadingManager() {
+  const abortCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  return {
+    isLoading: false,
+    itemsLoaded: 0,
+    itemsTotal: 0,
+    itemStart() {},
+    itemEnd() {},
+    itemError() {},
+    resolveURL(url) {
+      return typeof url === 'string' ? url.normalize('NFC') : url;
+    },
+    setURLModifier(fn) {
+      this.resolveURL = (url) => {
+        const norm = typeof url === 'string' ? url.normalize('NFC') : url;
+        return fn ? fn(norm) : norm;
+      };
+      return this;
+    },
+    get abortController() {
+      return this._abortController || (this._abortController = (typeof AbortController !== 'undefined' ? new AbortController() : null));
+    },
+    _abortController: abortCtrl
+  };
+}
+
 export function resolveOBJContext() {
   const C = objThreeContext;
 
   class FallbackLoader {
     constructor(manager) {
-      this.manager = manager || { itemStart() {}, itemEnd() {}, itemError() {} };
+      this.manager = manager || C.DefaultLoadingManager || createDefaultLoadingManager();
+      if (typeof this.manager.resolveURL !== 'function') {
+        this.manager.resolveURL = (url) => (typeof url === 'string' ? url.normalize('NFC') : url);
+      }
+      if (!this.manager.abortController && typeof AbortController !== 'undefined') {
+        try {
+          this.manager.abortController = new AbortController();
+        } catch (e) {}
+      }
       this.path = '';
+      this.resourcePath = '';
       this.requestHeader = {};
       this.withCredentials = false;
     }
     setPath(path) { this.path = path; return this; }
+    setResourcePath(resourcePath) { this.resourcePath = resourcePath; return this; }
     setRequestHeader(header) { this.requestHeader = header; return this; }
     setWithCredentials(val) { this.withCredentials = val; return this; }
     loadAsync(url, onProgress) {
@@ -65,8 +105,11 @@ export function resolveOBJContext() {
 
   class FallbackFileLoader extends FallbackLoader {
     load(url, onLoad, onProgress, onError) {
+      const resolvedUrl = (this.manager && typeof this.manager.resolveURL === 'function')
+        ? this.manager.resolveURL(this.path + url)
+        : (this.path + url);
       if (typeof fetch !== 'undefined') {
-        fetch(this.path + url)
+        fetch(resolvedUrl)
           .then((r) => r.text())
           .then(onLoad)
           .catch(onError);
@@ -80,11 +123,23 @@ export function resolveOBJContext() {
       this.children = [];
       this.materialLibraries = [];
       this.isGroup = true;
+      this.rotation = { x: 0, y: 0, z: 0 };
     }
-    add(child) {
-      this.children.push(child);
-      child.parent = this;
+    add(...items) {
+      this.children.push(...items);
+      items.forEach(child => { if (child) child.parent = this; });
       return this;
+    }
+    clone() {
+      const g = new FallbackGroup();
+      g.name = this.name;
+      g.rotation = { ...this.rotation };
+      g.children = this.children.map(c => (typeof c?.clone === 'function' ? c.clone() : c));
+      return g;
+    }
+    traverse(fn) {
+      fn(this);
+      this.children.forEach(c => c?.traverse?.(fn));
     }
   }
 
@@ -94,6 +149,14 @@ export function resolveOBJContext() {
       this.geometry = geometry;
       this.material = material;
       this.isMesh = true;
+    }
+    clone() {
+      const m = new FallbackMesh(this.geometry, this.material);
+      m.name = this.name;
+      return m;
+    }
+    traverse(fn) {
+      fn(this);
     }
   }
 
@@ -482,16 +545,48 @@ export function OBJParser() {
  */
 export class OBJLoader {
   constructor(manager) {
-    const { Loader } = resolveOBJContext();
-    this.manager = manager || { itemStart() {}, itemEnd() {}, itemError() {} };
+    const ctx = resolveOBJContext();
+    const LoaderClass = ctx.Loader;
+    if (manager !== undefined) {
+      this.manager = manager;
+    } else if (LoaderClass) {
+      try {
+        const dummyLoader = new LoaderClass();
+        this.manager = dummyLoader.manager;
+      } catch (e) {
+        this.manager = ctx.DefaultLoadingManager;
+      }
+    } else if (ctx.DefaultLoadingManager) {
+      this.manager = ctx.DefaultLoadingManager;
+    }
+
+    if (!this.manager) {
+      this.manager = createDefaultLoadingManager();
+    } else {
+      if (typeof this.manager.resolveURL !== 'function') {
+        this.manager.resolveURL = (url) => (typeof url === 'string' ? url.normalize('NFC') : url);
+      }
+      if (!this.manager.abortController && typeof AbortController !== 'undefined') {
+        try {
+          this.manager.abortController = new AbortController();
+        } catch (e) {}
+      }
+    }
+
     this.materials = null;
     this.path = '';
+    this.resourcePath = '';
     this.requestHeader = {};
     this.withCredentials = false;
   }
 
   setPath(path) {
     this.path = path;
+    return this;
+  }
+
+  setResourcePath(resourcePath) {
+    this.resourcePath = resourcePath;
     return this;
   }
 
@@ -518,8 +613,14 @@ export class OBJLoader {
 
   load(url, onLoad, onProgress, onError) {
     const { FileLoader } = resolveOBJContext();
+    if (this.manager && typeof this.manager.resolveURL !== 'function') {
+      this.manager.resolveURL = (u) => (typeof u === 'string' ? u.normalize('NFC') : u);
+    }
     const loader = new FileLoader(this.manager);
     loader.setPath(this.path);
+    if (typeof loader.setResourcePath === 'function') {
+      loader.setResourcePath(this.resourcePath);
+    }
     loader.setRequestHeader(this.requestHeader);
     loader.setWithCredentials(this.withCredentials);
 
@@ -531,7 +632,9 @@ export class OBJLoader {
         } catch (e) {
           if (onError) onError(e);
           else console.error(e);
-          this.manager.itemError(url);
+          if (this.manager && typeof this.manager.itemError === 'function') {
+            this.manager.itemError(url);
+          }
         }
       },
       onProgress,

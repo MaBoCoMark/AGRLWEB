@@ -358,3 +358,53 @@ test("11. Boost pad asset path resolution, turf decals, and padTemplates binding
   // Turf decals signature
   updateTurfPadDecals(world.turf, padDefs);
 });
+
+test("12. ArenaWorld.loadCarAndPadAssets loads pad models with OBJLoader without resolveURL TypeError", async () => {
+  const { setArenaWorldThreeContext, resolveContext } = await import("../src/entities/ArenaWorld.js");
+  const { OBJLoader, setOBJLoaderThreeContext } = await import("../src/loaders/OBJLoader.js");
+
+  // Track if resolveURL was called
+  let resolveUrlCalled = 0;
+  class ThreeStyleFileLoader {
+    constructor(manager) {
+      this.manager = manager;
+      this.path = "";
+    }
+    setPath(p) { this.path = p; return this; }
+    setRequestHeader() { return this; }
+    setWithCredentials() { return this; }
+    load(url, onLoad, onProgress, onError) {
+      assert.equal(typeof this.manager.resolveURL, "function", "manager.resolveURL must exist");
+      resolveUrlCalled++;
+      const resolved = this.manager.resolveURL(url);
+      assert.ok(resolved);
+      // Return valid OBJ string
+      onLoad("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+    }
+  }
+
+  class MockTextureLoader {
+    loadAsync(url) {
+      return Promise.resolve({ isTexture: true, colorSpace: "" });
+    }
+  }
+
+  setOBJLoaderThreeContext({
+    FileLoader: ThreeStyleFileLoader
+  });
+
+  setArenaWorldThreeContext({
+    OBJLoader: OBJLoader,
+    TextureLoader: MockTextureLoader
+  });
+
+  const world = new ArenaWorld(91.25);
+  await world.loadCarAndPadAssets();
+
+  assert.ok(resolveUrlCalled >= 4, "resolveURL should have been called for all 4 pad OBJ models");
+  assert.ok(world.padTemplates, "world.padTemplates must be populated");
+  assert.ok(world.padTemplates.bigFull, "bigFull template must exist");
+  assert.ok(world.padTemplates.bigBase, "bigBase template must exist");
+  assert.ok(world.padTemplates.smallFull, "smallFull template must exist");
+  assert.ok(world.padTemplates.smallBase, "smallBase template must exist");
+});

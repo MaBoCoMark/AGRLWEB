@@ -421,6 +421,19 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
       - 扩展 `tests/arena_world.test.js` 验证 `resolveAssetPath`、贴花绘制与 `padTemplates` 绑定。
       - 全量 15 个测试套件、75 项单元测试全部通过（100% 通过率）。
 
+18. **氮气垫 3D 模型加载器 LoadingManager 异常修复（`TypeError: this.manager.resolveURL is not a function`）**：
+    - **根本原因**：
+      - 在 Step 7.8 将 `cb` 抽离为 `src/loaders/OBJLoader.js` 时，`OBJLoader` 不再直接派生自 Three.js `Loader` 基类，且在构造器中将缺失的 manager 缺省初始化为了仅有空计数的普通对象 `{ itemStart() {}, itemEnd() {}, itemError() }`。
+      - `setOBJLoaderThreeContext` 未传递 Three.js 默认全局加载管理器 `DefaultLoadingManager`（混淆变量 `Wj`）。
+      - 当 `ArenaWorld.loadCarAndPadAssets()` 执行 `new OBJLoader().loadAsync()` 时，内部的 `FileLoader`（混淆类 `Pd`）在 `load()` 第 7588 行执行 `this.manager.resolveURL(url)`，由于缺省对象缺少 `resolveURL`，抛出 `TypeError: this.manager.resolveURL is not a function`，导致 3D 氮气垫模型加载全面失败并降级显示。
+    - **修复措施**：
+      - **主引擎上下文注入**：在 `CarSoccerEngine.js` 中的 `setOBJLoaderThreeContext` 中注入 `DefaultLoadingManager: Wj`。
+      - **加载管理器链路对齐**：在 `src/loaders/OBJLoader.js` 构造器中按 `manager -> Loader.manager -> DefaultLoadingManager -> createDefaultLoadingManager()` 层级解析，保证默认无参构造自动绑定 Three.js 默认加载管理器。
+      - **防御性兼容增强**：实现 `createDefaultLoadingManager()`，并对任何外部传入的不完整 manager 自动打补丁，保障 `resolveURL` 与 `abortController` 必定可用，避免任何 `FileLoader` 异常。
+      - **测试套件扩增**：在 `tests/loaders_and_geometry.test.js`（用例 8~11）与 `tests/arena_world.test.js`（用例 12）中加入对真实 Three.js 风格 `FileLoader.resolveURL` 调用链路的完整模拟与回归测试。
+    - **测试验收**：
+      - 全量 15 个测试套件、80 项单元测试全部绿色通过（100% 通过率）。
+
 ---
 
 ## 5. 后续反混淆与现代化演进路线（Roadmap）

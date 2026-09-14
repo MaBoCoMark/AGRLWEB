@@ -241,3 +241,86 @@ test("7. OBJLoader.loadAsync returns a Promise and loads successfully", async ()
   assert.ok(loaded, "loadAsync must resolve with loaded object");
   assert.equal(loaded.name, "mock-pad-mesh");
 });
+
+test('8. OBJLoader default manager implements resolveURL and abortController', () => {
+  const loader = new OBJLoader();
+  assert.ok(loader.manager, 'OBJLoader must have a manager');
+  assert.equal(typeof loader.manager.resolveURL, 'function', 'manager must implement resolveURL');
+  assert.equal(typeof loader.manager.itemStart, 'function', 'manager must implement itemStart');
+  assert.equal(typeof loader.manager.itemEnd, 'function', 'manager must implement itemEnd');
+  assert.equal(typeof loader.manager.itemError, 'function', 'manager must implement itemError');
+  assert.ok(loader.manager.abortController, 'manager must implement abortController getter');
+  assert.equal(loader.manager.resolveURL('/assets/arena/pads/large-active.obj'), '/assets/arena/pads/large-active.obj');
+});
+
+test('9. Regression: FileLoader calling this.manager.resolveURL does not throw TypeError', async () => {
+  // Simulate Three.js FileLoader (Pd) behavior from CarSoccerEngine.js:7588
+  class SimulatedThreeFileLoader {
+    constructor(manager) {
+      this.manager = manager;
+      this.path = '';
+      this._abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    }
+    setPath(p) { this.path = p; return this; }
+    setRequestHeader() { return this; }
+    setWithCredentials() { return this; }
+    load(url, onLoad, onProgress, onError) {
+      let resolved = (this.path || '') + url;
+      // Exact line 7588 from CarSoccerEngine.js:
+      resolved = this.manager.resolveURL(resolved);
+      const signal = this.manager.abortController ? this.manager.abortController.signal : null;
+      assert.ok(resolved, 'URL must be resolved');
+      // Return mock OBJ content
+      onLoad('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n');
+    }
+  }
+
+  setOBJLoaderThreeContext({
+    FileLoader: SimulatedThreeFileLoader
+  });
+
+  const loader = new OBJLoader();
+  const obj = await loader.loadAsync('/assets/arena/pads/large-active.obj');
+  assert.ok(obj, 'OBJ must load and parse through FileLoader');
+  assert.ok(obj.children.length > 0, 'Must produce mesh children');
+});
+
+test('10. OBJLoader adopts DefaultLoadingManager and Three.js Loader manager hierarchy', () => {
+  const mockDefaultManager = {
+    isDefaultManager: true,
+    resolveURL(url) { return 'resolved:' + url; },
+    itemStart() {},
+    itemEnd() {},
+    itemError() {},
+    abortController: {}
+  };
+
+  class MockThreeLoader {
+    constructor(manager) {
+      this.manager = manager !== undefined ? manager : mockDefaultManager;
+    }
+  }
+
+  setOBJLoaderThreeContext({
+    Loader: MockThreeLoader,
+    DefaultLoadingManager: mockDefaultManager
+  });
+
+  const loader = new OBJLoader();
+  assert.equal(loader.manager, mockDefaultManager, 'OBJLoader must adopt DefaultLoadingManager');
+  assert.equal(loader.manager.resolveURL('test.obj'), 'resolved:test.obj');
+});
+
+test('11. OBJLoader defensively patches custom manager missing resolveURL', () => {
+  // Edge case: user or third-party passes incomplete manager
+  const partialManager = {
+    itemStart() {},
+    itemEnd() {},
+    itemError() {}
+  };
+
+  const loader = new OBJLoader(partialManager);
+  assert.equal(typeof loader.manager.resolveURL, 'function', 'Defensively ensured resolveURL exists');
+  assert.equal(loader.manager.resolveURL('sample.obj'), 'sample.obj');
+  assert.ok(loader.manager.abortController, 'Defensively ensured abortController exists');
+});

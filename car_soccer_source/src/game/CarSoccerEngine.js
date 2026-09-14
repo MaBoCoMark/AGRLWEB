@@ -18516,6 +18516,7 @@ setBufferGeometryUtilsThreeContext({
 setOBJLoaderThreeContext({
   Loader: Xi,
   FileLoader: Pd,
+  DefaultLoadingManager: Wj,
   Group: dt,
   Mesh: Ee,
   LineSegments: Wa,
