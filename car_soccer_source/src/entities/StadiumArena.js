@@ -198,14 +198,33 @@ function updateRealisticMaterialProperties(mat) {
   }
 }
 
-function processBowlFlatStructureMaterial(mat) {
-  const rootName = mat.name ? mat.name.split(" / ")[0] : "";
+function processBowlFlatStructureMaterial(mat, resolveContextFn = resolveContext) {
+  const rootName = mat?.name ? mat.name.split(" / ")[0] : "";
   if (!FLAT_STRUCTURE_MATERIALS.has(rootName)) return mat;
-  const cloned = mat.clone ? mat.clone() : { ...mat };
-  cloned.userData = { ...mat.userData, stadiumFlatStructure: true };
-  const prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : () => "";
-  cloned.customProgramCacheKey = () => `stadium-flat-structure-v1/${prevKey()}`;
-  return cloned;
+  const ctx = (typeof resolveContextFn === "function") ? resolveContextFn() : resolveContext();
+  const { MeshLambertMaterial, Material } = ctx;
+  if (Material && !(mat instanceof Material)) return mat;
+  const TargetMaterial = MeshLambertMaterial || mat.constructor;
+  const lambert = new TargetMaterial();
+  if (Material?.prototype?.copy) {
+    Material.prototype.copy.call(lambert, mat);
+  } else if (typeof lambert.copy === "function") {
+    lambert.copy(mat);
+  }
+  if (mat.color && lambert.color) lambert.color.copy(mat.color);
+  if (mat.emissive && lambert.emissive) lambert.emissive.copy(mat.emissive);
+  Object.assign(lambert, {
+    emissiveIntensity: mat.emissiveIntensity,
+    flatShading: mat.flatShading,
+    fog: mat.fog,
+    wireframe: mat.wireframe,
+    wireframeLinewidth: mat.wireframeLinewidth
+  });
+  lambert.userData = { ...mat.userData, stadiumFlatStructure: true };
+  lambert.onBeforeCompile = mat.onBeforeCompile;
+  const prevKey = (typeof mat.customProgramCacheKey === "function") ? mat.customProgramCacheKey.bind(mat) : () => "";
+  lambert.customProgramCacheKey = () => `stadium-flat-structure-v1/${prevKey()}`;
+  return lambert;
 }
 
 function createFieldSideClippedMaterial(mat) {
@@ -282,7 +301,7 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
         updateArcadeMaterialColors(arcadeClone, resolveContextFn);
         updateRealisticMaterialProperties(mat);
         if (typeof multiThemeMaterial === 'function') {
-          multiThemeMaterial(mat, arcadeClone);
+          multiThemeMaterial(arcadeClone, mat);
         }
         processedMaterials.add(mat);
       }
@@ -305,7 +324,7 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
     if (objName.startsWith("Seating bowl /")) {
       if (!bowlMaterials.has(effectiveMat)) {
         const arcade = getThemeMaterial ? getThemeMaterial(effectiveMat, "arcade") : effectiveMat;
-        const flatArcade = processBowlFlatStructureMaterial(arcade);
+        const flatArcade = processBowlFlatStructureMaterial(arcade, resolveContextFn);
         if (flatArcade === arcade) {
           bowlMaterials.set(effectiveMat, effectiveMat);
         } else {

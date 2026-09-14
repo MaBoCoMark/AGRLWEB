@@ -8796,7 +8796,7 @@ float getSpotAttenuation( const in float coneCosine, const in float penumbraCosi
 		vec3 color;
 	};
 	uniform DirectionalLight directionalLights[ NUM_DIR_LIGHTS ];
-	void getDirectionalLightInfo( const in DirectionalLight directionalLight, out IncidentLight light ) {
+	void getDirectionalLightInfo( const in DirectionalLight directionalLight, inout IncidentLight light ) {
 		light.color = directionalLight.color;
 		light.direction = directionalLight.direction;
 		light.visible = true;
@@ -8810,7 +8810,7 @@ float getSpotAttenuation( const in float coneCosine, const in float penumbraCosi
 		float decay;
 	};
 	uniform PointLight pointLights[ NUM_POINT_LIGHTS ];
-	void getPointLightInfo( const in PointLight pointLight, const in vec3 geometryPosition, out IncidentLight light ) {
+	void getPointLightInfo( const in PointLight pointLight, const in vec3 geometryPosition, inout IncidentLight light ) {
 		vec3 lVector = pointLight.position - geometryPosition;
 		light.direction = normalize( lVector );
 		float lightDistance = length( lVector );
@@ -8830,7 +8830,7 @@ float getSpotAttenuation( const in float coneCosine, const in float penumbraCosi
 		float penumbraCos;
 	};
 	uniform SpotLight spotLights[ NUM_SPOT_LIGHTS ];
-	void getSpotLightInfo( const in SpotLight spotLight, const in vec3 geometryPosition, out IncidentLight light ) {
+	void getSpotLightInfo( const in SpotLight spotLight, const in vec3 geometryPosition, inout IncidentLight light ) {
 		vec3 lVector = spotLight.position - geometryPosition;
 		light.direction = normalize( lVector );
 		float angleCos = dot( light.direction, spotLight.direction );
@@ -17493,10 +17493,11 @@ export {
   Rj as MeshPhongMaterial,
   Lt as ShaderMaterial,
   Ym as RawShaderMaterial,
+  Zm as MeshLambertMaterial,
   Zm as FallbackMeshBasicMaterial,
   Fd as PointLight,
-  Yj as DirectionalLight,
-  eo as SpotLight,
+  eo as DirectionalLight,
+  Yj as SpotLight,
   e0 as HemisphereLight,
   ai as Light,
   fn as PerspectiveCamera,
@@ -17635,9 +17636,10 @@ const THREE = {
   MeshPhongMaterial: Rj,
   ShaderMaterial: Lt,
   RawShaderMaterial: Ym,
+  MeshLambertMaterial: Zm,
   PointLight: Fd,
-  DirectionalLight: Yj,
-  SpotLight: eo,
+  DirectionalLight: eo,
+  SpotLight: Yj,
   HemisphereLight: e0,
   Light: ai,
   PerspectiveCamera: fn,

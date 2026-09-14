@@ -180,3 +180,20 @@ test("8. InterleavedBufferAttribute applyMatrix4 and bounding box/sphere computa
   assert.equal(cloned.boundingBox.min.x, 15);
   assert.equal(cloned.boundingBox.max.x, 45);
 });
+
+test("9. Vendor Three.js exports MeshLambertMaterial, DirectionalLight, and SpotLight with correct types", () => {
+  assert.ok(THREE.MeshLambertMaterial, "MeshLambertMaterial should exist on THREE");
+  const lambert = new THREE.MeshLambertMaterial({ color: 0x112233 });
+  assert.equal(lambert.type, "MeshLambertMaterial");
+  assert.equal(lambert.isMeshLambertMaterial, true);
+
+  assert.ok(THREE.DirectionalLight, "DirectionalLight should exist on THREE");
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+  assert.equal(dirLight.type, "DirectionalLight");
+  assert.equal(dirLight.isDirectionalLight, true);
+
+  assert.ok(THREE.SpotLight, "SpotLight should exist on THREE");
+  const spotLight = new THREE.SpotLight(0xffffff, 2.0);
+  assert.equal(spotLight.type, "SpotLight");
+  assert.equal(spotLight.isSpotLight, true);
+});

@@ -529,3 +529,55 @@ test("14. loadStadiumArchitecture batching handles interleaved geometries withou
   assert.ok(Number.isFinite(batchGeo.boundingSphere.radius), "boundingSphere radius must be finite");
   assert.ok(batchGeo.boundingSphere.radius > 0, "boundingSphere radius must be > 0");
 });
+
+test("15. loadStadiumArchitecture converts seating bowl flat structures into MeshLambertMaterial", async () => {
+  const {
+    Group,
+    Mesh,
+    BufferGeometry,
+    Float32BufferAttribute,
+    MeshStandardMaterial,
+    MeshLambertMaterial
+  } = THREE;
+
+  const geo = new BufferGeometry();
+  geo.setAttribute("position", new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+
+  // Create mock seating bowl flat meshes: Basalt and Concrete
+  const basaltMat = new MeshStandardMaterial({ name: "Basalt", color: 0x222222 });
+  const basaltMesh = new Mesh(geo.clone(), basaltMat);
+  basaltMesh.name = "Seating bowl / Basalt slab";
+
+  const concreteMat = new MeshStandardMaterial({ name: "Concrete", color: 0x555555 });
+  const concreteMesh = new Mesh(geo.clone(), concreteMat);
+  concreteMesh.name = "Seating bowl / Concrete tier";
+
+  const mockRoot = new Group();
+  mockRoot.add(basaltMesh);
+  mockRoot.add(concreteMesh);
+
+  class MockGLTFLoader {
+    loadAsync() {
+      return Promise.resolve({ scene: mockRoot });
+    }
+  }
+
+  const customContext = () => ({
+    ...resolveContext(),
+    GLTFLoader: MockGLTFLoader,
+    MeshLambertMaterial
+  });
+
+  const stadiumContainer = await loadStadiumArchitecture(customContext);
+  assert.ok(stadiumContainer, "stadiumContainer must be created");
+
+  for (const child of stadiumContainer.children) {
+    assert.ok(child.material, "child mesh must have material");
+    const mat = child.material;
+    // In arcade / flat structures, it should have stadiumFlatStructure set and program cache key prefixed
+    if (mat.userData?.stadiumFlatStructure) {
+      assert.equal(mat.isMeshLambertMaterial || mat.type === "MeshLambertMaterial", true, "Flat structure material must be MeshLambertMaterial");
+      assert.ok(mat.customProgramCacheKey().startsWith("stadium-flat-structure-v1/"), "customProgramCacheKey must have stadium-flat-structure-v1 prefix");
+    }
+  }
+});

@@ -331,6 +331,23 @@ export function resolveContext() {
     CanvasTexture: G.CanvasTexture || (typeof THREE !== 'undefined' ? THREE.CanvasTexture : class {
       constructor(canvas) { this.image = canvas; this.needsUpdate = false; }
     }),
+    Material: G.Material || (typeof THREE !== 'undefined' ? THREE.Material : class {
+      constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
+      copy(m) { Object.assign(this, m); return this; }
+      clone() { return new (resolveContext().Material)().copy(this); }
+      dispose() {}
+    }),
+    MeshLambertMaterial: G.MeshLambertMaterial || (typeof THREE !== 'undefined' ? THREE.MeshLambertMaterial : class {
+      constructor(params = {}) {
+        Object.assign(this, params);
+        this.userData = {};
+        this.isMeshLambertMaterial = true;
+        this.type = "MeshLambertMaterial";
+      }
+      copy(m) { Object.assign(this, m); return this; }
+      clone() { return new (resolveContext().MeshLambertMaterial)(this); }
+      dispose() {}
+    }),
     MeshStandardMaterial: G.MeshStandardMaterial || (typeof THREE !== 'undefined' ? THREE.MeshStandardMaterial : class {
       constructor(params = {}) { Object.assign(this, params); this.userData = {}; }
       clone() { return new (resolveContext().MeshStandardMaterial)(this); }
