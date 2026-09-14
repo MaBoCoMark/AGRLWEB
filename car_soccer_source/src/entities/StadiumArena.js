@@ -321,6 +321,9 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
       effectiveMat = bowlMaterials.get(effectiveMat);
     }
 
+    const pos = obj.geometry?.attributes?.position;
+    if (!pos || pos.count === 0) return;
+
     const geoList = batches.get(effectiveMat) ?? [];
     const transformedGeo = obj.geometry.clone();
     if (typeof obj.updateWorldMatrix === "function") {
@@ -331,7 +334,7 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
     if (hasValidMatrix) {
       transformedGeo.applyMatrix4(obj.matrixWorld);
     }
-    if (transformedGeo.boundingBox && !Number.isFinite(transformedGeo.boundingBox.min?.x)) {
+    if (transformedGeo.boundingBox && (!Number.isFinite(transformedGeo.boundingBox.min?.x) || !Number.isFinite(transformedGeo.boundingBox.max?.x))) {
       transformedGeo.boundingBox = null;
     }
     if (transformedGeo.boundingSphere && !Number.isFinite(transformedGeo.boundingSphere.radius)) {
@@ -348,6 +351,8 @@ export async function loadStadiumArchitecture(resolveContextFn = resolveContext)
   for (const [material, geos] of batches) {
     const mergedGeo = mergeGeometries ? mergeGeometries(geos) : geos[0];
     if (mergedGeo) {
+      if (!mergedGeo.boundingBox) mergedGeo.computeBoundingBox?.();
+      if (!mergedGeo.boundingSphere) mergedGeo.computeBoundingSphere?.();
       const mesh = new Mesh(mergedGeo, material);
       mesh.name = `Stadium / ${material.name || 'batch'}`;
       if (material?.userData?.fieldSideOnly) {

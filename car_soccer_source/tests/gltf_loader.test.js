@@ -419,3 +419,67 @@ test("9. Node without mesh instantiates Object3D with removeFromParent support",
   });
   assert.equal(emptyNode.parent, group);
 });
+
+test("10. GLTFLoader parses interleaved vertex attributes and produces valid bounding boxes", async () => {
+  // 2 vertices, stride 24 bytes (6 floats = 3 pos + 3 norm)
+  // Vertex 0: pos = [1, 2, 3], norm = [0, 1, 0]
+  // Vertex 1: pos = [4, 5, 6], norm = [0, 1, 0]
+  const floatData = new Float32Array([
+    1, 2, 3, 0, 1, 0,
+    4, 5, 6, 0, 1, 0
+  ]);
+  const b64Data = Buffer.from(floatData.buffer).toString("base64");
+
+  const sampleGLTF = JSON.stringify({
+    asset: { version: "2.0" },
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: "InterleavedMeshNode", mesh: 0 }],
+    meshes: [{
+      name: "InterleavedMesh",
+      primitives: [{
+        attributes: {
+          POSITION: 0,
+          NORMAL: 1
+        }
+      }]
+    }],
+    accessors: [
+      { bufferView: 0, byteOffset: 0, componentType: 5126, count: 2, type: "VEC3", min: [1, 2, 3], max: [4, 5, 6] },
+      { bufferView: 0, byteOffset: 12, componentType: 5126, count: 2, type: "VEC3", min: [0, 1, 0], max: [0, 1, 0] }
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 48, byteStride: 24 }
+    ],
+    buffers: [
+      { byteLength: 48, uri: "data:application/octet-stream;base64," + b64Data }
+    ]
+  });
+
+  const loader = new GLTFLoader();
+  const gltf = await loader.parseAsync(sampleGLTF, "");
+  assert.ok(gltf);
+  assert.ok(gltf.scene);
+  const meshNode = gltf.scene.children[0];
+  assert.ok(meshNode.isMesh);
+  const geo = meshNode.geometry;
+  assert.ok(geo);
+  assert.ok(geo.attributes.position);
+  assert.ok(geo.attributes.normal);
+
+  assert.equal(geo.attributes.position.isInterleavedBufferAttribute, true);
+  assert.equal(geo.attributes.position.getX(0), 1);
+  assert.equal(geo.attributes.position.getY(0), 2);
+  assert.equal(geo.attributes.position.getZ(0), 3);
+  assert.equal(geo.attributes.position.getX(1), 4);
+  assert.equal(geo.attributes.position.getY(1), 5);
+  assert.equal(geo.attributes.position.getZ(1), 6);
+
+  // Validate bounding boxes and bounding spheres are finite and not NaN
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+  assert.ok(Number.isFinite(geo.boundingBox.min.x));
+  assert.ok(Number.isFinite(geo.boundingBox.max.x));
+  assert.ok(Number.isFinite(geo.boundingSphere.radius));
+  assert.equal(geo.boundingBox.min.x, 1);
+  assert.equal(geo.boundingBox.max.x, 4);
+});

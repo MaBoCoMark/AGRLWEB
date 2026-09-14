@@ -1,3 +1,4 @@
+import THREE from "../src/vendor/three.js";
 import fs from "node:fs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -468,4 +469,63 @@ test("13. BallTrajectoryPredictor initializes using injected Three.js context", 
   assert.equal(predictor.object.name, "BallTrajectoryPrediction");
   assert.ok(predictor.mesh, "ribbon mesh must exist");
   assert.equal(predictor.positions.length, 2400 * 3);
+});
+
+test("14. loadStadiumArchitecture batching handles interleaved geometries without NaN bounding box / sphere errors", async () => {
+  const {
+    Group,
+    Mesh,
+    BufferGeometry,
+    InterleavedBuffer,
+    InterleavedBufferAttribute,
+    MeshStandardMaterial,
+    Matrix4
+  } = THREE;
+
+  const data = new Float32Array([
+    10, 20, 30, 0, 1, 0,
+    40, 50, 60, 0, 1, 0
+  ]);
+  const ib = new InterleavedBuffer(data, 6);
+  const posAttr = new InterleavedBufferAttribute(ib, 3, 0);
+  const normAttr = new InterleavedBufferAttribute(ib, 3, 3);
+
+  const geo = new BufferGeometry();
+  geo.setAttribute("position", posAttr);
+  geo.setAttribute("normal", normAttr);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+
+  const mat = new MeshStandardMaterial({ name: "Seating bowl" });
+  const mesh = new Mesh(geo, mat);
+  mesh.matrixWorld = new Matrix4().makeTranslation(100, 0, -200);
+
+  const mockRoot = new Group();
+  mockRoot.add(mesh);
+
+  class MockGLTFLoader {
+    loadAsync() {
+      return Promise.resolve({ scene: mockRoot });
+    }
+  }
+
+  const customContext = () => ({
+    ...resolveContext(),
+    GLTFLoader: MockGLTFLoader
+  });
+
+  const stadiumContainer = await loadStadiumArchitecture(customContext);
+  assert.ok(stadiumContainer, "stadiumContainer must be created");
+  assert.equal(stadiumContainer.children.length, 1, "Should have 1 merged batch mesh");
+
+  const batchMesh = stadiumContainer.children[0];
+  const batchGeo = batchMesh.geometry;
+  assert.ok(batchGeo, "Batch mesh must have geometry");
+  assert.ok(batchGeo.boundingBox, "Batch geometry must have boundingBox");
+  assert.ok(batchGeo.boundingSphere, "Batch geometry must have boundingSphere");
+
+  assert.ok(Number.isFinite(batchGeo.boundingBox.min.x), "boundingBox min.x must be finite");
+  assert.ok(Number.isFinite(batchGeo.boundingBox.max.x), "boundingBox max.x must be finite");
+  assert.ok(Number.isFinite(batchGeo.boundingSphere.radius), "boundingSphere radius must be finite");
+  assert.ok(batchGeo.boundingSphere.radius > 0, "boundingSphere radius must be > 0");
 });

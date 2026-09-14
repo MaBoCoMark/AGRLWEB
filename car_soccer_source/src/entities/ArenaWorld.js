@@ -502,6 +502,51 @@ export function resolveContext() {
     }),
     DoubleSide: G.DoubleSide ?? 2,
     BackSide: G.BackSide ?? 1,
+    Fog: G.Fog || (typeof THREE !== "undefined" ? THREE.Fog : null),
+    InterleavedBuffer: G.InterleavedBuffer || (typeof THREE !== "undefined" ? THREE.InterleavedBuffer : class InterleavedBuffer {
+      constructor(array, stride) {
+        this.isInterleavedBuffer = true;
+        this.array = array;
+        this.stride = stride;
+        this.count = array ? array.length / stride : 0;
+      }
+      clone() { return new (resolveContext().InterleavedBuffer)(this.array ? new this.array.constructor(this.array) : null, this.stride); }
+    }),
+    InterleavedBufferAttribute: G.InterleavedBufferAttribute || (typeof THREE !== "undefined" ? THREE.InterleavedBufferAttribute : class InterleavedBufferAttribute {
+      constructor(ib, itemSize, offset, normalized = false) {
+        this.isInterleavedBufferAttribute = true;
+        this.data = ib;
+        this.itemSize = itemSize;
+        this.offset = offset;
+        this.normalized = normalized;
+      }
+      get count() { return this.data ? this.data.count : 0; }
+      get array() { return this.data ? this.data.array : null; }
+      getX(i) { return this.data.array[i * this.data.stride + this.offset]; }
+      getY(i) { return this.data.array[i * this.data.stride + this.offset + 1]; }
+      getZ(i) { return this.data.array[i * this.data.stride + this.offset + 2]; }
+      setXYZ(i, x, y, z) {
+        const idx = i * this.data.stride + this.offset;
+        this.data.array[idx] = x;
+        this.data.array[idx + 1] = y;
+        this.data.array[idx + 2] = z;
+        return this;
+      }
+      applyMatrix4(m) {
+        const e = m.elements;
+        for (let i = 0, n = this.count; i < n; i++) {
+          const x = this.getX(i), y = this.getY(i), z = this.getZ(i);
+          const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+          this.setXYZ(i,
+            (e[0] * x + e[4] * y + e[8] * z + e[12]) * w,
+            (e[1] * x + e[5] * y + e[9] * z + e[13]) * w,
+            (e[2] * x + e[6] * y + e[10] * z + e[14]) * w
+          );
+        }
+        return this;
+      }
+      clone() { return new (resolveContext().InterleavedBufferAttribute)(this.data, this.itemSize, this.offset, this.normalized); }
+    }),
     FrontSide: G.FrontSide ?? 0,
     AdditiveBlending: G.AdditiveBlending ?? 2,
     RepeatWrapping: G.RepeatWrapping ?? 1000,
@@ -1105,7 +1150,7 @@ const DEFAULT_WHEEL_SPECS = {
  */
 export class ArenaWorld {
   constructor(ballRadius, defaultCarVisual = "game-car") {
-    const { Scene, Group, Color, HemisphereLight, DirectionalLight, Vector3, Quaternion, RingGeometry, MeshBasicMaterial, Mesh } = resolveContext();
+    const { Scene, Group, Color, Fog, HemisphereLight, DirectionalLight, Vector3, Quaternion, RingGeometry, MeshBasicMaterial, Mesh } = resolveContext();
 
     this.scene = new Scene();
     this.ball = new Group();
@@ -1146,9 +1191,12 @@ export class ArenaWorld {
     this.shadowFocus = new Vector3();
     this.carVisual = defaultCarVisual;
     this.stadium = null;
-    this.stadiumVisible = false;
+    this.stadiumVisible = true;
 
     this.scene.background = new Color(4679561);
+    if (Fog) {
+      this.scene.fog = new Fog(6586005, 15000, 34000);
+    }
     this.scene.add(new HemisphereLight(13164543, 2569000, 1.15));
 
     this.carSunTarget = new Group();

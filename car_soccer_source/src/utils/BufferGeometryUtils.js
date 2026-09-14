@@ -162,7 +162,9 @@ export function computeInterleavedAttributes(attributes) {
         }
       }
     } else {
-      mergedArray.set(attr.array, offset);
+      const expectedLength = attr.count * itemSize;
+      const srcArray = attr.array.length === expectedLength ? attr.array : attr.array.subarray(0, expectedLength);
+      mergedArray.set(srcArray, offset);
     }
     offset += attr.count * itemSize;
   }

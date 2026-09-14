@@ -609,6 +609,33 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
      - 包含 6 大测试用例：覆盖默认/自定义加载界面 DOM 构建、状态与错误文字更新、跨设备输入模式监听与注销、资产缺失 vs 运行时异常诊断、`GameBootstrap` 完整生命周期调度及向后兼容别名校验。
   4. 全工程 21 个测试套件、125 项单元测试 100% 绿色无损通过。
 
+### 专项修复：场馆详情渲染与 glTF 交错缓冲区（InterleavedBuffer）NaN 报错根治（✅ 已完成）
+- **核心问题**：
+  1. 开启 render stadium details 无法正常渲染外围场馆建筑与座椅，关闭后外围变全黑。
+  2. 控制台持续抛出 Three.js 报错：`BufferGeometry.computeBoundingBox(): Computed min/max have NaN values. The "position" attribute is likely to have NaN values.` 以及 `computeBoundingSphere(): Computed radius is NaN`。
+- **根因分析**：
+  1. **Three.js 类倒置与导出缺失**：在混淆代码解耦过程中，`src/vendor/three.js` 缺失了 `InterleavedBuffer`（混淆类 `Tm`）与 `InterleavedBufferAttribute`（混淆类 `Va`）的正确导出，甚至把 `Va` 错误导成了 `InterleavedBuffer`。
+  2. **GLTFLoader 内部实例化错位**：`src/loaders/GLTFLoader.js` 在加载 `stadium.glb` 的交错顶点流时，将 `Tm` 赋为 `InstancedBufferAttribute`，导致 `InterleavedBufferAttribute` 内部引用的 `data` 实例缺乏 `stride` 属性，调用 `getX(i)` 时计算 `i * undefined + offset = NaN`，顶点取值全部为 `undefined/NaN`，矩阵变换和包围盒/球计算彻底沦为 NaN。
+  3. **未定义常量 $n**：`GLTFLoader.js` 在构建缺省材质时引用了未定义的 `$n`（`FrontSide` = 0），触发 `ReferenceError: $n is not defined`。
+  4. **ArenaWorld 场馆初始化可见性偏差与雾效缺失**：`ArenaWorld.js` 将 `stadiumVisible` 初始置为 `false` 且缺失雾效（`Fog`），导致装配后的 `stadium` 未按原始引擎逻辑默认挂载入场景中。
+- **核心成果**：
+  1. **修正 `src/vendor/three.js` 核心类导出**：语义化导出 `Tm as InterleavedBuffer`、`Va as InterleavedBufferAttribute`、`Ed as Fog`，并在向后兼容混淆列表中补齐 `Tm`, `Va`, `Ed`。
+  2. **重构 `src/loaders/GLTFLoader.js` 缓冲解析**：
+     - 实现健全的降级类 `FallbackInterleavedBuffer` 与 `FallbackInterleavedBufferAttribute`（具备完整的 `count`, `getX/Y/Z/W`, `setXYZ`, `applyMatrix4`, `clone` 支持）。
+     - 补全 `FrontSide = 0 ($n)` 与 `BackSide = 1 (pn)` 常量定义。
+     - 纠正 `setGLTFLoaderThreeContext` 和 `resolveGLTFContext` 中 `InstancedBufferAttribute`、`InterleavedBuffer`、`InterleavedBufferAttribute` 的上下文映射。
+  3. **强化 `src/providers/ThreeProvider.js` 与 `src/entities/ArenaWorld.js`**：
+     - 在 21 个子系统上下文总线中注入 `InterleavedBuffer`、`InterleavedBufferAttribute` 与 `Fog`。
+     - 修正 `ArenaWorld` 的 `stadiumVisible` 初始值为 `true`，并注入原生场景雾效（`Fog(6586005, 15000, 34000)`）。
+  4. **加固 `src/entities/StadiumArena.js` 与 `src/utils/BufferGeometryUtils.js`**：
+     - 场馆网格合并与矩阵变换前，严格校验顶点数量与有效性，对非有限浮点值的包围盒/球自动重算或清理，彻底消除 NaN 报错污染。
+     - `computeInterleavedAttributes` 安全裁剪非对齐数组长度。
+  5. **新增单元测试验证**：
+     - `tests/vendor_three.test.js`：测试 7 & 8 验证交错缓冲区坐标存取、变换矩阵计算及包围盒球有限性。
+     - `tests/gltf_loader.test.js`：测试 10 验证 GLTF 载入二进制交错顶点属性并计算合法包围盒。
+     - `tests/arena_world.test.js`：测试 14 验证 `loadStadiumArchitecture` 批处理交错几何体零 NaN。
+  6. 全工程测试用例从 125 项扩充至 129 项，全部 100% 通过。
+
 ### 阶段 8.5 / 阶段 9：物理与网络通信层语义化规范（⏳ 下一步规划）
 - **目标**：
   1. 梳理 `RocketSimWasm.js`（`jC`）与 `ParallelTrainingManager.js` 的物理内存二进制布局与通信协议，将多车并行训练插槽规范化。

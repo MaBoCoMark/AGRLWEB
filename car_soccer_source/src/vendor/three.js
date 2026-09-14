@@ -17480,7 +17480,9 @@ export {
   Ke as Float32BufferAttribute,
   al as InstancedBufferGeometry,
   un as InstancedBufferAttribute,
-  Va as InterleavedBuffer,
+  Tm as InterleavedBuffer,
+  Va as InterleavedBufferAttribute,
+  Ed as Fog,
   Qt as Material,
   lt as MeshStandardMaterial,
   Cn as MeshPhysicalMaterial,
@@ -17591,7 +17593,7 @@ export {
   Va, Wa, Wj, Xi, Xt, Ya, Yj, Ym, Yt, Yv, Za, Zm, Zt, ad, ai, al,
   ba, bd, bh, bt, cd, ci, cn, dt, e0, e6, el, eo, er, fA, fn, fr,
   gm, gr, il, jn, jt, ka, kd, kn, kt, l0, ld, li, lo, lt, mt, nl,
-  od, oo, pn, pr, qa, qj, qn, qt, r6, rl, sd, sl, ui, un, ws, xd,
+  od, oo, pn, pr, qa, qj, qn, qt, r6, rl, sd, sl, ui, un, Tm, Ed, ws, xd,
   xr, yd, zi, zm, zs, zt, zv, $n
 };
 
@@ -17620,7 +17622,9 @@ const THREE = {
   Float32BufferAttribute: Ke,
   InstancedBufferGeometry: al,
   InstancedBufferAttribute: un,
-  InterleavedBuffer: Va,
+  InterleavedBuffer: Tm,
+  InterleavedBufferAttribute: Va,
+  Fog: Ed,
   Material: Qt,
   MeshStandardMaterial: lt,
   MeshPhysicalMaterial: Cn,

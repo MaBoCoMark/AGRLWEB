@@ -95,6 +95,8 @@ export const LinearMipmapLinearFilter = 1007;
 export const LinearMipmapNearestFilter = 1008;
 export const InterpolateDiscrete = 2300;
 export const InterpolateLinear = 2301;
+export const FrontSide = 0;
+export const BackSide = 1;
 export const DoubleSide = 2;
 export const SRGBColorSpace = "srgb";
 export const LinearSRGBColorSpace = "srgb-linear";
@@ -111,6 +113,8 @@ const fA = LinearMipmapLinearFilter;
 const pr = LinearMipmapNearestFilter;
 const Ha = InterpolateDiscrete;
 const Ua = InterpolateLinear;
+const $n = FrontSide;
+const pn = BackSide;
 const Ut = DoubleSide;
 const Ht = SRGBColorSpace;
 const kn = LinearSRGBColorSpace;
@@ -495,9 +499,87 @@ class FallbackBufferAttribute {
 
 class FallbackInterleavedBuffer {
   constructor(array, stride) {
+    this.isInterleavedBuffer = true;
     this.array = array;
     this.stride = stride;
     this.count = array ? array.length / stride : 0;
+  }
+  clone() {
+    return new FallbackInterleavedBuffer(this.array ? new this.array.constructor(this.array) : null, this.stride);
+  }
+}
+
+class FallbackInterleavedBufferAttribute {
+  constructor(interleavedBuffer, itemSize, offset, normalized = false) {
+    this.isInterleavedBufferAttribute = true;
+    this.data = interleavedBuffer;
+    this.itemSize = itemSize;
+    this.offset = offset;
+    this.normalized = normalized;
+  }
+  get count() {
+    return this.data ? this.data.count : 0;
+  }
+  get array() {
+    return this.data ? this.data.array : null;
+  }
+  getComponent(index, component) {
+    return this.data.array[index * this.data.stride + this.offset + component];
+  }
+  setComponent(index, component, value) {
+    this.data.array[index * this.data.stride + this.offset + component] = value;
+    return this;
+  }
+  getX(index) {
+    return this.data.array[index * this.data.stride + this.offset];
+  }
+  getY(index) {
+    return this.data.array[index * this.data.stride + this.offset + 1];
+  }
+  getZ(index) {
+    return this.data.array[index * this.data.stride + this.offset + 2];
+  }
+  getW(index) {
+    return this.data.array[index * this.data.stride + this.offset + 3];
+  }
+  setX(index, x) {
+    this.data.array[index * this.data.stride + this.offset] = x;
+    return this;
+  }
+  setY(index, y) {
+    this.data.array[index * this.data.stride + this.offset + 1] = y;
+    return this;
+  }
+  setZ(index, z) {
+    this.data.array[index * this.data.stride + this.offset + 2] = z;
+    return this;
+  }
+  setW(index, w) {
+    this.data.array[index * this.data.stride + this.offset + 3] = w;
+    return this;
+  }
+  setXYZ(index, x, y, z) {
+    const idx = index * this.data.stride + this.offset;
+    this.data.array[idx] = x;
+    this.data.array[idx + 1] = y;
+    this.data.array[idx + 2] = z;
+    return this;
+  }
+  applyMatrix4(m) {
+    const e = m.elements;
+    for (let i = 0, n = this.count; i < n; i++) {
+      const x = this.getX(i), y = this.getY(i), z = this.getZ(i);
+      const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+      this.setXYZ(i,
+        (e[0] * x + e[4] * y + e[8] * z + e[12]) * w,
+        (e[1] * x + e[5] * y + e[9] * z + e[13]) * w,
+        (e[2] * x + e[6] * y + e[10] * z + e[14]) * w
+      );
+    }
+    return this;
+  }
+  clone() {
+    return new FallbackInterleavedBufferAttribute(this.data, this.itemSize, this.offset, this.normalized);
   }
 }
 
@@ -826,8 +908,8 @@ let xr = FallbackBox3;
 let Gt = FallbackMathUtils;
 let Ct = FallbackBufferGeometry;
 let zt = FallbackBufferAttribute;
-let Tm = FallbackBufferAttribute;
-let Va = FallbackInterleavedBuffer;
+let Tm = FallbackInterleavedBuffer;
+let Va = FallbackInterleavedBufferAttribute;
 let It = FallbackObject3D;
 let dt = FallbackGroup;
 let Ee = FallbackMesh;
@@ -882,6 +964,7 @@ let gltfThreeContext = {
   BufferAttribute: null,
   InstancedBufferAttribute: null,
   InterleavedBuffer: null,
+  InterleavedBufferAttribute: null,
   Material: null,
   MeshStandardMaterial: null,
   MeshPhysicalMaterial: null,
@@ -929,7 +1012,7 @@ export function setGLTFLoaderThreeContext(ctx) {
   if (ctx.TextureLoader) Ao = ctx.TextureLoader;
   if (ctx.ImageBitmapLoader) e6 = ctx.ImageBitmapLoader;
   if (ctx.PropertyBinding) Rt = ctx.PropertyBinding;
-  if (ctx.InstancedBufferAttribute) { Tm = ctx.InstancedBufferAttribute; un = ctx.InstancedBufferAttribute; }
+  if (ctx.InstancedBufferAttribute) un = ctx.InstancedBufferAttribute;
   if (ctx.Vector2) Ae = ctx.Vector2;
   if (ctx.Vector3) F = ctx.Vector3;
   if (ctx.Quaternion) jn = ctx.Quaternion;
@@ -940,8 +1023,8 @@ export function setGLTFLoaderThreeContext(ctx) {
   if (ctx.MathUtils) Gt = ctx.MathUtils;
   if (ctx.BufferGeometry) Ct = ctx.BufferGeometry;
   if (ctx.BufferAttribute) zt = ctx.BufferAttribute;
-  if (ctx.InstancedBufferAttribute) Tm = ctx.InstancedBufferAttribute;
-  if (ctx.InterleavedBuffer) Va = ctx.InterleavedBuffer;
+  if (ctx.InterleavedBuffer) Tm = ctx.InterleavedBuffer;
+  if (ctx.InterleavedBufferAttribute) Va = ctx.InterleavedBufferAttribute;
   if (ctx.Object3D) It = ctx.Object3D;
   if (ctx.Group) dt = ctx.Group;
   if (ctx.Mesh) Ee = ctx.Mesh;
@@ -999,8 +1082,9 @@ export function resolveGLTFContext() {
     MathUtils: Gt,
     BufferGeometry: Ct,
     BufferAttribute: zt,
-    InstancedBufferAttribute: Tm,
-    InterleavedBuffer: Va,
+    InstancedBufferAttribute: un,
+    InterleavedBuffer: Tm,
+    InterleavedBufferAttribute: Va,
     Object3D: It,
     Group: dt,
     Mesh: Ee,

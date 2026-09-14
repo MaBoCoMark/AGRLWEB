@@ -122,3 +122,61 @@ test('6. Scene hierarchy, Groups, and BufferGeometry creation', () => {
   assert.equal(group.children.length, 1);
   assert.equal(group.children[0], mesh);
 });
+
+test("7. Vendor Three.js exports InterleavedBuffer, InterleavedBufferAttribute, and Fog", () => {
+  assert.ok(THREE.InterleavedBuffer, "InterleavedBuffer should exist on THREE");
+  assert.ok(THREE.InterleavedBufferAttribute, "InterleavedBufferAttribute should exist on THREE");
+  assert.ok(THREE.Fog, "Fog should exist on THREE");
+
+  const data = new Float32Array([0, 1, 2, 10, 20, 30, 3, 4, 5, 40, 50, 60]);
+  const ib = new THREE.InterleavedBuffer(data, 6);
+  assert.equal(ib.count, 2);
+  assert.equal(ib.stride, 6);
+
+  const posAttr = new THREE.InterleavedBufferAttribute(ib, 3, 0);
+  assert.equal(posAttr.count, 2);
+  assert.equal(posAttr.itemSize, 3);
+  assert.equal(posAttr.offset, 0);
+  assert.equal(posAttr.getX(0), 0);
+  assert.equal(posAttr.getY(0), 1);
+  assert.equal(posAttr.getZ(0), 2);
+  assert.equal(posAttr.getX(1), 3);
+  assert.equal(posAttr.getY(1), 4);
+  assert.equal(posAttr.getZ(1), 5);
+
+  const normAttr = new THREE.InterleavedBufferAttribute(ib, 3, 3);
+  assert.equal(normAttr.getX(0), 10);
+  assert.equal(normAttr.getX(1), 40);
+});
+
+test("8. InterleavedBufferAttribute applyMatrix4 and bounding box/sphere computation are finite without NaN", () => {
+  const data = new Float32Array([
+    10, 20, 30, 0, 1, 0,
+    40, 50, 60, 0, 1, 0
+  ]);
+  const ib = new THREE.InterleavedBuffer(data, 6);
+  const posAttr = new THREE.InterleavedBufferAttribute(ib, 3, 0);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", posAttr);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+
+  assert.ok(Number.isFinite(geo.boundingBox.min.x));
+  assert.ok(Number.isFinite(geo.boundingBox.max.x));
+  assert.ok(Number.isFinite(geo.boundingSphere.radius));
+  assert.equal(geo.boundingBox.min.x, 10);
+  assert.equal(geo.boundingBox.max.x, 40);
+
+  // Clone and apply transform
+  const cloned = geo.clone();
+  const m = new THREE.Matrix4();
+  m.makeTranslation(5, 5, 5);
+  cloned.applyMatrix4(m);
+
+  assert.ok(Number.isFinite(cloned.boundingBox.min.x), "Cloned min.x must be finite");
+  assert.ok(Number.isFinite(cloned.boundingBox.max.x), "Cloned max.x must be finite");
+  assert.ok(Number.isFinite(cloned.boundingSphere.radius), "Cloned bounding sphere radius must be finite");
+  assert.equal(cloned.boundingBox.min.x, 15);
+  assert.equal(cloned.boundingBox.max.x, 45);
+});
