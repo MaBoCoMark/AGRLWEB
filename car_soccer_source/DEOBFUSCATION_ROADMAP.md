@@ -556,7 +556,13 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
 ### 阶段 7.8（Part 3）：GLTF 3D 加载器与插件扩展解耦（✅ 已完成）
 - 已抽离为 `src/loaders/GLTFLoader.js`，包含核心解析器 `GLTFParser`（原 `$b`）与 `GLTFLoader`（原 `ho`）、全套 22 项扩展插件、三次样条插值器与网格工具，并通过 `src/loaders/index.js` 统一导出。主引擎削减 1,470 行代码，99 项单元测试全绿。
 
-### 阶段 8.1：主引擎生命周期与 120Hz 渲染时钟解耦（⏳ 待实施）
+### 阶段 8.1：主引擎生命周期与 120Hz 渲染时钟解耦（✅ 已完成）
+- **核心成果**：
+  1. 创建了独立的会话编排器模块 `src/game/GameRuntime.js`，实现 `GameRuntime` 核心类及其向后兼容别名（`CarSoccerGameSession`, `GameSession`, `GameOrchestration`）。
+  2. 完整解耦并重构了原单体混淆启动器 `dB()`：包含系统资产审计、Service Worker 离线注水、RocketSim C++ WebAssembly 物理环境初始化、车辆与场馆加载、相机与多平台控制器（键盘/手柄/触控）绑定、UI 面板与 HUD 挂载、音频预加载及多主题着色器预热（`prewarmSceneShaders`）。
+  3. 完整解耦并重构了 120Hz 主时钟渲染管线 `wt(W)`：包含物理插值步进、平行训练场多视口时钟同步、RLBot 策略推断与速度翻滚开球流程、9 大核心游戏音频事件边缘触发与空间音效计算、车体动态跟踪与自适应 BallCam 箭头指引、双通道辉光遮挡器（Bloom Occluder）动态材质替换与还原、EffectComposer 后期后处理及性能分析剖析器。
+  4. 瘦身并现代化重构 `CarSoccerEngine.js`，移除了 697 行混淆局部变量与循环，委托给 `GameRuntime` 编排，保留 `dB` 和 `wt` 别名确保 100% 向后兼容。
+  5. 新增专用单元测试套件 `tests/game_runtime.test.js`（7 项用例覆盖向后兼容别名、初始状态规范、模态窗口互斥与输入调度、9 大音频事件边缘去重、辉光遮挡器遍历与材质替换还原、视口动态缩放、音频与 Bot 状态复位）。全工程 18 个测试套件、109 项单元测试 100% 绿色通过。
 - **目标**：将 `CarSoccerEngine.js` 剩余的 `dB()` 初始化引导流与 `wt()` 120Hz 主时钟渲染循环重构并抽取为模块化运行时：
   - 启动阶段：资产诊断校验、WASM 物理内核加载、三维场馆构建、相机与输入设备配对、UI HUD 挂载。
   - 运行时阶段：物理插值步进、平行训练场多线程同步、AI 策略推理、3D 空间音频触发器阵列（进球、倒计时、超音速、撞击、无气提示）、后期后处理管线与性能监控。
