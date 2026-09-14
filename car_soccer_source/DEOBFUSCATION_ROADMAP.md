@@ -591,7 +591,25 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
   5. 新增专用单元测试套件 `tests/three_provider.test.js`（4 项用例覆盖 21 个子系统上下文自动激活状态、全局 `THREE` 命名空间可用性、解耦子系统平滑实例化、自定义上下文动态注入与重置机制）。
   6. 全工程 20 个测试套件、119 项单元测试 100% 绿色无损通过。
 
-### 阶段 8.4：主引擎入口收束与语义化规范（⏳ 下一步）
+### 阶段 8.4：主引擎入口收束与语义化规范（✅ 已完成）
+- **核心成果**：
+  1. 创建了独立的生命周期与加载器模块 `src/game/GameBootstrap.js`：
+     - `renderLoadingScreen`：标准化构建品牌加载界面 DOM 结构（加载徽标、游戏标题、状态指示条及说明文本），解耦硬编码 HTML 注入。
+     - `updateLoadingState`：提供响应式的加载状态、进度提示及错误诊断更新接口（支持纯文本与富文本 HTML 错误说明）。
+     - `setupInputMethodDetection`：跨平台输入模式动态探测器（Touch/Mouse/Keyboard 动态响应与容器标记），并提供完整的事件监听解绑清理能力。
+     - `handleBootstrapError`：结构化异常捕获与诊断分发，清晰区分静态物理资产缺失（`isAssetError`）与底层运行时 WebGL/WASM 崩溃。
+     - `GameBootstrap` 类与 `bootstrapGameEngine` 工厂函数：统一编排宿主 DOM 准备、输入探测挂载、`GameRuntime` 实例构建、异步资产注水与 120Hz 渲染循环激活。
+  2. 深度重构并现代化 `src/game/CarSoccerEngine.js`：
+     - **消除冗余的三维上下文重复调用**：全面依托 `ThreeProvider.js` 统一分发总线，移除了原主引擎中 21 处冗长冗余的单体 `set*ThreeContext` 注入代码，同时保留 `BallVisual` 针对 `ho`（`GLTFLoader`）的 TDZ 防御校验勾子。
+     - **彻底移除 120 个混淆 Three.js 顶层导入**：完全剔除 `import { Ad, Ae, Ai, ... } from "../vendor/three.js"` 等双字母混淆导入，彻底切断主引擎对渲染库内部压缩别名的强耦合。
+     - **彻底清除残留死代码**：移除了早期遗留的 9 个无用顶层音频状态变量（`__audioLastPhase`, `__audioLastOvertime`, `__audioLastRemainingSec`, `__audioLastSupersonic`, `__audioLastBoostPressed`, `__audioLastGoalScored`, `__audioLastCountdown`, `__audioCollidingPairs`, `__audioCarHitSerials`）以及无用的 `activeSettingsOverlay` 占位变量。
+     - **规范化向后兼容别名字典**：系统梳理并注释归类物理仿真（`yC`, `CC`, `bC`, `Gd`, `_C`, `no`）、输入控制器（`SC`, `XC`, `ib`, `Tf`, `UC`, `qC` 等）、场馆装配（`ow`, `RS`, `GS`, `OS`, `mg`, `gg`, `vg`, `jg`）与模型加载器，无损满足 `tests/arena_world.test.js`、`tests/entities_subsystem.test.js`、`tests/match_and_rlbot.test.js` 及 `tests/module_integrity.test.js` 的所有严格静态规范与 TDZ 约束。
+     - 主引擎体积从 1,206 行锐减至 602 行（缩减幅度达 50.1%），逻辑层次清晰整洁。
+  3. 新增专用单元测试套件 `tests/game_bootstrap.test.js`：
+     - 包含 6 大测试用例：覆盖默认/自定义加载界面 DOM 构建、状态与错误文字更新、跨设备输入模式监听与注销、资产缺失 vs 运行时异常诊断、`GameBootstrap` 完整生命周期调度及向后兼容别名校验。
+  4. 全工程 21 个测试套件、125 项单元测试 100% 绿色无损通过。
+
+### 阶段 8.5 / 阶段 9：物理与网络通信层语义化规范（⏳ 下一步规划）
 - **目标**：
-  1. 进一步重构 `CarSoccerEngine.js`，将顶层启动流程（`dB`, `wt`, loading DOM 注入）收束为标准生命周期类或工厂函数。
-  2. 梳理清理残余的历史混淆变量缩写（`yC`, `CC`, `bC`, `Gd`, `_C`, `no`, `EC`, `ro` 等），与 `RocketSimConstants` 及 `GameRuntime` 统一语义。
+  1. 梳理 `RocketSimWasm.js`（`jC`）与 `ParallelTrainingManager.js` 的物理内存二进制布局与通信协议，将多车并行训练插槽规范化。
+  2. 针对 WebGL/WebGPU 渲染视口自适应缩放机制与离屏 Canvas 性能进行持续调优。
