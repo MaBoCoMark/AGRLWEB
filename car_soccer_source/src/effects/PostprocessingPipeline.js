@@ -195,6 +195,14 @@ class FallbackShaderMaterial {
   dispose() {}
 }
 
+class FallbackRawShaderMaterial extends FallbackShaderMaterial {
+  constructor(params = {}) {
+    super(params);
+    this.isRawShaderMaterial = true;
+    this.type = 'RawShaderMaterial';
+  }
+}
+
 class FallbackTimer {
   constructor() {
     this._previousTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -225,6 +233,7 @@ let postprocessingThreeContext = {
   Float32BufferAttribute: null,
   OrthographicCamera: null,
   ShaderMaterial: null,
+  RawShaderMaterial: null,
   UniformsUtils: null,
   Vector2: null,
   WebGLRenderTarget: null,
@@ -299,6 +308,15 @@ export function resolvePostprocessingContext() {
     },
     OrthographicCamera: C.OrthographicCamera || globalThree.OrthographicCamera || FallbackOrthographicCamera,
     ShaderMaterial: C.ShaderMaterial || globalThree.ShaderMaterial || FallbackShaderMaterial,
+    RawShaderMaterial: C.RawShaderMaterial || globalThree.RawShaderMaterial || (
+      C.ShaderMaterial ? class extends C.ShaderMaterial {
+        constructor(params = {}) {
+          super(params);
+          this.isRawShaderMaterial = true;
+          this.type = 'RawShaderMaterial';
+        }
+      } : FallbackRawShaderMaterial
+    ),
     UniformsUtils: C.UniformsUtils || globalThree.UniformsUtils || {
       clone(uniforms) {
         if (!uniforms) return {};
@@ -771,10 +789,11 @@ export class OutputPass extends Pass {
     super();
     this.isOutputPass = true;
 
-    const { ShaderMaterial, UniformsUtils } = resolvePostprocessingContext();
+    const { RawShaderMaterial, ShaderMaterial, UniformsUtils } = resolvePostprocessingContext();
+    const MaterialClass = RawShaderMaterial || ShaderMaterial;
 
     this.uniforms = UniformsUtils.clone(OutputShader.uniforms);
-    this.material = new ShaderMaterial({
+    this.material = new MaterialClass({
       name: OutputShader.name,
       uniforms: this.uniforms,
       vertexShader: OutputShader.vertexShader,
@@ -1117,5 +1136,6 @@ export {
   RenderPass as pC,
   EffectComposer as uC,
   RoomEnvironment as c0,
-  createRoomEnvironmentMaterial as gs
+  createRoomEnvironmentMaterial as gs,
+  FallbackRawShaderMaterial as RawShaderMaterial
 };

@@ -15,6 +15,7 @@ import {
   RoomEnvironment,
   createRoomEnvironmentMaterial,
   setPostprocessingThreeContext,
+  RawShaderMaterial,
   LinearToneMapping,
   ReinhardToneMapping,
   CineonToneMapping,
@@ -223,6 +224,8 @@ test('7. RenderPass preserves clear settings and evaluates scene', () => {
 test('8. OutputPass adapts tonemapping and color space defines', () => {
   const outputPass = new OutputPass();
   assert.equal(outputPass.isOutputPass, true);
+  assert.equal(outputPass.material.isRawShaderMaterial, true, 'OutputPass material must have isRawShaderMaterial = true');
+  assert.equal(outputPass.material.type, 'RawShaderMaterial', 'OutputPass material type must be RawShaderMaterial');
 
   const mockRenderer = {
     outputColorSpace: 'srgb',
@@ -346,4 +349,51 @@ test('11. Context injection dynamically updates prototypes', () => {
   const room = new RoomEnvironment();
   assert.ok(room instanceof CustomSceneBase, 'RoomEnvironment must inherit from injected Scene');
   assert.equal(room.isCustomScene, true);
+});
+
+test('12. Regression: OutputPass uses RawShaderMaterial to prevent Three.js ShaderMaterial GLSL redefinition errors', () => {
+  // 1. Test with custom RawShaderMaterial class injection
+  class MockCustomRawShaderMaterial {
+    constructor(params = {}) {
+      this.isRawShaderMaterial = true;
+      this.type = 'RawShaderMaterial';
+      this.name = params.name;
+      this.uniforms = params.uniforms;
+      this.vertexShader = params.vertexShader;
+      this.fragmentShader = params.fragmentShader;
+    }
+    dispose() {}
+  }
+
+  setPostprocessingThreeContext({
+    RawShaderMaterial: MockCustomRawShaderMaterial
+  });
+
+  const pass1 = new OutputPass();
+  assert.ok(pass1.material instanceof MockCustomRawShaderMaterial, 'Must instantiate injected RawShaderMaterial');
+  assert.equal(pass1.material.isRawShaderMaterial, true);
+  assert.equal(pass1.material.name, 'OutputShader');
+
+  // 2. Test with only ShaderMaterial class injection (automatic RawShaderMaterial subclassing fallback)
+  class MockCustomShaderMaterial {
+    constructor(params = {}) {
+      this.isShaderMaterial = true;
+      this.type = 'ShaderMaterial';
+      this.name = params.name;
+      this.uniforms = params.uniforms;
+      this.vertexShader = params.vertexShader;
+      this.fragmentShader = params.fragmentShader;
+    }
+    dispose() {}
+  }
+
+  setPostprocessingThreeContext({
+    ShaderMaterial: MockCustomShaderMaterial,
+    RawShaderMaterial: null
+  });
+
+  const pass2 = new OutputPass();
+  assert.ok(pass2.material instanceof MockCustomShaderMaterial, 'Must subclass injected ShaderMaterial');
+  assert.equal(pass2.material.isRawShaderMaterial, true, 'Subclass must enforce isRawShaderMaterial = true');
+  assert.equal(pass2.material.type, 'RawShaderMaterial');
 });

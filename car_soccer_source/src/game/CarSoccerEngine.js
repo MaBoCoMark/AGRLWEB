@@ -18048,6 +18048,7 @@ setPostprocessingThreeContext({
   Float32BufferAttribute: Ke,
   OrthographicCamera: lo,
   ShaderMaterial: Lt,
+  RawShaderMaterial: Ym,
   UniformsUtils: sl,
   Vector2: Ae,
   WebGLRenderTarget: qn,

@@ -453,8 +453,16 @@ RocketSim 是由 ZealanL 开源的高保真 Rocket League C++ 物理仿真库（
       - `src/effects/index.js` 星号重导出无任何重名冲突（通过 `tests/module_integrity.test.js` 验证）。
       - 导出所有 13 个原始混淆符号别名（`Js`, `cC`, `ll`, `h0`, `Mf`, `dC`, `_A`, `Ko`, `fC`, `pC`, `uC`, `c0`, `gs`），保证引擎其余部分 100% 向后兼容。
     - **测试验收**：
-      - 新增 `tests/postprocessing_pipeline.test.js` 涵盖 11 个独立单元测试。
-      - 全量 16 个测试套件、91 项单元测试全部通过（100% 通过率）。
+      - 新增 `tests/postprocessing_pipeline.test.js` 涵盖 12 个独立单元测试。
+      - 全量 16 个测试套件、92 项单元测试全部通过（100% 通过率）。
+    - **黑屏与 WebGL 着色器重定义缺陷修复（WebGLProgram Shader Error 0 / 1282）**：
+      - **根因分析**：原混淆代码中 `fC` (`OutputPass`) 实例化的材质类为 `Ym`（`RawShaderMaterial`），其具备 `isRawShaderMaterial = true` 属性。Three.js 的 `WebGLProgram` 编译器对于 `ShaderMaterial` 会自动前置注入默认顶点属性（`modelViewMatrix`, `projectionMatrix`, `position`, `uv`）以及片元色调映射与色彩空间代码块（`<tonemapping_pars_fragment>`, `<colorspace_pars_fragment>`）。而 `OutputShader`（原 `Ko`）在其 GLSL 源码中已显式手写了上述顶点属性与色调映射块，若错误使用 `ShaderMaterial` 实例化，会导致 GLSL 变量与函数重定义（`'modelViewMatrix' : redefinition`, `'LinearTransferOETF' : function already has a body`），触发 `VALIDATE_STATUS false` 编译中断与 `useProgram: program not valid` 异常，使得全屏 Quad 渲染完全失效，画面全黑（但物理与音频正常）。
+      - **修复实施**：
+        1. 在 `PostprocessingPipeline.js` 中引入 `FallbackRawShaderMaterial`（设置 `this.isRawShaderMaterial = true; this.type = 'RawShaderMaterial'`）。
+        2. `OutputPass` 构造器修正为实例化 `RawShaderMaterial`。
+        3. `resolvePostprocessingContext()` 健全支持 `RawShaderMaterial` 解析，并在仅提供 `ShaderMaterial` 时自动派生标注 `isRawShaderMaterial = true` 的子类。
+        4. 在 `CarSoccerEngine.js` 的 `setPostprocessingThreeContext` 调用中显式注入内联的三维材质类 `RawShaderMaterial: Ym`。
+        5. 在 `tests/postprocessing_pipeline.test.js` 扩充测试用例 8 并新增测试用例 12，全方位回归验证 `RawShaderMaterial` 实例化及自动派生保障机制。
 
 ---
 
